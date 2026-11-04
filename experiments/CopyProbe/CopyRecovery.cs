@@ -71,7 +71,7 @@ internal static class CopyRecovery
     }
 
     public static RecoveryResult Recover(string root, string temporary, string destination, DestinationBinding? binding = null,
-        byte[]? expectedHash = null, DateTime? lastWriteUtc = null)
+        byte[]? expectedHash = null, FileMetadata? metadata = null)
     {
         CheckParents(temporary, destination);
         using var fence = new DirectoryFence(root, temporary, destination);
@@ -108,17 +108,27 @@ internal static class CopyRecovery
             return RecoveryResult.MissingData;
 
         using var data = WindowsProbeNative.OpenPlainFile(directory, hasTemporary ? temporary : destination,
-            FileAccess.Read, FileShare.Read, rename: hasTemporary);
+            FileAccess.Read, FileShare.Read, rename: hasTemporary, writeAttributes: hasTemporary && metadata?.CreationUtc is not null);
         WindowsProbeNative.RequireSupportedData(data.SafeFileHandle, Path.GetFileName(destination));
         if (!SHA256.HashData(data).AsSpan().SequenceEqual(record[Magic.Length..DataHashEnd]))
             return RecoveryResult.HashMismatch;
-        VerifiedCopy.RequireLastWriteTime(data, lastWriteUtc);
+        metadata?.RequireMatch(data.SafeFileHandle);
 
         if (hasFinal)
             return RecoveryResult.AlreadyPublished;
 
-        WindowsProbeNative.RenameNew(data.SafeFileHandle, directory, Path.GetFileName(destination));
+        PublishData(data, directory, destination, metadata);
         return RecoveryResult.Published;
+    }
+
+    internal static void PublishData(FileStream file, SafeFileHandle directory, string destination, FileMetadata? metadata)
+    {
+        var handle = file.SafeFileHandle;
+        WindowsProbeNative.RenameNew(handle, directory, Path.GetFileName(destination));
+        // NTFS may restore the old creation time of a recently removed destination name during rename.
+        if (metadata?.CreationUtc is { } creation && File.GetCreationTimeUtc(handle) != creation)
+            File.SetCreationTimeUtc(handle, creation);
+        metadata?.RequireMatch(handle);
     }
 
     private static void CheckParents(string temporary, string destination)

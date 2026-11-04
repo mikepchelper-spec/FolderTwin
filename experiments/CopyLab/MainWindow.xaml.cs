@@ -132,7 +132,7 @@ public partial class MainWindow : Window
             BatchPlan plan = await Task.Run(session.Analyze);
             analyzed = true;
             PreviewText.Text = $"{plan.Files.Length:N0} archivos · {plan.Bytes:N0} bytes de contenido · {plan.Directories.Length:N0} carpetas\n" +
-                "Se conserva la fecha de modificación de los archivos.\n" +
+                "Se conservan las fechas de creación y modificación y el atributo Oculto de los archivos. Los permisos se heredan de la carpeta de destino.\n" +
                 "La copia puede ocupar más espacio en disco que un original comprimido o disperso.\n" +
                 string.Join("\n", plan.Files.Select(file => file.RelativePath));
             ResultsList.ItemsSource = null;
@@ -442,6 +442,7 @@ public partial class MainWindow : Window
         Check(AnalyzeButton.IsEnabled && !CopyButton.IsEnabled && !RestoreButton.IsEnabled,
             "Copy became available before analysis.");
         File.WriteAllText(session.CopyFile, "synthetic conflict");
+        File.SetCreationTimeUtc(session.CopyFile, new DateTime(1995, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         try
         {
             Click(AnalyzeButton);
@@ -601,6 +602,7 @@ public partial class MainWindow : Window
             string empty = Path.Combine(interrupted.Destination, BatchFixture.SampleNames[2]);
             DateTime originalDate = File.GetLastWriteTimeUtc(interrupted.CopyFile);
             DateTime emptyDate = File.GetLastWriteTimeUtc(empty);
+            DateTime emptyCreation = File.GetCreationTimeUtc(empty);
             File.WriteAllBytes(interrupted.CopyFile, altered);
             File.Delete(empty);
             try
@@ -620,6 +622,7 @@ public partial class MainWindow : Window
                 File.WriteAllBytes(interrupted.CopyFile, original);
                 File.WriteAllBytes(empty, []);
                 File.SetLastWriteTimeUtc(interrupted.CopyFile, originalDate);
+                File.SetCreationTimeUtc(empty, emptyCreation);
                 File.SetLastWriteTimeUtc(empty, emptyDate);
             }
             Click(confirmedWindow.VerifyButton);

@@ -82,7 +82,7 @@ internal static class BatchProbe
         using (var fixture = new BatchFixture())
         {
             var first = fixture.Analyze().Files[0];
-            DateTime expected = first.LastWriteUtc!.Value;
+            DateTime expected = first.Metadata!.LastWriteUtc;
             string temporary = FolderBatch.TemporaryPath(fixture.Destination, first.RelativePath);
             var interrupted = fixture.Copy(checkpoint: (relative, step, _) =>
             {
@@ -99,9 +99,20 @@ internal static class BatchProbe
                 entry.Detail?.Contains("fecha de modificación", StringComparison.Ordinal) == true) &&
                 File.Exists(temporary) && !File.Exists(output), "Recovery published a temporary with a different date.");
             File.SetLastWriteTimeUtc(temporary, expected);
-            Check(fixture.Copy().Complete && File.GetLastWriteTimeUtc(output) == expected,
-                "Recovery failed to preserve the recorded date on retry.");
-            Pass("reopening a pending descriptor rejects a changed date and preserves the verified date on retry");
+            FileAttributes original = File.GetAttributes(temporary);
+            File.SetAttributes(temporary, (original & ~FileAttributes.Normal) | FileAttributes.Hidden);
+            var hidden = fixture.Copy();
+            Check(!hidden.Complete && hidden.Entries.Any(entry => entry.RelativePath == first.RelativePath &&
+                entry.Detail?.Contains("atributo Oculto", StringComparison.Ordinal) == true) &&
+                File.Exists(temporary) && !File.Exists(output), "Recovery published a temporary with a different hidden attribute.");
+            File.SetAttributes(temporary, original);
+            File.WriteAllText(output, "synthetic previous name");
+            File.SetCreationTimeUtc(output, new DateTime(1995, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+            File.Delete(output);
+            Check(fixture.Copy().Complete && File.GetLastWriteTimeUtc(output) == expected &&
+                File.GetCreationTimeUtc(output) == first.Metadata.CreationUtc,
+                "Recovery failed to preserve the recorded dates on retry after the destination name was reused.");
+            Pass("reopening a pending descriptor rejects changed timestamps and attributes and preserves the verified metadata on retry");
         }
         using (var fixture = new BatchFixture())
         {

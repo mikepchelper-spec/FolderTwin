@@ -1,6 +1,9 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -12,23 +15,34 @@ internal static class CatalogProbe
         using (var fixture = new BatchFixture())
         {
             DateTime stamp = new DateTime(2001, 2, 3, 4, 5, 6, DateTimeKind.Utc).AddTicks(123_456);
+            DateTime creation = stamp.AddDays(-7).AddTicks(543);
+            File.SetCreationTimeUtc(fixture.SourceFile, creation);
             File.SetLastWriteTimeUtc(fixture.SourceFile, stamp);
+            File.SetAttributes(fixture.SourceFile, FileAttributes.Hidden);
             fixture.Analyze();
-            Check(fixture.Copy().Complete && File.GetLastWriteTimeUtc(fixture.CopyFile) == stamp,
-                "The original modification date did not survive copying.");
+            Check(fixture.Copy().Complete && File.GetLastWriteTimeUtc(fixture.CopyFile) == stamp &&
+                File.GetCreationTimeUtc(fixture.CopyFile) == creation && File.GetAttributes(fixture.CopyFile).HasFlag(FileAttributes.Hidden),
+                "The original file metadata did not survive copying.");
             byte[] primary = File.ReadAllBytes(Path.Combine(fixture.Destination, BatchCatalog.PrimaryName));
             Check(primary.AsSpan().SequenceEqual(File.ReadAllBytes(Path.Combine(fixture.Destination, BatchCatalog.BackupName))),
                 "The catalog replicas differ.");
             var catalog = BatchCatalog.Read(fixture.Destination);
             Check(!catalog.Degraded && catalog.Files.Length == 3 && catalog.Directories.Length == 2, "Incorrect catalog entries.");
-            Check(catalog.Files.Single(file => file.RelativePath == BatchFixture.SampleNames[0]).LastWriteUtc == stamp,
-                "The modification date did not survive catalog serialization.");
+            Check(catalog.Files.Single(file => file.RelativePath == BatchFixture.SampleNames[0]).Metadata ==
+                new FileMetadata(stamp, creation, true), "The metadata did not survive catalog serialization.");
             File.SetLastWriteTimeUtc(fixture.CopyFile, stamp.AddDays(1));
-            Check(BatchCatalog.Verify(fixture.Destination, fixture.DestinationBinding).Entries.Any(entry =>
-                entry.RelativePath == BatchFixture.SampleNames[0] && entry.Status == BatchStatus.Failed &&
-                entry.Detail?.Contains("fecha de modificación", StringComparison.Ordinal) == true),
-                "Verification missed a date-only change.");
+            RequireMetadataIssue("fecha de modificación");
+            File.SetLastWriteTimeUtc(fixture.CopyFile, stamp);
+            File.SetCreationTimeUtc(fixture.CopyFile, creation.AddDays(1));
+            RequireMetadataIssue("fecha de creación");
+            File.SetCreationTimeUtc(fixture.CopyFile, creation);
+            File.SetAttributes(fixture.CopyFile, FileAttributes.Normal);
+            RequireMetadataIssue("atributo Oculto");
+            File.SetCreationTimeUtc(fixture.CopyFile, creation.AddDays(1));
             fixture.ForgetPlan();
+            File.WriteAllText(fixture.RestoredFile, "synthetic previous name");
+            File.SetCreationTimeUtc(fixture.RestoredFile, creation.AddYears(-10));
+            File.Delete(fixture.RestoredFile);
             string absent = Path.Combine(fixture.Root, "Origen ausente");
             string config = Path.Combine(fixture.Root, "restore-binding.json");
             fixture.RestoreBinding.SaveNew(config);
@@ -37,24 +51,40 @@ internal static class CatalogProbe
             {
                 RestoreInNewProcess(fixture.Root);
                 fixture.CheckRestored();
-                Check(File.GetLastWriteTimeUtc(fixture.RestoredFile) == stamp, "Restoration did not reapply the date from the catalog.");
+                Check(File.GetLastWriteTimeUtc(fixture.RestoredFile) == stamp && File.GetCreationTimeUtc(fixture.RestoredFile) == creation &&
+                    File.GetAttributes(fixture.RestoredFile).HasFlag(FileAttributes.Hidden),
+                    "Restoration did not reapply the metadata from the catalog.");
             }
             finally
             {
                 Directory.Move(absent, fixture.Source);
                 File.Delete(config);
             }
-            Pass("a fresh process restores the recorded date with the original source absent, even after a date-only change to the backup");
+            Pass("a fresh process restores the recorded timestamps and hidden attribute without the source after metadata changes to the backup");
+
+            void RequireMetadataIssue(string detail)
+            {
+                Check(BatchCatalog.Verify(fixture.Destination, fixture.DestinationBinding).Entries.Any(entry =>
+                    entry.RelativePath == BatchFixture.SampleNames[0] && entry.Status == BatchStatus.Failed &&
+                    entry.Detail?.Contains(detail, StringComparison.Ordinal) == true), "Verification missed a metadata-only change.");
+            }
         }
-        using (var fixture = new BatchFixture())
+        foreach (int version in new[] { 1, 2 })
         {
+            using var fixture = new BatchFixture();
             var plan = fixture.Analyze();
-            var legacy = plan with { Files = plan.Files.Select(file => file with { LastWriteUtc = null }).ToArray() };
+            var legacy = plan with { Files = plan.Files.Select(file => file with
+            {
+                Metadata = version == 1 ? null : new FileMetadata(file.Metadata!.LastWriteUtc)
+            }).ToArray() };
             PendingBatch.Save(legacy);
             string metadata = Path.Combine(fixture.Destination, PendingBatch.MetadataName);
             byte[] before = File.ReadAllBytes(metadata);
-            Check(Encoding.UTF8.GetString(before).Contains("\"version\":1", StringComparison.Ordinal) &&
-                !Encoding.UTF8.GetString(before).Contains("lastWriteUtc", StringComparison.Ordinal), "The legacy writer changed the version 1 layout.");
+            string original = Encoding.UTF8.GetString(before);
+            Check(original.Contains($"\"version\":{version}", StringComparison.Ordinal) &&
+                original.Contains("lastWriteUtc", StringComparison.Ordinal) == (version == 2) &&
+                !original.Contains("creationUtc", StringComparison.Ordinal) && !original.Contains("hidden", StringComparison.Ordinal),
+                "The legacy writer changed the previous layout.");
             string relative = legacy.Files[0].RelativePath;
             var interrupted = FolderBatch.Run(legacy, checkpoint: (path, step, _) =>
             {
@@ -62,16 +92,18 @@ internal static class CatalogProbe
                     throw new IOException("Injected interruption in a version 1 session.");
             });
             Check(!interrupted.Complete && File.Exists(CopyRecovery.ReceiptPath(FolderBatch.TemporaryPath(fixture.Destination, relative))),
-                "The version 1 session did not leave a verified temporary.");
+                "The previous session did not leave a verified temporary.");
             fixture.ForgetPlan();
             var resumed = fixture.Copy();
             Check(resumed.Complete && resumed.Entries.Any(entry => entry.RelativePath == relative && entry.Status == BatchStatus.Recovered) &&
                 File.ReadAllBytes(metadata).AsSpan().SequenceEqual(before) &&
-                BatchCatalog.Read(fixture.Destination).Files.All(file => file.LastWriteUtc is null) && fixture.Restore().Complete,
-                "A version 1 pending session did not resume and restore without changing its descriptor.");
+                BatchCatalog.Read(fixture.Destination).Files.All(file => file.CatalogVersion == version) && fixture.Restore().Complete,
+                "A previous pending session did not resume and restore without changing its descriptor.");
             fixture.CheckRestored();
-            Pass("a version 1 descriptor resumes and its confirmed catalog restores without inventing timestamps");
+            Pass($"a version {version} descriptor resumes and its confirmed catalog restores with only the recorded metadata");
         }
+        if (OperatingSystem.IsWindows())
+            CheckPermissionInheritance();
         using (var fixture = CopiedFixture())
         {
             string primary = Path.Combine(fixture.Destination, BatchCatalog.PrimaryName);
@@ -118,12 +150,17 @@ internal static class CatalogProbe
             byte[] original = File.ReadAllBytes(Path.Combine(fixture.Destination, BatchCatalog.PrimaryName));
             foreach (Action<List<JsonObject>> mutation in new Action<List<JsonObject>>[]
             {
-                nodes => nodes[0]["version"] = 3,
+                nodes => nodes[0]["version"] = 4,
+                nodes => nodes[0]["version"] = 2,
                 nodes => nodes[0]["version"] = 1,
                 nodes => nodes.First(node => (string?)node["kind"] == "file").Remove("lastWriteUtc"),
                 nodes => nodes.First(node => (string?)node["kind"] == "file")["lastWriteUtc"] = null,
                 nodes => nodes.First(node => (string?)node["kind"] == "file")["lastWriteUtc"] = "2001-02-03T04:05:06",
                 nodes => nodes.First(node => (string?)node["kind"] == "file")["lastWriteUtc"] = "1601-01-01T00:00:00Z",
+                nodes => nodes.First(node => (string?)node["kind"] == "file").Remove("creationUtc"),
+                nodes => nodes.First(node => (string?)node["kind"] == "file")["creationUtc"] = "1601-01-01T00:00:00Z",
+                nodes => nodes.First(node => (string?)node["kind"] == "file").Remove("hidden"),
+                nodes => nodes.First(node => (string?)node["kind"] == "file")["hidden"] = "true",
                 nodes => nodes[0]["unexpected"] = true,
                 nodes => nodes[0].Remove("generationId"),
                 nodes => nodes.First(node => (string?)node["kind"] == "file")["path"] = @"..\escaped.bin",
@@ -151,7 +188,7 @@ internal static class CatalogProbe
                 nodes => nodes.First(node => (string?)node["kind"] == "file")["kind"] = "unknown"
             })
                 RejectBytes(Rewrite(original, mutation));
-            byte[] duplicate = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(original).Replace("\"version\":2", "\"version\":2,\"version\":2", StringComparison.Ordinal));
+            byte[] duplicate = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(original).Replace("\"version\":3", "\"version\":3,\"version\":3", StringComparison.Ordinal));
             RejectBytes(duplicate);
             RejectBytes(Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(original).Replace("muestra.txt", @"invalid-\ud800.bin", StringComparison.Ordinal)));
             RejectBytes(original[..^1]);
@@ -168,7 +205,7 @@ internal static class CatalogProbe
                 for (int index = 0; index <= 10_000; index++)
                     nodes.Insert(nodes.Count - 1, new JsonObject { ["kind"] = "file", ["path"] = $"{index:D5}.bin",
                         ["size"] = 0, ["hash"] = Convert.ToBase64String(SHA256.HashData([])),
-                        ["lastWriteUtc"] = "2001-02-03T04:05:06Z" });
+                        ["lastWriteUtc"] = "2001-02-03T04:05:06Z", ["creationUtc"] = "2001-02-03T04:05:06Z", ["hidden"] = false });
                 nodes[^1]["files"] = 10_001;
                 nodes[^1]["directories"] = 0;
             }));
@@ -264,6 +301,49 @@ internal static class CatalogProbe
             Pass("copied catalogs cannot authorize another directory and the store lock excludes concurrent import or publication");
         }
         return 0;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void CheckPermissionInheritance()
+    {
+        using var fixture = new BatchFixture();
+        var sourceSid = new SecurityIdentifier("S-1-5-21-111-222-333-1001");
+        var backupSid = new SecurityIdentifier("S-1-5-21-111-222-333-1002");
+        var restoredSid = new SecurityIdentifier("S-1-5-21-111-222-333-1003");
+        var source = new FileInfo(fixture.SourceFile);
+        var sourceAcl = source.GetAccessControl(AccessControlSections.Access);
+        sourceAcl.AddAccessRule(new FileSystemAccessRule(sourceSid, FileSystemRights.ReadData, AccessControlType.Allow));
+        source.SetAccessControl(sourceAcl);
+        AddInheritableRule(fixture.Destination, backupSid);
+        AddInheritableRule(fixture.Restored, restoredSid);
+
+        fixture.Analyze();
+        Check(fixture.Copy().Complete && fixture.Restore().Complete, "The ACL inheritance fixture did not copy and restore.");
+        var origin = Rules(fixture.SourceFile);
+        var backup = Rules(fixture.CopyFile);
+        var restored = Rules(fixture.RestoredFile);
+        Check(origin.Any(rule => rule.IdentityReference.Equals(sourceSid) && !rule.IsInherited) &&
+            backup.Any(rule => rule.IdentityReference.Equals(backupSid) && rule.IsInherited) &&
+            !backup.Any(rule => rule.IdentityReference.Equals(sourceSid)) &&
+            restored.Any(rule => rule.IdentityReference.Equals(restoredSid) && rule.IsInherited) &&
+            !restored.Any(rule => rule.IdentityReference.Equals(sourceSid) || rule.IdentityReference.Equals(backupSid)),
+            "The copy or restoration imported a prior file ACL instead of inheriting the new parent rules.");
+        var nested = Rules(Path.Combine(fixture.Restored, BatchFixture.SampleNames[1]));
+        Check(nested.Any(rule => rule.IdentityReference.Equals(restoredSid) && rule.IsInherited),
+            "A file in a restored subdirectory did not inherit the destination rule.");
+        Pass("copy and restore inherit their own parent ACLs without importing source or backup rules");
+
+        static void AddInheritableRule(string path, SecurityIdentifier sid)
+        {
+            var directory = new DirectoryInfo(path);
+            var acl = directory.GetAccessControl(AccessControlSections.Access);
+            acl.AddAccessRule(new FileSystemAccessRule(sid, FileSystemRights.ReadData,
+                InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
+            directory.SetAccessControl(acl);
+        }
+
+        static FileSystemAccessRule[] Rules(string path) => new FileInfo(path).GetAccessControl(AccessControlSections.Access)
+            .GetAccessRules(includeExplicit: true, includeInherited: true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>().ToArray();
     }
 
     internal static int RestoreChild(string root)

@@ -24,7 +24,7 @@ internal static class WindowsProbeNative
 
     internal static FileStream OpenPlainFile(SafeFileHandle parent, string path, FileAccess access, FileShare share,
         FileMode mode = FileMode.Open,
-        bool rename = false)
+        bool rename = false, bool writeAttributes = false)
     {
         uint rights = access switch
         {
@@ -34,6 +34,8 @@ internal static class WindowsProbeNative
         };
         if (rename)
             rights |= 0x00010000; // DELETE, required for rename.
+        if (writeAttributes)
+            rights |= 0x00000100; // FILE_WRITE_ATTRIBUTES.
         uint disposition = mode switch
         {
             FileMode.Open => 1,

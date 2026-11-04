@@ -8,7 +8,7 @@ internal static class VerifiedCopy
     public static void Run(
         string source, string destination, string temporary,
         Action<CopyStep, string>? checkpoint = null, byte[]? expectedHash = null, string? recoveryRoot = null,
-        CancellationToken cancellationToken = default, DestinationBinding? binding = null, DateTime? lastWriteUtc = null)
+        CancellationToken cancellationToken = default, DestinationBinding? binding = null, FileMetadata? metadata = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var fence = recoveryRoot is null ? null : new DirectoryFence(recoveryRoot, source, temporary, destination);
@@ -38,10 +38,10 @@ internal static class VerifiedCopy
             checkpoint?.Invoke(CopyStep.Written, temporary);
             cancellationToken.ThrowIfCancellationRequested();
             checkpoint?.Invoke(CopyStep.Flushing, temporary);
-            if (lastWriteUtc is { } time)
+            if (metadata is not null)
             {
                 output.Flush();
-                File.SetLastWriteTimeUtc(output.SafeFileHandle, time);
+                metadata.Apply(output.SafeFileHandle);
             }
             output.Flush(flushToDisk: true);
             if (fence is not null)
@@ -52,14 +52,15 @@ internal static class VerifiedCopy
         byte[] sourceHash = hash.GetHashAndReset();
         using (var input = directory is null
             ? File.OpenRead(temporary)
-            : WindowsProbeNative.OpenPlainFile(directory, temporary, FileAccess.Read, FileShare.Read, rename: true))
+            : WindowsProbeNative.OpenPlainFile(directory, temporary, FileAccess.Read, FileShare.Read, rename: true,
+                writeAttributes: metadata?.CreationUtc is not null))
         {
             if (directory is not null)
                 WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, Path.GetFileName(temporary));
             if (!SHA256.HashData(input).AsSpan().SequenceEqual(sourceHash) ||
                 (expectedHash is not null && !sourceHash.AsSpan().SequenceEqual(expectedHash)))
                 throw new InvalidDataException("The copy does not match the expected SHA-256.");
-            RequireLastWriteTime(input, lastWriteUtc);
+            metadata?.RequireMatch(input.SafeFileHandle);
             cancellationToken.ThrowIfCancellationRequested();
             if (directory is not null)
                 CopyRecovery.RecordVerified(temporary, destination, sourceHash, directory, checkpoint);
@@ -67,18 +68,12 @@ internal static class VerifiedCopy
             if (directory is not null)
             {
                 WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, Path.GetFileName(temporary));
-                RequireLastWriteTime(input, lastWriteUtc);
-                WindowsProbeNative.RenameNew(input.SafeFileHandle, directory, Path.GetFileName(destination));
+                metadata?.RequireMatch(input.SafeFileHandle);
+                CopyRecovery.PublishData(input, directory, destination, metadata);
             }
         }
         if (directory is null)
             File.Move(temporary, destination);
         checkpoint?.Invoke(CopyStep.Published, destination);
-    }
-
-    internal static void RequireLastWriteTime(FileStream file, DateTime? expected)
-    {
-        if (expected is { } time && File.GetLastWriteTimeUtc(file.SafeFileHandle) != time)
-            throw new InvalidDataException("La fecha de modificación del archivo no coincide con la registrada.");
     }
 }
