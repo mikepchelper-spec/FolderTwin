@@ -32,6 +32,8 @@ if (args is ["--version-scale", var fileCount, var objectCount] &&
 if (args is ["--object-layout", var layoutCount] && int.TryParse(layoutCount, out int layoutObjects) &&
     layoutObjects is >= 1 and <= 1_000_000)
     return ObjectLayoutProbe.Run(layoutObjects);
+if (args is ["--recover-version", var recoveryWorkspace, var recoveryStore, var recoveryGeneration, var recoveryOutput])
+    return VersionRecovery.Run(recoveryWorkspace, recoveryStore, recoveryGeneration, recoveryOutput);
 if (args is ["--catalog"])
     return CatalogProbe.Run();
 if (args is ["--resume"])

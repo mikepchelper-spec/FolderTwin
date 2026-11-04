@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Reflection;
 using System.Security.Cryptography;
 
 internal static class VersionProbe
@@ -66,6 +68,15 @@ internal static class VersionProbe
             var earlier = store.Restore(first, outputA);
             Check(earlier.Degraded && !store.Restore(second, outputB).Degraded,
                 "An intact replica did not restore the earlier generation.");
+            string independent = NewFolder("recuperación independiente");
+            RestoreInNewProcess(workspace.Root, Path.GetFileName(destination), first, Path.GetFileName(independent));
+            Check(File.ReadAllText(Path.Combine(independent, "cambio.txt")) == "primera versión" &&
+                File.ReadAllText(Path.Combine(independent, "borrado.txt")) == "todavía recuperable" &&
+                File.GetLastWriteTimeUtc(Path.Combine(independent, Path.GetFileName(duplicate))) == stamp &&
+                File.GetAttributes(Path.Combine(independent, Path.GetFileName(duplicate))).HasFlag(FileAttributes.Hidden) &&
+                Directory.Exists(Path.Combine(independent, "carpeta vacía")),
+                "The standalone recovery did not restore the earlier point and its metadata.");
+            Console.WriteLine("PASS standalone recovery in a new process restores a full point with no source or index and one damaged replica.");
             Check(File.ReadAllText(Path.Combine(outputA, "cambio.txt")) == "primera versión" &&
                 File.ReadAllText(Path.Combine(outputB, "cambio.txt")) == "segunda versión" &&
                 File.ReadAllText(Path.Combine(outputA, "borrado.txt")) == "todavía recuperable" &&
@@ -187,6 +198,29 @@ internal static class VersionProbe
         Check(interrupted.ListPoints().Length == 1 && interrupted.ListPending().Length == 0,
             "The verified temporary did not recover idempotently without the source.");
         Console.WriteLine("PASS a verified temporary object can be promoted without the source after reopening.");
+    }
+
+    private static void RestoreInNewProcess(string root, string store, string generation, string output)
+    {
+        string executable = Environment.ProcessPath ?? throw new InvalidOperationException("Executable path unavailable.");
+        var start = new ProcessStartInfo(executable)
+        {
+            UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+            start.ArgumentList.Add(Assembly.GetExecutingAssembly().Location);
+        foreach (string argument in new[] { "--recover-version", root, store, generation, output })
+            start.ArgumentList.Add(argument);
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start recovery process.");
+        if (!process.WaitForExit(30_000))
+        {
+            process.Kill();
+            process.WaitForExit();
+            throw new TimeoutException("Standalone recovery timed out.");
+        }
+        Check(process.ExitCode == 0 && process.StandardOutput.ReadToEnd().Contains("Degraded catalog replica = True", StringComparison.Ordinal),
+            "Standalone recovery failed. " + process.StandardError.ReadToEnd());
     }
 
     private static void Reject(Action operation, string? detail = null)

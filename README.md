@@ -44,6 +44,8 @@ Usa `-- --workspace` para probar trabajos con rutas y nombres de archivo libres 
 
 Usa `-- --versions` para probar dos generaciones con objetos SHA-256 compartidos. El ensayo crea sus propios datos, reabre generaciones pendientes, recupera un temporal verificado con el origen ausente, restaura ambas fechas y detecta la corrupción de un objeto común. [Formato de generaciones](experiments/CopyProbe/VERSIONES.md).
 
+El comando `--recover-version` permite recuperar un punto del laboratorio desde otro proceso, con el origen ausente y sin índice local. Sus cuatro argumentos y comprobaciones están en la [guía del almacén](experiments/CopyProbe/VERSIONES.md).
+
 Usa `-- --version-scale 10240 32` para medir 10.240 archivos sintéticos con 32 contenidos distintos. El ensayo registra tiempo, E/S y memoria, verifica todos los objetos y restaura una ruta de muestra tras apartar el origen. [Método y resultados](PLAN.md#mediciones-del-versionado).
 
 El workflow manual **Synthetic object layout** compara una y dos carpetas de prefijo con 329.000 y un millón de objetos sintéticos. También importa 329.000 rutas en SQLite y comprueba la navegación y los cambios desde catálogos generados para el ensayo. Cada trabajo usa un runner Windows desechable.
