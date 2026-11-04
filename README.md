@@ -60,6 +60,8 @@ Elige el origen y el destino y pulsa **Analizar carpetas**. La vista previa mues
 
 En un espacio temporal, abre **Versiones** para usar una carpeta dedicada como almacén. Elige un origen sintético y crea un punto. Selecciona una fecha para recorrer sus carpetas, verificar los objetos o restaurar el punto o un archivo. El filtro de cambios compara la fecha seleccionada con la anterior. Si seleccionas un archivo eliminado, se recupera desde el punto anterior. Los puntos pendientes ofrecen **Reintentar punto**. La vista puede reconstruir su índice SQLite desde los catálogos confirmados. Si el índice dañado sigue presente, la ventana lo conserva y muestra la vista directa con un aviso.
 
+**Copiar en segundo plano** registra el trabajo y abre un ejecutor independiente. Puedes cerrar la ventana y volver a abrir el almacén para revisar sus puntos y los resultados de los trabajos. El ejecutor comprueba las identidades registradas. Si hay un punto pendiente para el mismo origen, intenta completarlo antes de crear otro. Un origen o destino ausente queda indicado en el historial. La programación horaria y la bandeja siguen pendientes.
+
 Durante una copia, **Cancelar copia** solicita detener el lote en el próximo punto seguro. Si un archivo está en curso, el motor termina ese paso y conserva lo ya verificado para el reintento. Si la confirmación del catálogo ya empezó, el lote puede terminar.
 
 Durante la copia, el reintento, la restauración y la verificación, la ventana muestra el archivo en curso y los recuentos de archivos procesados y verificados. El resultado final aparece al terminar las comprobaciones.

@@ -12,4 +12,6 @@ Conserva la carpeta temporal si hay un problema y anota el mensaje, la operació
 
 Para probar **Versiones**, crea en el mismo espacio otra subcarpeta vacía y selecciónala en **Crear almacén**. Elige el origen y crea un primer punto. Cambia un archivo sintético y elimina otro. Crea un segundo punto, selecciónalo y activa el filtro de cambios. Selecciona el archivo eliminado y restáuralo en una subcarpeta nueva y vacía. Comprueba que contiene los bytes que guardó la fecha anterior.
 
+Para probar el ejecutor independiente, elige un origen y usa **Copiar en segundo plano**. Cierra la ventana y vuelve a abrir el espacio y el almacén. Pulsa **Actualizar** para ver el punto y el resultado del trabajo. Conserva el espacio mientras el trabajador esté ejecutándose. Un intento con incidencias aparece por separado de los puntos ya confirmados.
+
 `SHA256SUMS.txt` contiene el SHA-256 y la ruta relativa de cada archivo distribuido. El artefacto de GitHub incluye el código fuente del commit en `FolderTwin-source.tar` y las licencias de la distribución. El catálogo de la aplicación es independiente y verifica el contenido de los trabajos.

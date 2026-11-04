@@ -34,6 +34,10 @@ if (args is ["--object-layout", var layoutCount] && int.TryParse(layoutCount, ou
     return ObjectLayoutProbe.Run(layoutObjects);
 if (args is ["--recover-version", var recoveryWorkspace, var recoveryStore, var recoveryGeneration, var recoveryOutput])
     return VersionRecovery.Run(recoveryWorkspace, recoveryStore, recoveryGeneration, recoveryOutput);
+if (args is ["--run-version-job", var jobWorkspace, var jobId] && Guid.TryParseExact(jobId, "N", out var parsedJobId))
+    return VersionJob.RunCommand(jobWorkspace, parsedJobId);
+if (args is ["--jobs"])
+    return JobProbe.Run();
 if (args is ["--catalog"])
     return CatalogProbe.Run();
 if (args is ["--resume"])

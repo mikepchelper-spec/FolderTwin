@@ -126,6 +126,7 @@ public partial class VersionWindow
         {
             Directory.Delete(workspace.Root, recursive: true); // The test owns every entry in this workspace.
         }
+        await RunBackgroundSmokeAsync();
 
         string NewFolder(string name) => Directory.CreateDirectory(Path.Combine(workspace.Root, name)).FullName;
         static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -133,6 +134,70 @@ public partial class VersionWindow
         {
             if (!condition)
                 throw new InvalidOperationException(message);
+        }
+    }
+
+    private static async Task RunBackgroundSmokeAsync()
+    {
+        var workspace = LabWorkspace.Create();
+        try
+        {
+            string source = Directory.CreateDirectory(Path.Combine(workspace.Root, "origen trabajador")).FullName;
+            string destination = Directory.CreateDirectory(Path.Combine(workspace.Root, "almacén trabajador")).FullName;
+            byte[] bytes = new byte[8 * 1024 * 1024 + 17];
+            new Random(42).NextBytes(bytes);
+            File.WriteAllBytes(Path.Combine(source, "contenido.bin"), bytes);
+            var selections = new Queue<string>([destination, source]);
+            var window = new VersionWindow(workspace, _ => selections.Dequeue());
+            Guid id;
+            try
+            {
+                window.NewStoreButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await window.activeTask;
+                window.ChooseSourceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                window.BackgroundButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await window.activeTask;
+                id = window.backgroundJob ?? throw new InvalidOperationException("The background job was not created.");
+            }
+            finally { window.Close(); }
+            var timeout = DateTime.UtcNow.AddSeconds(30);
+            VersionJobResult? result = null;
+            while (DateTime.UtcNow < timeout)
+            {
+                result = VersionJob.History(workspace, id).Results.FirstOrDefault();
+                if (result is not null)
+                    break;
+                await Task.Delay(100);
+            }
+            if (result is not { State: VersionJobState.Confirmed })
+                throw new InvalidOperationException("The worker did not confirm its point after the window closed.");
+            var store = VersionStore.Open(workspace, destination);
+            if (store.ListPoints().Single().Id != result.Generation || store.Verify(result.Generation))
+                throw new InvalidOperationException("The background point did not verify.");
+            var reopened = new VersionWindow(LabWorkspace.Open(workspace.Root), _ => destination);
+            try
+            {
+                reopened.OpenStoreButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await reopened.activeTask;
+                if (!reopened.JobsText.Text.Contains("punto confirmado", StringComparison.Ordinal))
+                    throw new InvalidOperationException("The reopened window hid its background job result.");
+                string moved = Path.Combine(workspace.Root, "origen apartado");
+                Directory.Move(source, moved);
+                if (VersionJob.Run(workspace, id).State != VersionJobState.WaitingForSource)
+                    throw new InvalidOperationException("The missing-source worker fixture was not observed.");
+                reopened.RefreshButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await reopened.activeTask;
+                if (!reopened.JobsText.Text.Contains("origen ausente", StringComparison.Ordinal) ||
+                    !reopened.JobsText.Text.Contains("pendiente de resolver", StringComparison.Ordinal) ||
+                    !reopened.RestorePointButton.IsEnabled)
+                    throw new InvalidOperationException("A failed job was hidden or blocked an independently confirmed point.");
+            }
+            finally { reopened.Close(); }
+        }
+        finally
+        {
+            using (workspace.OpenRegisteredRoot()) { }
+            Directory.Delete(workspace.Root, recursive: true);
         }
     }
 }

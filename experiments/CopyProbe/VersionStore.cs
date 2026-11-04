@@ -22,6 +22,7 @@ internal sealed class VersionStore
     private readonly LabWorkspace workspace;
     private readonly DestinationBinding binding;
     internal string Destination { get; }
+    internal DestinationBinding Binding => binding;
 
     private VersionStore(LabWorkspace workspace, string destination, DestinationBinding binding)
     {
@@ -124,20 +125,28 @@ internal sealed class VersionStore
             }).ToArray();
     }
 
-    internal void ResumePoint(string generation, Action<CatalogStep>? checkpoint = null)
+    internal void ResumePoint(string generation, Action<CatalogStep>? checkpoint = null, byte[]? expectedSourceIdentity = null)
     {
         _ = GenerationTime(generation);
         using var scope = workspace.OpenRegisteredRoot();
         using var store = new DirectoryFence(Destination);
         using var marker = binding.OpenVerifiedMarker(store.Root);
         using var operation = OpenLock(store.Root, FileAccess.ReadWrite);
-        if (IsCommitted(store.Root, generation))
+        bool committed = IsCommitted(store.Root, generation);
+        if (committed && expectedSourceIdentity is null)
         {
             VerifyObjects(store.Root, ReadPoint(store.Root, generation).Files);
             return;
         }
         using var pending = WindowsProbeNative.OpenPlainDirectory(store.Root, PendingDirectory);
         var plan = ReadIntent(scope.Root, store.Root, pending, generation);
+        if (expectedSourceIdentity is not null && !plan.SourceIdentity.AsSpan().SequenceEqual(expectedSourceIdentity))
+            throw new InvalidDataException("El origen del plan pendiente no corresponde al trabajo.");
+        if (committed)
+        {
+            VerifyObjects(store.Root, ReadPoint(store.Root, generation).Files);
+            return;
+        }
         CopyAndConfirm(store.Root, plan, generation, checkpoint, objectCheckpoint: null);
     }
 

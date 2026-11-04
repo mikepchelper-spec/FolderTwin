@@ -35,6 +35,8 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --workspace
       - name: Verify versioned snapshots and restoration from shared objects
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --versions
+      - name: Verify persistent headless version jobs
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --jobs
       - name: Verify versioning above the initial catalog entry limit
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --version-scale 10240 32
       - name: Verify confirmed catalogs and independent restoration

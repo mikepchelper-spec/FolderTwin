@@ -1,5 +1,7 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation.Peers;
@@ -27,6 +29,7 @@ public partial class VersionWindow : Window
     private readonly Func<string, string?>? testPicker;
     private VersionStore? store;
     private string? source;
+    private Guid? backgroundJob;
     private VersionBrowser? browser;
     private string? indexKey;
     private string? comparisonId;
@@ -60,6 +63,7 @@ public partial class VersionWindow : Window
         {
             store = await Task.Run(() => create ? VersionStore.Initialize(workspace, selected) : VersionStore.Open(workspace, selected));
             source = null;
+            backgroundJob = null;
             SourceText.Text = "Elige un origen para crear otro punto.";
             StoreText.Text = store.Destination;
             OnlyChanges.IsChecked = false;
@@ -80,6 +84,7 @@ public partial class VersionWindow : Window
         {
             workspace.CheckRoots(selected, current.Destination);
             source = selected;
+            backgroundJob = null;
             SourceText.Text = selected;
             SetStatus("El origen está listo para analizar y crear un punto.");
             RefreshActions();
@@ -100,6 +105,23 @@ public partial class VersionWindow : Window
     {
         if (!busy && store is { } current && Timeline.SelectedItem is PointRow { Pending: not null } row)
             Start(() => RunPointAsync(row.Id, () => current.ResumePoint(row.Id)));
+    }
+
+    private void BackgroundClick(object sender, RoutedEventArgs e)
+    {
+        if (!busy && store is { } current && source is { } origin)
+            Start(async () =>
+            {
+                backgroundJob ??= await Task.Run(() => VersionJob.Create(workspace, origin, current.Destination));
+                string executable = Environment.ProcessPath ?? throw new IOException("No se pudo localizar el ejecutor.");
+                var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true };
+                if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+                    start.ArgumentList.Add(Assembly.GetExecutingAssembly().Location);
+                foreach (string argument in new[] { "--run-version-job", workspace.Root, backgroundJob.Value.ToString("N") })
+                    start.ArgumentList.Add(argument);
+                using var process = Process.Start(start) ?? throw new IOException("No se pudo iniciar el trabajo.");
+                SetStatus("Trabajo iniciado en segundo plano. Puedes cerrar la ventana. Actualiza el almacén para revisar los puntos confirmados.");
+            });
     }
 
     private async Task RunPointAsync(string id, Action write)
@@ -126,6 +148,22 @@ public partial class VersionWindow : Window
         Timeline.ItemsSource = points;
         Timeline.SelectedItem = points.FirstOrDefault(row => row.Id == select) ?? points.FirstOrDefault();
         await ShowSelectionAsync();
+        var jobs = await Task.Run(() =>
+        {
+            var catalog = VersionJob.List(workspace);
+            var own = catalog.Jobs.Where(job => job.TargetMarker == current.Binding.Marker &&
+                job.Destination == Path.GetFileName(current.Destination)).ToArray();
+            var histories = own.Select(job => (Job: job, History: VersionJob.History(workspace, job.Id))).ToArray();
+            return (Entries: histories, Unreadable: catalog.Unreadable + histories.Sum(entry => entry.History.Unreadable));
+        });
+        int failed = jobs.Entries.Count(entry => entry.History.Results.FirstOrDefault()?.State is { } state &&
+            state != VersionJobState.Confirmed);
+        JobsText.Text = string.Join("\n", jobs.Entries.Take(4).Select(entry =>
+            entry.Job.Source + " · " + (entry.History.Results.FirstOrDefault() is { } result ?
+                JobStateText(result.State) : "sin resultado registrado"))) +
+            (jobs.Entries.Length > 4 ? $"\nHay {jobs.Entries.Length - 4} trabajos adicionales." : "") +
+            (failed > 0 ? $"\n{failed} trabajos tienen un último intento pendiente de resolver." : "") +
+            (jobs.Unreadable > 0 ? $"\n{jobs.Unreadable} registros de trabajos requieren revisión." : "");
     }
 
     private void TimelineChanged(object sender, SelectionChangedEventArgs e)
@@ -316,6 +354,7 @@ public partial class VersionWindow : Window
         NewStoreButton.IsEnabled = OpenStoreButton.IsEnabled = Timeline.IsEnabled = !busy;
         ChooseSourceButton.IsEnabled = RefreshButton.IsEnabled = !busy && store is not null;
         CreatePointButton.IsEnabled = ChooseSourceButton.IsEnabled && source is not null;
+        BackgroundButton.IsEnabled = CreatePointButton.IsEnabled;
         ResumeButton.IsEnabled = !busy && row?.Pending is not null;
         VerifyButton.IsEnabled = RestorePointButton.IsEnabled = confirmed;
         RestoreFileButton.IsEnabled = confirmed && entry is { IsDirectory: false };
@@ -327,6 +366,15 @@ public partial class VersionWindow : Window
 
     private static bool IsExpected(Exception error) => error is IOException or InvalidDataException or
         UnauthorizedAccessException or Win32Exception or ArgumentException or JsonException;
+
+    private static string JobStateText(VersionJobState state) => state switch
+    {
+        VersionJobState.Confirmed => "punto confirmado",
+        VersionJobState.Busy => "otro trabajo estaba en curso",
+        VersionJobState.WaitingForSource => "origen ausente",
+        VersionJobState.WaitingForDestination => "destino ausente",
+        _ => "requiere revisión"
+    };
 
     private void SetStatus(string text)
     {
