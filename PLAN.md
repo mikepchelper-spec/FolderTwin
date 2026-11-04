@@ -132,7 +132,7 @@ Para el modo de bajo impacto, comparar primero concurrencia limitada y buffers a
 
 Estado global: la base experimental ya copia, verifica y restaura lotes sintéticos, con recuperación por archivo y ensayos de fallos. La ventana WPF incorpora revisión previa, resultados por ruta y reintentos de copias parciales. Un catálogo JSONL duplicado y confirmado permite restaurar un lote inicial desde otro proceso sin el origen ni SQLite. Un descriptor de ejecución permite reabrir lotes pendientes tras terminar su trabajador y reconstruir el progreso verificando los datos del destino. La alfa de respaldo de carpetas personales sigue pendiente. También quedan por construir el versionado, el índice reconstruible, la automatización, la retención y el espejo protegido. La etapa 1 permanece abierta con las pruebas de hardware aplazadas; eso permite avanzar en funciones de software sin declarar validada la durabilidad frente a apagones.
 
-La restauración de lotes completos se reconstruye desde el catálogo y la reanudación de pendientes desde el descriptor y los registros por archivo. La ventana ya abre sesiones de laboratorio anteriores y ofrece la acción que corresponde a cada estado. El historial durable de mensajes aún está pendiente. Antes de admitir carpetas personales, cerrar la matriz de metadatos, exclusiones y detección de contenido no soportado, y superar los criterios de la alfa.
+La restauración de lotes completos se reconstruye desde el catálogo y la reanudación de pendientes desde el descriptor y los registros por archivo. La ventana abre sesiones anteriores, ofrece la acción que corresponde a cada estado y conserva un historial de los intentos. Antes de admitir carpetas personales, cerrar la matriz de metadatos, exclusiones y detección de contenido no soportado, y superar los criterios de la alfa.
 
 | Etapa | Entrega | Para pasar a la siguiente |
 |---|---|---|
@@ -252,7 +252,15 @@ Al reabrir, el progreso se reconstruye desde los registros e identidades por arc
 
 La ventana conserva la sesión nueva al cerrar si se inició una copia. **Abrir sesión anterior** permite escoger una carpeta sintética directamente bajo la carpeta temporal de Windows. Valida la identidad del destino y las rutas, tamaños y hashes del lote fijo. Si encuentra una confirmación, exige un catálogo válido para habilitar la restauración. Para un lote pendiente exige un descriptor válido y muestra las incidencias al reintentar. Restaurar una sesión anterior escribe en una carpeta nueva del laboratorio, que se retira al cerrar.
 
-El descriptor tiene una sola copia. Su corrupción detiene la reanudación y conserva los datos. Los catálogos completos conservan su lector independiente. Las incidencias se reconstruyen en cada intento y el historial persistente queda pendiente. Las pruebas cubren la terminación de procesos. El reinicio abrupto de Windows y el corte eléctrico siguen pendientes.
+El descriptor tiene una sola copia. Su corrupción detiene la reanudación y conserva los datos. Los catálogos completos conservan su lector independiente. Las pruebas cubren la terminación de procesos. El reinicio abrupto de Windows y el corte eléctrico siguen pendientes.
+
+### Historial de intentos del laboratorio
+
+Al terminar una copia, reintento o restauración en WPF, el laboratorio añade un registro JSONL a `.foldertwin-history-v1.jsonl` en la raíz de la sesión, fuera de Origen y Destino. Comprueba el marcador y la identidad del destino antes de acceder al historial. Guarda fecha, operación, resultado, recuento verificado, rutas relativas sintéticas y categorías de incidencia. Los detalles del intento activo siguen visibles en la ventana. El archivo excluye mensajes de excepción, rutas absolutas y nombres de aplicaciones detectadas.
+
+La escritura usa un handle exclusivo y solicita un flush. Un registro truncado se reporta como ilegible y se conserva. Los reintentos pueden añadir líneas después de él. El archivo se limita a 256 KiB y la interfaz muestra los 20 intentos más recientes. Al alcanzar el límite, la ventana avisa y conserva las entradas existentes. Los catálogos y registros por archivo siguen siendo la fuente para restaurar y reanudar. El historial guarda resultados de intentos que llegaron a informar su resultado. Una terminación anterior a su escritura puede dejar ese intento fuera.
+
+La prueba WPF comprueba que un reintento exitoso conserve la incidencia previa, que otra ventana la pueda leer tras reabrir la sesión y que un registro truncado no oculte los demás. También bloquea la escritura del historial durante una restauración y comprueba que el aviso sea independiente del resultado verificado.
 
 ### Laboratorio de volumen desechable
 

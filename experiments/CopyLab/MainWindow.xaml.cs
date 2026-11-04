@@ -97,6 +97,7 @@ public partial class MainWindow : Window
                 : "Lote pendiente. Al reintentar se comprobará lo guardado y se mostrarán las incidencias por archivo.";
             ResultsList.ItemsSource = null;
             SetStatus(confirmed ? "Sesión anterior abierta. Puedes restaurar el lote." : "Sesión anterior abierta. Puedes reintentar la copia.");
+            await RefreshHistoryAsync();
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException
             or Win32Exception or ArgumentException or JsonException)
@@ -165,11 +166,13 @@ public partial class MainWindow : Window
         SetStatus(restore ? "Restaurando y verificando…" : "Copiando y verificando…");
         if (!restore && previous is null)
             copyStarted = true;
+        BatchResult? outcome = null;
         try
         {
             BatchResult result = await Task.Run(() => previous is { } reopened
                 ? restore ? reopened.Restore(session) : reopened.Resume()
                 : restore ? session.Restore() : session.Copy());
+            outcome = result;
             if (restore)
                 restored = result.Complete;
             else
@@ -192,17 +195,76 @@ public partial class MainWindow : Window
                 PreviewText.Text = $"Archivos restaurados en {session.Restored}" +
                     (previous is null ? "" : "\nEsta carpeta de prueba se retira al cerrar la ventana.");
         }
-        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException
-            or Win32Exception or ArgumentException)
+        catch (Exception error) when (IsLabError(error))
         {
+            outcome ??= new([], "La operación necesita revisión.");
             SetStatus($"La prueba no se completó. {error.Message}");
         }
         finally
         {
+            if (outcome is not null)
+                await RefreshHistoryAsync(outcome, restore);
             busy = false;
             RefreshActions();
         }
     }
+
+    private async Task RefreshHistoryAsync(BatchResult? outcome = null, bool restore = false)
+    {
+        string root = previous?.Root ?? session.Root;
+        var binding = previous?.Binding ?? session.DestinationBinding;
+        bool appendFailed = false;
+        if (outcome is not null)
+        {
+            try { await Task.Run(() => AttemptHistory.Append(root, binding, restore, outcome)); }
+            catch (Exception error) when (IsLabError(error)) { appendFailed = true; }
+        }
+
+        try
+        {
+            AttemptLog log = await Task.Run(() => AttemptHistory.Read(root, binding));
+            HistoryList.ItemsSource = log.Records.Take(20).Select(DescribeAttempt).ToArray();
+            HistoryStatus.Text = log.Records.Length == 0 ? "Aún no hay intentos registrados."
+                : $"Se muestran {Math.Min(20, log.Records.Length):N0} de {log.Records.Length:N0} intentos, del más reciente al más antiguo.";
+            if (log.Unreadable != 0)
+                HistoryStatus.Text += $" Registros incompletos o ilegibles: {log.Unreadable:N0}.";
+        }
+        catch (Exception error) when (IsLabError(error))
+        {
+            HistoryList.ItemsSource = null;
+            HistoryStatus.Text = "El historial no está disponible.";
+        }
+        if (appendFailed)
+            HistoryStatus.Text += " No se pudo guardar este intento.";
+    }
+
+    private static string DescribeAttempt(AttemptRecord record)
+    {
+        string action = record.Restore ? "Restauración" : "Copia";
+        string state = record.Complete ? "Completa" : record.VerifiedFiles == 0 ? "Sin completar" : "Parcial";
+        var lines = new List<string>
+        {
+            $"{record.FinishedAt.ToLocalTime():g} · {action} · {state} · {record.VerifiedFiles:N0} archivos verificados"
+        };
+        if (record.HasProblem)
+            lines.Add("La operación requiere revisión.");
+        if (record.Degraded)
+            lines.Add("Se usó una sola réplica del catálogo.");
+        foreach (var issue in record.Issues)
+        {
+            string reason = issue.Kind switch
+            {
+                AttemptIssueKind.InUse => "Archivo en uso",
+                AttemptIssueKind.Cancelled => "Cancelado",
+                _ => "Requiere revisión"
+            };
+            lines.Add($"{issue.Path} · {reason}");
+        }
+        return string.Join("\n", lines);
+    }
+
+    private static bool IsLabError(Exception error) => error is IOException or InvalidDataException or
+        UnauthorizedAccessException or Win32Exception or ArgumentException or JsonException;
 
     private void RefreshActions()
     {
@@ -311,11 +373,22 @@ public partial class MainWindow : Window
         await activeTask;
         Check(restored && !RestoreButton.IsEnabled && StatusText.Text.Contains("réplica íntegra", StringComparison.Ordinal), StatusText.Text);
         session.CheckRestored();
+        string[] ownHistory = HistoryList.Items.Cast<string>().ToArray();
+        Check(ownHistory.Length == 4 && ownHistory[0].Contains("Se usó una sola réplica", StringComparison.Ordinal) &&
+            ownHistory[1].Contains("Sin completar", StringComparison.Ordinal) &&
+            ownHistory[3].Contains("muestra.txt · Archivo en uso", StringComparison.Ordinal),
+            "Copy or restore attempt history was lost.");
 
         using var interrupted = new BatchFixture();
         interrupted.Analyze();
         using (var writer = new FileStream(interrupted.SourceFile, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
-            Check(interrupted.Copy().VerifiedFiles == 2, "The previous session was not left partial.");
+        {
+            BatchResult partial = interrupted.Copy();
+            Check(partial.VerifiedFiles == 2, "The previous session was not left partial.");
+            AttemptHistory.Append(interrupted.Root, interrupted.DestinationBinding, restore: false, partial);
+        }
+        string interruptedLog = Path.Combine(interrupted.Root, AttemptHistory.Name);
+        File.AppendAllText(interruptedLog, "{\"FinishedAt\":");
         interrupted.ForgetPlan();
 
         var reopened = new MainWindow(smoke: true);
@@ -331,9 +404,15 @@ public partial class MainWindow : Window
             await reopened.activeTask;
             Check(reopened.CopyButton.IsEnabled && !reopened.RestoreButton.IsEnabled && !File.Exists(interrupted.CopyFile),
                 "Opening a pending session wrote files or showed the wrong actions.");
+            Check(reopened.HistoryList.Items.Count == 1 &&
+                reopened.HistoryStatus.Text.Contains("ilegibles: 1", StringComparison.Ordinal),
+                "A torn history record hid a previous valid attempt.");
             Click(reopened.CopyButton);
             await reopened.activeTask;
             Check(reopened.copied && reopened.RestoreButton.IsEnabled, reopened.StatusText.Text);
+            Check(reopened.HistoryList.Items.Count == 2 &&
+                ((string)reopened.HistoryList.Items[1]).Contains("Archivo en uso", StringComparison.Ordinal),
+                "A successful retry replaced an older incident or failed to append after a torn record.");
         }
         finally { reopened.Close(); }
         Check(File.Exists(interrupted.CopyFile), "Closing a reopened session removed its data.");
@@ -347,9 +426,14 @@ public partial class MainWindow : Window
             await confirmedWindow.activeTask;
             Check(confirmedWindow.RestoreButton.IsEnabled && !confirmedWindow.CopyButton.IsEnabled,
                 "A confirmed session did not offer restoration.");
-            Click(confirmedWindow.RestoreButton);
-            await confirmedWindow.activeTask;
-            Check(confirmedWindow.restored && !File.Exists(interrupted.RestoredFile), confirmedWindow.StatusText.Text);
+            using (var logLock = new FileStream(interruptedLog, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                Click(confirmedWindow.RestoreButton);
+                await confirmedWindow.activeTask;
+                Check(confirmedWindow.restored && !File.Exists(interrupted.RestoredFile), confirmedWindow.StatusText.Text);
+                Check(confirmedWindow.HistoryStatus.Text.Contains("No se pudo guardar este intento", StringComparison.Ordinal),
+                    "A history write failure was hidden or prevented restoration.");
+            }
             confirmedWindow.session.CheckRestored();
         }
         finally { confirmedWindow.Close(); }

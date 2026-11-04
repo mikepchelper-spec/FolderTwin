@@ -82,6 +82,10 @@ internal sealed class BatchFixture : IDisposable
 
     public void Dispose()
     {
+        string markerPath = Path.Combine(Destination, global::DestinationBinding.MarkerName);
+        using (var root = new DirectoryFence(Root, markerPath))
+        using (DestinationBinding.OpenVerifiedMarker(root.Parent(markerPath)))
+            File.Delete(Path.Combine(Root, AttemptHistory.Name));
         Clear(Source, sourceIdentity, null);
         Clear(Destination, DestinationBinding.Identity, DestinationBinding);
         Clear(Restored, RestoreBinding.Identity, RestoreBinding);

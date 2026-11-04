@@ -36,6 +36,8 @@ Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project e
 
 La ventana muestra el nombre de la sesión y conserva su carpeta temporal si iniciaste la copia. En otra ejecución, pulsa **Abrir sesión anterior** y elige esa carpeta `FolderTwin-Batch-…`. El laboratorio ofrece reintentar un lote pendiente o restaurar uno confirmado. Al restaurar una sesión anterior, muestra la ruta de una carpeta de prueba nueva que se retira al cerrar. CI comprueba estos recorridos con `-- --smoke`.
 
+Abre **Historial de intentos** para ver las últimas 20 operaciones de copia o restauración de la sesión, incluidas las incidencias de intentos anteriores. El historial guarda nombres relativos del lote sintético y categorías de incidencia en la carpeta de la sesión. Si hay registros ilegibles o falla la escritura del historial, la ventana lo indica aparte del resultado de la operación.
+
 Si un archivo está en uso, el laboratorio intenta mostrar las aplicaciones que detecta Windows mediante Restart Manager. Si no puede identificarlas, conserva el aviso y permite reintentar. El diagnóstico no cierra aplicaciones.
 
 Para repetir el ensayo de disco lleno, cambio de letra, destino sustituido y reconexión ordenada, ejecuta **Disposable volume lab** en la pestaña Actions de GitHub. Usa un disco virtual de 128 MiB en un runner Windows desechable. El ensayo de corte eléctrico en hardware queda aplazado. [Alcance y resultados](PLAN.md#laboratorio-de-volumen-desechable).

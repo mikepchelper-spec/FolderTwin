@@ -4,7 +4,7 @@ namespace CopyLab;
 
 internal sealed class PreviousSession
 {
-    private readonly DestinationBinding binding;
+    internal DestinationBinding Binding { get; }
     internal string Root { get; }
     internal string Source => Path.Combine(Root, "Origen");
     internal string Destination => Path.Combine(Root, "Destino");
@@ -20,13 +20,13 @@ internal sealed class PreviousSession
         {
             var catalog = BatchCatalog.Read(Destination);
             BatchFixture.ValidateSamples(catalog.Files, catalog.Directories);
-            binding = catalog.Binding;
+            Binding = catalog.Binding;
         }
         else
         {
             var plan = PendingBatch.Read(Root, Destination);
             ValidateSamples(plan);
-            binding = plan.Target;
+            Binding = plan.Target;
         }
     }
 
@@ -51,7 +51,7 @@ internal sealed class PreviousSession
 
     private void RequireSameDestination(DestinationBinding current)
     {
-        if (binding.Marker != current.Marker || !binding.Identity.AsSpan().SequenceEqual(current.Identity))
+        if (Binding.Marker != current.Marker || !Binding.Identity.AsSpan().SequenceEqual(current.Identity))
             throw new InvalidDataException("El destino de la sesión cambió desde que se abrió.");
     }
 

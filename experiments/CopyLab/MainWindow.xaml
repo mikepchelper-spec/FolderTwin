@@ -64,6 +64,19 @@
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
+            <Expander Header="Historial de intentos" Margin="0,16,0,0">
+                <StackPanel>
+                    <TextBlock x:Name="HistoryStatus" Text="Aún no hay intentos registrados."
+                               Style="{StaticResource Detail}" AutomationProperties.LiveSetting="Polite" />
+                    <ItemsControl x:Name="HistoryList" AutomationProperties.AutomationId="AttemptHistory">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,4,0,8" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Expander>
         </StackPanel>
     </ScrollViewer>
 </Window>
