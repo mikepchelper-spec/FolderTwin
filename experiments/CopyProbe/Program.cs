@@ -5,12 +5,18 @@ using System.Text;
 
 if (args is ["--interrupt", "before-receipt"])
     return RunInterruptedCopy(CopyStep.Flushed);
+if (args is ["--interrupt", "receipt-draft"])
+    return RunInterruptedCopy(CopyStep.ReceiptFlushed);
 if (args is ["--interrupt", "before"])
     return RunInterruptedCopy(CopyStep.Verified);
 if (args is ["--interrupt", "after"])
     return RunInterruptedCopy(CopyStep.Published);
 if (args is ["--compare"])
     return TransportProbe.Run();
+if (args is ["--uncached"])
+    return UncachedProbe.Run();
+if (args is ["--paths"])
+    return PathProbe.Run();
 if (args.Length != 0)
 {
     Console.Error.WriteLine("Unknown scenario. This experiment does not accept paths.");
@@ -88,7 +94,7 @@ if (OperatingSystem.IsWindows())
     Pass("Windows rejects a source with an open writer");
 }
 
-foreach (string boundary in new[] { "before-receipt", "before", "after" })
+foreach (string boundary in new[] { "before-receipt", "receipt-draft", "before", "after" })
 {
     CheckInterruptedCopy(boundary);
     Pass($"Disk recovery after process termination at {boundary}");
@@ -146,6 +152,48 @@ File.WriteAllBytes(fixture.Backup, "corrupted copy"u8);
 CheckRecoveryLeavesFiles(fixture, RecoveryResult.HashMismatch);
 Pass("Recovery excludes concurrent access, retries, and rejects an altered final file");
 
+foreach (CopyStep fault in new[] { CopyStep.Writing, CopyStep.Flushing, CopyStep.WritingReceipt, CopyStep.FlushingReceipt })
+{
+    byte[] content = new byte[65_537];
+    new Random(12).NextBytes(content);
+    fixture.Seed(content);
+    int writes = 0;
+    var error = new IOException("Injected I/O failure", unchecked((int)(fault == CopyStep.Writing ? 0x80070070 : 0x8007001D)));
+    try
+    {
+        VerifiedCopy.Run(fixture.Source, fixture.Backup, fixture.Temporary, (step, _) =>
+        {
+            if (step == fault && (step != CopyStep.Writing || ++writes == 2))
+                throw error;
+        }, recoverable: true);
+        throw new InvalidOperationException("A failed operation completed.");
+    }
+    catch (IOException caught) when (ReferenceEquals(caught, error))
+    {
+        CheckFile(fixture.Source, SHA256.HashData(content));
+        Check(new FileInfo(fixture.Temporary).Length == (fault == CopyStep.Writing ? 65_536 : content.Length),
+            "Unexpected amount of pending data");
+        Check(!File.Exists(fixture.Backup) && !File.Exists(CopyRecovery.ReceiptPath(fixture.Temporary)),
+            "An I/O failure published a file or a receipt");
+        CheckRecoveryLeavesFiles(fixture, RecoveryResult.NoReceipt);
+        Pass($"Injected I/O error at {fault} leaves the operation pending");
+    }
+}
+
+fixture.Seed(new byte[65_537]);
+using (var cancellation = new CancellationTokenSource())
+{
+    int writes = 0;
+    Expect<OperationCanceledException>(() => VerifiedCopy.Run(fixture.Source, fixture.Backup, fixture.Temporary, (step, _) =>
+    {
+        if (step == CopyStep.Writing && ++writes == 2)
+            cancellation.Cancel();
+    }, recoverable: true, cancellationToken: cancellation.Token));
+}
+Check(new FileInfo(fixture.Temporary).Length == 65_536 && !File.Exists(fixture.Backup), "Cancellation published data");
+CheckRecoveryLeavesFiles(fixture, RecoveryResult.NoReceipt);
+Pass("Cancellation during copy preserves the partial temporary without publishing");
+
 Console.WriteLine($"{passed} synthetic checks passed.");
 return 0;
 
@@ -188,8 +236,10 @@ static void CheckInterruptedCopy(string boundary)
             Check(!File.Exists(interrupted.Backup), "Unpublished copy appeared under its final name");
             CheckFile(interrupted.Temporary, hash);
         }
-        if (boundary == "before-receipt")
+        if (boundary is "before-receipt" or "receipt-draft")
         {
+            Check(File.Exists(CopyRecovery.ReceiptDraftPath(interrupted.Temporary)) == (boundary == "receipt-draft"),
+                "Unexpected receipt draft state");
             CheckRecoveryLeavesFiles(interrupted, RecoveryResult.NoReceipt);
             return;
         }
@@ -242,7 +292,8 @@ static void PreparePending(Fixture fixture)
 
 static void CheckRecoveryLeavesFiles(Fixture fixture, RecoveryResult expected)
 {
-    string[] paths = [fixture.Source, fixture.Temporary, fixture.Backup, CopyRecovery.ReceiptPath(fixture.Temporary)];
+    string[] paths = [fixture.Source, fixture.Temporary, fixture.Backup,
+        CopyRecovery.ReceiptPath(fixture.Temporary), CopyRecovery.ReceiptDraftPath(fixture.Temporary)];
     byte[]?[] before = paths.Select(path => File.Exists(path) ? File.ReadAllBytes(path) : null).ToArray();
     Check(CopyRecovery.Recover(fixture.Temporary, fixture.Backup) == expected, $"Expected recovery result {expected}");
     for (int i = 0; i < paths.Length; i++)
@@ -317,7 +368,7 @@ sealed class Fixture : IDisposable
         foreach (string path in new[]
         {
             Source, Temporary, Backup, RestoreTemporary, Restored,
-            CopyRecovery.ReceiptPath(Temporary), CopyRecovery.LockPath(Temporary)
+            CopyRecovery.ReceiptPath(Temporary), CopyRecovery.ReceiptDraftPath(Temporary), CopyRecovery.LockPath(Temporary)
         })
             File.Delete(path);
     }

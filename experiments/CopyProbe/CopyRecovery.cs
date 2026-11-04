@@ -22,6 +22,7 @@ internal static class CopyRecovery
     private const int ReceiptSize = PayloadSize + SHA256.HashSizeInBytes;
 
     public static string ReceiptPath(string temporary) => temporary + ".ready";
+    public static string ReceiptDraftPath(string temporary) => ReceiptPath(temporary) + ".tmp";
     public static string LockPath(string temporary) => temporary + ".lock";
 
     public static FileStream Begin(string temporary, string destination)
@@ -29,7 +30,8 @@ internal static class CopyRecovery
         var operation = Acquire(temporary, destination);
         try
         {
-            if (IsRegularFile(ReceiptPath(temporary)) || IsRegularFile(temporary) || IsRegularFile(destination))
+            if (IsRegularFile(ReceiptPath(temporary)) || IsRegularFile(ReceiptDraftPath(temporary)) ||
+                IsRegularFile(temporary) || IsRegularFile(destination))
                 throw new IOException("This operation already has files. Inspect recovery first.");
             return operation;
         }
@@ -40,16 +42,24 @@ internal static class CopyRecovery
         }
     }
 
-    public static void RecordVerified(string temporary, string destination, ReadOnlySpan<byte> hash)
+    public static void RecordVerified(string temporary, string destination, ReadOnlySpan<byte> hash,
+        Action<CopyStep, string>? checkpoint)
     {
         Span<byte> record = stackalloc byte[ReceiptSize];
         Magic.CopyTo(record);
         hash.CopyTo(record[Magic.Length..DataHashEnd]);
         SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFileName(destination)), record[DataHashEnd..PayloadSize]);
         SHA256.HashData(record[..PayloadSize], record[PayloadSize..]);
-        using var receipt = new FileStream(ReceiptPath(temporary), FileMode.CreateNew, FileAccess.Write, FileShare.None);
-        receipt.Write(record);
-        receipt.Flush(flushToDisk: true);
+        string draft = ReceiptDraftPath(temporary);
+        using (var receipt = new FileStream(draft, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            checkpoint?.Invoke(CopyStep.WritingReceipt, draft);
+            receipt.Write(record);
+            checkpoint?.Invoke(CopyStep.FlushingReceipt, draft);
+            receipt.Flush(flushToDisk: true);
+        }
+        checkpoint?.Invoke(CopyStep.ReceiptFlushed, draft);
+        File.Move(draft, ReceiptPath(temporary));
     }
 
     public static RecoveryResult Recover(string temporary, string destination)

@@ -23,3 +23,7 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release
       - name: Compare Windows transports
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --compare
+      - name: Compare buffered and unbuffered verification
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --uncached
+      - name: Verify directory rename and junction behavior
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --paths

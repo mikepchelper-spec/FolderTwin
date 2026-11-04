@@ -1,14 +1,16 @@
 using System.Security.Cryptography;
 
-internal enum CopyStep { Written, Flushed, Verified, Published }
+internal enum CopyStep { Writing, Written, Flushing, Flushed, WritingReceipt, FlushingReceipt, ReceiptFlushed, Verified, Published }
 
 internal static class VerifiedCopy
 {
     // The caller supplies paths inside a fresh synthetic fixture on one volume.
     public static void Run(
         string source, string destination, string temporary,
-        Action<CopyStep, string>? checkpoint = null, byte[]? expectedHash = null, bool recoverable = false)
+        Action<CopyStep, string>? checkpoint = null, byte[]? expectedHash = null, bool recoverable = false,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         using var operation = recoverable ? CopyRecovery.Begin(temporary, destination) : null;
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -18,10 +20,14 @@ internal static class VerifiedCopy
             int count;
             while ((count = input.Read(buffer)) != 0)
             {
+                checkpoint?.Invoke(CopyStep.Writing, temporary);
+                cancellationToken.ThrowIfCancellationRequested();
                 output.Write(buffer.AsSpan(0, count));
                 hash.AppendData(buffer.AsSpan(0, count));
             }
             checkpoint?.Invoke(CopyStep.Written, temporary);
+            cancellationToken.ThrowIfCancellationRequested();
+            checkpoint?.Invoke(CopyStep.Flushing, temporary);
             output.Flush(flushToDisk: true);
         }
         checkpoint?.Invoke(CopyStep.Flushed, temporary);
@@ -32,8 +38,9 @@ internal static class VerifiedCopy
             if (!SHA256.HashData(input).AsSpan().SequenceEqual(sourceHash) ||
                 (expectedHash is not null && !sourceHash.AsSpan().SequenceEqual(expectedHash)))
                 throw new InvalidDataException("The copy does not match the expected SHA-256.");
+            cancellationToken.ThrowIfCancellationRequested();
             if (recoverable)
-                CopyRecovery.RecordVerified(temporary, destination, sourceHash);
+                CopyRecovery.RecordVerified(temporary, destination, sourceHash, checkpoint);
         }
         checkpoint?.Invoke(CopyStep.Verified, temporary);
         File.Move(temporary, destination);
