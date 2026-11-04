@@ -21,6 +21,8 @@ if (args is ["--volume-lab", "fill"])
     return VolumeProbe.Run("fill");
 if (args is ["--volume-lab", "absent"])
     return VolumeProbe.Run("absent");
+if (args is ["--volume-lab", "substituted"])
+    return VolumeProbe.Run("substituted");
 if (args is ["--volume-lab", "reopen"])
     return VolumeProbe.Run("reopen");
 if (args.Length != 0)

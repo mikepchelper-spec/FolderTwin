@@ -23,6 +23,7 @@ internal static class VolumeProbe
             throw new InvalidOperationException("The volume lab configuration is invalid.");
 
         string configuration = Path.Combine(state, "destination.json");
+        string root = Path.Combine($"{letter}:\\", label);
         if (phase == "absent")
         {
             DestinationBinding saved = DestinationBinding.Load(configuration);
@@ -39,12 +40,31 @@ internal static class VolumeProbe
             }
             throw new InvalidDataException("Recovery did not report the detached destination as unavailable.");
         }
+        if (phase == "substituted")
+        {
+            DestinationBinding saved = DestinationBinding.Load(configuration);
+            using var candidate = new DirectoryFence(root);
+            Check(!WindowsProbeNative.DirectoryIdentity(candidate.Root).AsSpan().SequenceEqual(saved.Identity),
+                "The substitution did not reach a different destination.");
+            Check(File.ReadAllBytes(Path.Combine(root, DestinationBinding.MarkerName)).AsSpan()
+                .SequenceEqual(saved.Marker.ToByteArray()), "The substitute should have an identical marker.");
+            try
+            {
+                CopyRecovery.Recover(root, Path.Combine(root, "pending.tmp"), Path.Combine(root, "final.bin"), saved);
+            }
+            catch (InvalidDataException)
+            {
+                Check(Directory.EnumerateFileSystemEntries(root).Count() == 1, "Recovery wrote into the substitute.");
+                Console.WriteLine("PASS recovery refused the reused letter with a copied marker and left the substitute unchanged.");
+                return 0;
+            }
+            throw new InvalidDataException("Recovery accepted the substitute under the registered drive letter.");
+        }
 
         var drive = new DriveInfo($"{letter}:\\");
         if (drive.TotalSize is < 110 * MiB or > 128 * MiB || drive.VolumeLabel != label || drive.DriveFormat != "NTFS")
             throw new InvalidOperationException("The volume does not match the disposable lab disk.");
 
-        string root = Path.Combine(drive.RootDirectory.FullName, label);
         using var fence = new DirectoryFence(root);
         using (var gate = WindowsProbeNative.OpenPlainFile(fence.Root, "runner.txt", FileAccess.Read, FileShare.Read))
         using (var reader = new StreamReader(gate))

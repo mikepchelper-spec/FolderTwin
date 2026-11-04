@@ -72,12 +72,38 @@ try {
     if ($changed.DriveLetter -ne $newLetter -or [IO.Directory]::Exists($root)) { throw 'Drive letter did not change.' }
     Write-Output "The disposable volume moved from $letter to $newLetter."
     $env:FOLDERTWIN_LAB_LETTER = $newLetter
+    $registeredMarker = [IO.File]::ReadAllBytes("${newLetter}:\$label\.foldertwin-destination")
 
     Dismount-DiskImage -ImagePath $image | Out-Null
     if ((Get-DiskImage -ImagePath $image).Attached -or [IO.Directory]::Exists("${newLetter}:\$label")) {
         throw 'The disposable volume did not detach.'
     }
     Invoke-Probe 'absent'
+
+    # Reuse the letter for a synthetic directory on a different volume. The
+    # alias is released before reattaching the image.
+    $substitute = Join-Path $work 'substitute'
+    $substituteRoot = Join-Path $substitute $label
+    $substituteMarker = Join-Path $substituteRoot '.foldertwin-destination'
+    $subst = Join-Path ([Environment]::SystemDirectory) 'subst.exe'
+    $aliasCreated = $false
+    try {
+        [IO.Directory]::CreateDirectory($substituteRoot) | Out-Null
+        [IO.File]::WriteAllBytes($substituteMarker, $registeredMarker)
+        & $subst "${newLetter}:" $substitute
+        if ($LASTEXITCODE -ne 0) { throw 'Could not assign the test substitute.' }
+        $aliasCreated = $true
+        Invoke-Probe 'substituted'
+    }
+    finally {
+        if ($aliasCreated) {
+            & $subst "${newLetter}:" /d
+            if ($LASTEXITCODE -ne 0) { throw 'Could not release the test substitute.' }
+        }
+        if (Test-Path -LiteralPath $substituteMarker -PathType Leaf) { Remove-Item -LiteralPath $substituteMarker }
+        if ([IO.Directory]::Exists($substituteRoot)) { [IO.Directory]::Delete($substituteRoot) }
+        if ([IO.Directory]::Exists($substitute)) { [IO.Directory]::Delete($substitute) }
+    }
 
     Mount-DiskImage -ImagePath $image -NoDriveLetter | Out-Null
     $remounted = Get-Partition -DiskNumber (Get-OwnedDisk).Number -PartitionNumber $partition.PartitionNumber
