@@ -152,6 +152,14 @@ internal static class WindowsProbeNative
             case InventoryIssueKind.Encrypted:
                 throw new InvalidDataException("La ruta está cifrada con EFS. Requiere revisión.");
         }
+        if (!info.Attributes.HasFlag(FileAttributes.Directory))
+        {
+            const int fileStandardInfo = 1;
+            if (!GetStandardInfo(handle, fileStandardInfo, out StandardInfo standard, Marshal.SizeOf<StandardInfo>()))
+                throw new IOException("No se pudieron comprobar los enlaces del archivo.", new Win32Exception(Marshal.GetLastPInvokeError()));
+            if (standard.NumberOfLinks != 1 || standard.DeletePending != 0)
+                throw new InvalidDataException("El archivo tiene enlaces duros o está pendiente de eliminación. Requiere revisión.");
+        }
     }
 
     internal static byte[] DirectoryIdentity(SafeFileHandle directory)
@@ -166,6 +174,16 @@ internal static class WindowsProbeNative
     internal static void RequireSupportedData(SafeFileHandle handle, string label)
     {
         RequirePlain(handle);
+        const int fileEaInformation = 7; // NT FILE_INFORMATION_CLASS.
+        int status = NtQueryInformationFile(handle, out var result, out uint eaSize, sizeof(uint), fileEaInformation);
+        if (status != 0)
+            throw new IOException($"No se pudieron comprobar los atributos extendidos de «{label}».",
+                new Win32Exception(RtlNtStatusToDosError(status)));
+        if (result.Information != sizeof(uint))
+            throw new InvalidDataException($"La información de atributos extendidos de «{label}» es incompleta.");
+        if (eaSize != 0)
+            throw new InvalidDataException($"«{label}» tiene atributos extendidos de NTFS. Requiere revisión.");
+
         const int fileStreamInfo = 7;
         const int headerSize = 24;
         // Only the unnamed data stream is supported. A larger response is not needed to authorize a copy.
@@ -296,6 +314,20 @@ internal static class WindowsProbeNative
         public uint ReparseTag;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct StandardInfo
+    {
+        public long AllocationSize;
+        public long EndOfFile;
+        public uint NumberOfLinks;
+        public byte DeletePending;
+        public byte Directory;
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "GetFileInformationByHandleEx", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetStandardInfo(SafeFileHandle file, int infoClass, out StandardInfo info, int size);
+
     [DllImport("kernel32.dll", EntryPoint = "GetFileInformationByHandleEx", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetAttributeTag(SafeFileHandle file, int infoClass, out AttributeTag info, int size);
@@ -308,7 +340,7 @@ internal static class WindowsProbeNative
     private static extern unsafe uint GetFinalPathNameByHandle(SafeFileHandle file, char* path, uint size, uint flags);
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct IoStatusBlock
+    internal struct IoStatusBlock
     {
         public nint Status;
         public nuint Information;
@@ -340,6 +372,10 @@ internal static class WindowsProbeNative
 
     [DllImport("ntdll.dll", ExactSpelling = true)]
     private static extern int NtSetInformationFile(SafeFileHandle file, out IoStatusBlock status, byte[] data,
+        uint size, int infoClass);
+
+    [DllImport("ntdll.dll", ExactSpelling = true)]
+    private static extern int NtQueryInformationFile(SafeFileHandle file, out IoStatusBlock status, out uint data,
         uint size, int infoClass);
 
     [DllImport("ntdll.dll", ExactSpelling = true)]

@@ -48,6 +48,8 @@ El laboratorio admite el flujo principal de cada archivo. Si encuentra flujos de
 
 También revisa los atributos al abrir las rutas, incluida la raíz. Los archivos o carpetas detectados como offline, cifrados con EFS o con puntos de reanálisis quedan para revisión. La validación con proveedores de nube reales sigue pendiente.
 
+El laboratorio también señala los enlaces duros y los atributos extendidos de NTFS que detecta. En archivos comprimidos o dispersos, copia y verifica los bytes de contenido. La vista previa muestra ese tamaño, que puede superar el espacio que ocupa el original en disco. La conservación de fechas y permisos queda pendiente.
+
 Abre **Historial de intentos** para ver las últimas 20 copias, restauraciones o verificaciones de la sesión, incluidas las incidencias de intentos anteriores. El historial guarda nombres relativos del lote sintético y categorías de incidencia en la carpeta de la sesión. Si hay registros ilegibles o falla la escritura del historial, la ventana lo indica aparte del resultado de la operación.
 
 Si un archivo está en uso, el laboratorio intenta mostrar las aplicaciones que detecta Windows mediante Restart Manager. Si no puede identificarlas, conserva el aviso y permite reintentar. El diagnóstico no cierra aplicaciones.

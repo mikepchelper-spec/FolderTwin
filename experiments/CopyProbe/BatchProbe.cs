@@ -1,4 +1,7 @@
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using Microsoft.Win32.SafeHandles;
 
 internal static class BatchProbe
 {
@@ -328,8 +331,147 @@ internal static class BatchProbe
             finally { File.Delete(stream); }
             Pass("recovery refuses a named stream on a verified temporary without deleting it");
         }
+        using (var fixture = new BatchFixture())
+        {
+            var plan = fixture.Analyze();
+            string alias = Path.Combine(fixture.Root, "alias.bin");
+            Link(alias, fixture.SourceFile);
+            try
+            {
+                var partial = fixture.Copy();
+                Check(!partial.Complete && partial.Entries.Any(entry => entry.RelativePath == BatchFixture.SampleNames[0] &&
+                    entry.Detail?.Contains("enlaces duros", StringComparison.Ordinal) == true) && !File.Exists(fixture.CopyFile),
+                    "A linked source file was copied after analysis.");
+            }
+            finally { File.Delete(alias); }
+            string relative = BatchFixture.SampleNames[0];
+            var interrupted = fixture.Copy(checkpoint: (path, step, _) =>
+            {
+                if (path == relative && step == CopyStep.Verified)
+                    throw new IOException("Synthetic interruption before publication.");
+            });
+            string temporary = FolderBatch.TemporaryPath(fixture.Destination, relative);
+            Check(!interrupted.Complete && File.Exists(CopyRecovery.ReceiptPath(temporary)), "A verified temporary was not left for retry.");
+            Link(alias, temporary);
+            try
+            {
+                Check(!fixture.Copy().Complete && File.Exists(temporary) && !File.Exists(fixture.CopyFile),
+                    "Recovery published a linked temporary.");
+            }
+            finally { File.Delete(alias); }
+            Check(fixture.Copy().Complete, "Removing the synthetic alias did not allow recovery.");
+            Link(alias, fixture.CopyFile);
+            try
+            {
+                var result = BatchCatalog.Verify(fixture.Destination, plan.Target);
+                Check(!result.Complete && result.VerifiedFiles == 2 &&
+                    !fixture.Restore().Complete && !File.Exists(fixture.RestoredFile) &&
+                    SHA256.HashData(File.ReadAllBytes(alias)).AsSpan().SequenceEqual(
+                        plan.Files.Single(file => file.RelativePath == BatchFixture.SampleNames[0]).Hash),
+                    "A linked backup was accepted or its alias was altered.");
+            }
+            finally { File.Delete(alias); }
+            Pass("hard links block source copying, temporary recovery, and confirmed backup verification without modifying the alias");
+        }
+        using (var fixture = new BatchFixture())
+        {
+            foreach (string path in new[] { fixture.Source, Path.Combine(fixture.Source, BatchFixture.DirectoryNames[0]), fixture.SourceFile })
+            {
+                SetExtendedAttribute(path, present: true);
+                try
+                {
+                    bool rejected = false;
+                    try { fixture.Analyze(); }
+                    catch (InvalidDataException error) when (error.Message.Contains("atributos extendidos de NTFS", StringComparison.Ordinal))
+                    {
+                        rejected = true;
+                    }
+                    Check(rejected && !File.Exists(fixture.CopyFile), "Analysis ignored a real NTFS extended attribute.");
+                }
+                finally { SetExtendedAttribute(path, present: false); }
+            }
+            var plan = fixture.Analyze();
+            Check(fixture.Copy().Complete, "Removing the synthetic attributes did not allow copying.");
+            SetExtendedAttribute(fixture.CopyFile, present: true);
+            try
+            {
+                var result = BatchCatalog.Verify(fixture.Destination, plan.Target);
+                Check(!result.Complete && result.Entries.Any(entry => entry.RelativePath == BatchFixture.SampleNames[0] &&
+                    entry.Detail?.Contains("atributos extendidos de NTFS", StringComparison.Ordinal) == true) &&
+                    !fixture.Restore().Complete && !File.Exists(fixture.RestoredFile),
+                    "Verification or restoration accepted a backup with an extended attribute.");
+            }
+            finally { SetExtendedAttribute(fixture.CopyFile, present: false); }
+            Pass("extended attributes on files and directories block analysis and are also detected in a confirmed backup");
+        }
+        using (var fixture = new BatchFixture())
+        {
+            const uint setCompression = 0x0009c040;
+            const uint setSparse = 0x000900c4;
+            const int sparseOffset = 1024 * 1024;
+            byte[] compressible = new byte[128 * 1024];
+            compressible[0] = 42;
+            File.WriteAllBytes(fixture.SourceFile, compressible);
+            using (var file = File.Open(fixture.SourceFile, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                SetFileLayout(file, setCompression, [1, 0]); // COMPRESSION_FORMAT_DEFAULT.
+            string sparse = Path.Combine(fixture.Source, BatchFixture.SampleNames[2]);
+            using (var file = File.Open(sparse, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                SetFileLayout(file, setSparse, null);
+                file.Position = sparseOffset;
+                file.WriteByte(73);
+            }
+            Check(File.GetAttributes(fixture.SourceFile).HasFlag(FileAttributes.Compressed) &&
+                File.GetAttributes(sparse).HasFlag(FileAttributes.SparseFile), "The synthetic layouts were not created.");
+            var plan = FolderBatch.Prepare(fixture.Root, fixture.Source, fixture.Destination, fixture.DestinationBinding);
+            Check(plan.Bytes == compressible.Length + sparseOffset + 1 + 65_537, "The preview did not count logical bytes.");
+            Check(PendingBatch.Start(plan).Complete && fixture.Restore().Complete, "The logical bytes did not copy and restore.");
+            byte[] expectedSparse = new byte[sparseOffset + 1];
+            expectedSparse[^1] = 73;
+            foreach (string root in new[] { fixture.Destination, fixture.Restored })
+            {
+                Check(File.ReadAllBytes(Path.Combine(root, BatchFixture.SampleNames[0])).AsSpan().SequenceEqual(compressible) &&
+                    File.ReadAllBytes(Path.Combine(root, BatchFixture.SampleNames[2])).AsSpan().SequenceEqual(expectedSparse),
+                    "Copy or restore changed logical bytes in a compressed or sparse file.");
+            }
+            Pass("compressed files and sparse holes contribute their logical length and restore with identical bytes");
+        }
         return 0;
     }
+
+    private static void SetFileLayout(FileStream file, uint control, byte[]? input)
+    {
+        if (!PathProbe.DeviceIoControl(file.SafeFileHandle, control, input, input?.Length ?? 0, null, 0, out _, 0))
+            throw new Win32Exception(Marshal.GetLastPInvokeError(), "Setting the synthetic NTFS file layout failed.");
+    }
+
+    private static void SetExtendedAttribute(string path, bool present)
+    {
+        const uint writeEa = 0x10;
+        const uint openReparsePointAndBackupSemantics = 0x02200000;
+        using var handle = WindowsProbeNative.CreateFile(path, writeEa, FileShare.ReadWrite, 0, 3,
+            openReparsePointAndBackupSemantics, 0);
+        if (handle.IsInvalid)
+            throw new Win32Exception(Marshal.GetLastPInvokeError(), "Opening the synthetic extended attribute failed.");
+        // FILE_FULL_EA_INFORMATION with one ASCII name, a NUL, and a one-byte value (empty to remove).
+        byte[] data = [0, 0, 0, 0, 0, 2, present ? (byte)1 : (byte)0, 0, (byte)'F', (byte)'T', 0, 42];
+        int status = NtSetEaFile(handle, out _, data, present ? data.Length : data.Length - 1);
+        if (status != 0)
+            throw new IOException($"Setting the synthetic extended attribute failed with NTSTATUS 0x{status:X8}.");
+    }
+
+    [DllImport("ntdll.dll", ExactSpelling = true)]
+    private static extern int NtSetEaFile(SafeFileHandle file, out WindowsProbeNative.IoStatusBlock status, byte[] data, int size);
+
+    private static void Link(string alias, string target)
+    {
+        if (!CreateHardLink(alias, target, 0))
+            throw new Win32Exception(Marshal.GetLastPInvokeError(), "Creating the synthetic hard link failed.");
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CreateHardLink(string alias, string target, nint security);
 
     private static void Check(bool condition, string message)
     {

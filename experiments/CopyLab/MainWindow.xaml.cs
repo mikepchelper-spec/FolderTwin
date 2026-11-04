@@ -131,7 +131,8 @@ public partial class MainWindow : Window
         {
             BatchPlan plan = await Task.Run(session.Analyze);
             analyzed = true;
-            PreviewText.Text = $"{plan.Files.Length:N0} archivos · {plan.Bytes:N0} bytes · {plan.Directories.Length:N0} carpetas\n" +
+            PreviewText.Text = $"{plan.Files.Length:N0} archivos · {plan.Bytes:N0} bytes de contenido · {plan.Directories.Length:N0} carpetas\n" +
+                "La copia puede ocupar más espacio en disco que un original comprimido o disperso.\n" +
                 string.Join("\n", plan.Files.Select(file => file.RelativePath));
             ResultsList.ItemsSource = null;
             SetStatus("Revisión completada. Puedes copiar el lote de prueba.");
@@ -453,7 +454,8 @@ public partial class MainWindow : Window
         }
         Click(AnalyzeButton);
         await activeTask;
-        Check(analyzed && CopyButton.IsEnabled && PreviewText.Text.Contains("3 archivos", StringComparison.Ordinal),
+        Check(analyzed && CopyButton.IsEnabled && PreviewText.Text.Contains("3 archivos", StringComparison.Ordinal) &&
+            PreviewText.Text.Contains("bytes de contenido", StringComparison.Ordinal),
             "The valid preview did not enable the copy.");
         string firstFile = session.Plan!.Files[0].RelativePath;
         bool pauseRequested = false;

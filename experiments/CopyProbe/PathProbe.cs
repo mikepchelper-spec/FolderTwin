@@ -310,6 +310,6 @@ internal static class PathProbe
 
     [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool DeviceIoControl(SafeFileHandle file, uint code, byte[]? input, int inputSize,
+    internal static extern bool DeviceIoControl(SafeFileHandle file, uint code, byte[]? input, int inputSize,
         [Out] byte[]? output, int outputSize, out int bytes, nint overlapped);
 }
