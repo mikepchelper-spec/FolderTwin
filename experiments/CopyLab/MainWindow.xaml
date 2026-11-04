@@ -57,6 +57,11 @@
                 <Button x:Name="CancelCopyButton" Content="_Cancelar copia" Click="CancelCopyClick"
                         Margin="8,0,0,8" Visibility="Collapsed" AutomationProperties.AutomationId="CancelCopy" />
             </WrapPanel>
+            <StackPanel x:Name="OperationProgress" Visibility="Collapsed" Margin="0,0,0,8">
+                <ProgressBar x:Name="FileProgress" Height="6" Margin="0,0,0,6"
+                             AutomationProperties.Name="Archivos procesados" />
+                <TextBlock x:Name="ProgressText" TextWrapping="Wrap" />
+            </StackPanel>
             <TextBlock x:Name="StatusText" Text="Selecciona las dos carpetas para empezar."
                        FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,4,0,4"
                        AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="LabStatus" />

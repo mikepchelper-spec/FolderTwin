@@ -15,6 +15,8 @@ internal sealed record BatchEntryResult(string RelativePath, bool IsDirectory, B
 {
     public bool Succeeded => Status is BatchStatus.Copied or BatchStatus.Recovered or BatchStatus.AlreadyVerified or BatchStatus.DirectoryReady;
 }
+internal sealed record BatchProgress(int ProcessedFiles, int TotalFiles, int VerifiedFiles, string? CurrentPath);
+
 internal sealed record BatchResult(BatchEntryResult[] Entries, string? Problem = null, string? Note = null, bool Cancelled = false)
 {
     public bool Complete => !Cancelled && Problem is null && Entries.All(entry => entry.Succeeded);
@@ -57,7 +59,8 @@ internal static class FolderBatch
     }
 
     internal static BatchResult Run(BatchPlan plan, CancellationToken cancellationToken = default,
-        Action<string, CopyStep, string>? checkpoint = null, bool resume = false, bool finishCurrentFileOnCancel = false)
+        Action<string, CopyStep, string>? checkpoint = null, bool resume = false, bool finishCurrentFileOnCancel = false,
+        IProgress<BatchProgress>? progress = null)
     {
         var results = new List<BatchEntryResult>();
         DirectoryFence? source = null;
@@ -80,10 +83,21 @@ internal static class FolderBatch
 
             foreach (string directory in plan.Directories)
                 Execute(directory, true, () => WithDirectories(destination.Root, directory, () => BatchStatus.DirectoryReady));
+            int processedFiles = 0;
+            int verifiedFiles = 0;
             foreach (var item in plan.Files)
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                    progress?.Report(new(processedFiles, plan.Files.Length, verifiedFiles, item.RelativePath));
                 Execute(item.RelativePath, false, () => WithDirectories(destination.Root,
                     Path.GetDirectoryName(item.RelativePath) ?? "", () => CopyOne(item)));
+                if (results[^1].Status != BatchStatus.Cancelled)
+                    processedFiles++;
+                if (results[^1].Succeeded)
+                    verifiedFiles++;
+            }
             cancellationToken.ThrowIfCancellationRequested();
+            progress?.Report(new(processedFiles, plan.Files.Length, verifiedFiles, CurrentPath: null));
             if (sourceReady)
                 RequireSameInventory(plan);
             for (int index = 0; index < results.Count; index++)

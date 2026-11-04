@@ -104,7 +104,7 @@ internal static class BatchCatalog
         return ReadLocked(root);
     }
 
-    internal static BatchResult Verify(string backup, DestinationBinding expected)
+    internal static BatchResult Verify(string backup, DestinationBinding expected, IProgress<BatchProgress>? progress = null)
     {
         using var root = new DirectoryFence(backup);
         using var marker = expected.OpenVerifiedMarker(root.Root);
@@ -118,8 +118,16 @@ internal static class BatchCatalog
             {
                 using var directory = new DirectoryFence(Path.Combine(backup, relative));
             });
-        foreach (var file in catalog.Files)
+        int verifiedFiles = 0;
+        for (int index = 0; index < catalog.Files.Length; index++)
+        {
+            var file = catalog.Files[index];
+            progress?.Report(new(index, catalog.Files.Length, verifiedFiles, file.RelativePath));
             Check(file.RelativePath, isDirectory: false, () => VerifyFile(backup, file));
+            if (entries[^1].Succeeded)
+                verifiedFiles++;
+        }
+        progress?.Report(new(catalog.Files.Length, catalog.Files.Length, verifiedFiles, CurrentPath: null));
 
         return new(entries.ToArray(), Note: catalog.Degraded
             ? "Se usó una réplica íntegra. La otra copia del catálogo necesita revisión." : null);

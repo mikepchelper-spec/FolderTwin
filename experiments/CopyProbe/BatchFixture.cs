@@ -58,15 +58,16 @@ internal sealed class BatchFixture : IDisposable
             !directories.Order(StringComparer.Ordinal).SequenceEqual(DirectoryNames.Order(StringComparer.Ordinal)))
             throw new InvalidDataException("Este laboratorio solo admite los archivos sintéticos generados para la sesión.");
     }
-    internal BatchResult Copy(CancellationToken cancellationToken = default, Action<string, CopyStep, string>? checkpoint = null)
+    internal BatchResult Copy(CancellationToken cancellationToken = default, Action<string, CopyStep, string>? checkpoint = null,
+        IProgress<BatchProgress>? progress = null)
     {
-        return Plan is null ? PendingBatch.Resume(Root, Destination, cancellationToken, checkpoint, finishCurrentFileOnCancel: true)
-            : PendingBatch.Start(Plan, cancellationToken, checkpoint);
+        return Plan is null ? PendingBatch.Resume(Root, Destination, cancellationToken, checkpoint, finishCurrentFileOnCancel: true, progress: progress)
+            : PendingBatch.Start(Plan, cancellationToken, checkpoint, progress);
     }
-    internal BatchResult Restore()
+    internal BatchResult Restore(IProgress<BatchProgress>? progress = null)
     {
         var catalog = BatchCatalog.Read(Destination);
-        var result = FolderBatch.Run(catalog.RestoreTo(Root, Destination, Restored, RestoreBinding));
+        var result = FolderBatch.Run(catalog.RestoreTo(Root, Destination, Restored, RestoreBinding), progress: progress);
         return catalog.Degraded ? result with { Note = "Se usó una réplica íntegra. La otra copia del catálogo necesita revisión." } : result;
     }
     internal void ForgetPlan() => Plan = null;

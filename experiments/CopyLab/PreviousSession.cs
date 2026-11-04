@@ -30,20 +30,21 @@ internal sealed class PreviousSession
         }
     }
 
-    internal BatchResult Resume(CancellationToken cancellationToken) => PendingBatch.Resume(Root, Destination, cancellationToken, validate: plan =>
-    {
-        ValidateSamples(plan);
-        RequireSameDestination(plan.Target);
-    }, finishCurrentFileOnCancel: true);
+    internal BatchResult Resume(CancellationToken cancellationToken, IProgress<BatchProgress>? progress) =>
+        PendingBatch.Resume(Root, Destination, cancellationToken, validate: plan =>
+        {
+            ValidateSamples(plan);
+            RequireSameDestination(plan.Target);
+        }, finishCurrentFileOnCancel: true, progress: progress);
 
-    internal BatchResult Restore(BatchFixture output)
+    internal BatchResult Restore(BatchFixture output, IProgress<BatchProgress>? progress)
     {
         var catalog = BatchCatalog.Read(Destination);
         RequireSameDestination(catalog.Binding);
         BatchFixture.ValidateSamples(catalog.Files, catalog.Directories);
         // Both roots are separate synthetic fixtures directly under the same temp directory.
         string temporaryRoot = Path.TrimEndingDirectorySeparator(Path.GetTempPath());
-        var result = FolderBatch.Run(catalog.RestoreTo(temporaryRoot, Destination, output.Restored, output.RestoreBinding));
+        var result = FolderBatch.Run(catalog.RestoreTo(temporaryRoot, Destination, output.Restored, output.RestoreBinding), progress: progress);
         return catalog.Degraded
             ? result with { Note = "Se usó una réplica íntegra. La otra copia del catálogo necesita revisión." }
             : result;

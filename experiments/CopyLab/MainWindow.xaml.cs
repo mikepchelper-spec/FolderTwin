@@ -192,16 +192,31 @@ public partial class MainWindow : Window
         });
         if (operation == AttemptOperation.Copy && previous is null)
             copyStarted = true;
+        bool showProgress = true;
+        OperationProgress.Visibility = Visibility.Visible;
+        FileProgress.IsIndeterminate = true;
+        ProgressText.Text = "Preparando la operación…";
+        var progress = new Progress<BatchProgress>(update =>
+        {
+            if (!showProgress || token.IsCancellationRequested)
+                return;
+            FileProgress.IsIndeterminate = false;
+            FileProgress.Maximum = Math.Max(1, update.TotalFiles);
+            FileProgress.Value = update.ProcessedFiles;
+            ProgressText.Text = $"{update.ProcessedFiles:N0} de {update.TotalFiles:N0} procesados · {update.VerifiedFiles:N0} verificados\n" +
+                (update.CurrentPath is { } path ? $"En curso · {path}" : "Preparando el resultado final…");
+        });
         BatchResult? outcome = null;
         try
         {
             BatchResult result = await Task.Run(() => operation switch
             {
                 AttemptOperation.Verify => BatchCatalog.Verify(previous?.Destination ?? session.Destination,
-                    previous?.Binding ?? session.DestinationBinding),
-                AttemptOperation.Restore => previous?.Restore(session) ?? session.Restore(),
-                _ => previous?.Resume(token) ?? session.Copy(token, copyCheckpoint)
+                    previous?.Binding ?? session.DestinationBinding, progress),
+                AttemptOperation.Restore => previous?.Restore(session, progress) ?? session.Restore(progress),
+                _ => previous?.Resume(token, progress) ?? session.Copy(token, copyCheckpoint, progress)
             });
+            HideProgress();
             copyCancellation = null;
             RefreshActions();
             outcome = result;
@@ -240,12 +255,19 @@ public partial class MainWindow : Window
         }
         finally
         {
+            HideProgress();
             copyCancellation = null;
             RefreshActions();
             if (outcome is not null)
                 await RefreshHistoryAsync(outcome, operation);
             busy = false;
             RefreshActions();
+        }
+
+        void HideProgress()
+        {
+            showProgress = false;
+            OperationProgress.Visibility = Visibility.Collapsed;
         }
     }
 
@@ -393,13 +415,22 @@ public partial class MainWindow : Window
         copyCheckpoint = (_, step, _) =>
         {
             if (step == CopyStep.Writing)
-                Dispatcher.Invoke(() => Click(CancelCopyButton));
+                Dispatcher.Invoke(() =>
+                {
+                    if (!CancelCopyButton.IsEnabled)
+                        return;
+                    Check(OperationProgress.Visibility == Visibility.Visible && FileProgress.Maximum == 3 && FileProgress.Value == 0 &&
+                        ProgressText.Text.Contains(firstFile, StringComparison.Ordinal),
+                        "The active copy did not show its first file and total.");
+                    Click(CancelCopyButton);
+                }, System.Windows.Threading.DispatcherPriority.Background);
         };
         Click(CopyButton);
         await activeTask;
         copyCheckpoint = null;
         Check(StatusText.Text.StartsWith("Copia cancelada.", StringComparison.Ordinal) && CopyButton.IsEnabled &&
             !RestoreButton.IsEnabled && CancelCopyButton.Visibility == Visibility.Collapsed &&
+            OperationProgress.Visibility == Visibility.Collapsed &&
             File.Exists(Path.Combine(session.Destination, firstFile)) && !File.Exists(session.CopyFile) &&
             !File.Exists(Path.Combine(session.Destination, BatchCatalog.CommitName)) &&
             !Directory.EnumerateFiles(session.Destination, "*.tmp", SearchOption.AllDirectories).Any(),
@@ -414,9 +445,20 @@ public partial class MainWindow : Window
                 !AnalyzeButton.IsEnabled && CopyButton.IsEnabled, "A partial batch or its retry was hidden.");
         }
         session.ForgetPlan();
+        bool sawRetryProgress = false;
+        copyCheckpoint = (path, step, _) =>
+        {
+            if (step == CopyStep.Writing)
+                Dispatcher.Invoke(() =>
+                {
+                    sawRetryProgress = FileProgress.Value == 1 && ProgressText.Text.Contains("1 verificados", StringComparison.Ordinal) &&
+                        ProgressText.Text.Contains(path, StringComparison.Ordinal);
+                }, System.Windows.Threading.DispatcherPriority.Background);
+        };
         Click(CopyButton);
         await activeTask;
-        Check(copied && File.Exists(session.CopyFile) && RestoreButton.IsEnabled, StatusText.Text);
+        copyCheckpoint = null;
+        Check(sawRetryProgress && copied && File.Exists(session.CopyFile) && RestoreButton.IsEnabled, StatusText.Text);
         session.ForgetPlan();
         string primaryCatalog = Path.Combine(session.Destination, BatchCatalog.PrimaryName);
         string backupCatalog = Path.Combine(session.Destination, BatchCatalog.BackupName);
