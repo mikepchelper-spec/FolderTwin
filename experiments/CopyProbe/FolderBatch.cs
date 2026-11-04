@@ -3,7 +3,11 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
-internal sealed record BatchFile(string RelativePath, long Length, byte[] Hash);
+internal sealed record BatchFile(string RelativePath, long Length, byte[] Hash, DateTime? LastWriteUtc = null)
+{
+    internal static bool SupportsLastWriteTime(DateTime value) =>
+        value.Kind == DateTimeKind.Utc && value > DateTime.FromFileTimeUtc(0);
+}
 internal sealed record BatchPlan(string FixtureRoot, string Source, string Destination, byte[] SourceIdentity,
     DestinationBinding Target, string[] Directories, BatchFile[] Files, DestinationBinding? SourceBinding = null)
 {
@@ -55,7 +59,12 @@ internal static class FolderBatch
             WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath);
             if (file.Length != entry.Length)
                 throw new InvalidDataException("El origen cambió durante el análisis.");
-            files.Add(new(entry.RelativePath, entry.Length, SHA256.HashData(file)));
+            DateTime lastWrite = File.GetLastWriteTimeUtc(file.SafeFileHandle);
+            byte[] hash = SHA256.HashData(file);
+            if (!BatchFile.SupportsLastWriteTime(lastWrite))
+                throw new InvalidDataException($"La fecha de modificación de «{entry.RelativePath}» está fuera del alcance.");
+            VerifiedCopy.RequireLastWriteTime(file, lastWrite);
+            files.Add(new(entry.RelativePath, entry.Length, hash, lastWrite));
         }
         return new(fixtureRoot, source, destination, WindowsProbeNative.DirectoryIdentity(sourceFence.Root), binding,
             directories, files.ToArray());
@@ -129,6 +138,7 @@ internal static class FolderBatch
                         WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath);
                         if (file.Length != item.Length || !SHA256.HashData(file).AsSpan().SequenceEqual(item.Hash))
                             throw new InvalidDataException("La copia cambió antes de terminar el lote.");
+                        VerifiedCopy.RequireLastWriteTime(file, item.LastWriteUtc);
                     }
                 }
                 catch (Exception error) when (IsExpectedFailure(error))
@@ -186,12 +196,14 @@ internal static class FolderBatch
                 VerifiedCopy.Run(input, output, temporary,
                     (step, path) => checkpoint?.Invoke(item.RelativePath, step, path), expectedHash: item.Hash,
                     recoveryRoot: plan.FixtureRoot,
-                    cancellationToken: finishCurrentFileOnCancel ? CancellationToken.None : cancellationToken);
+                    cancellationToken: finishCurrentFileOnCancel ? CancellationToken.None : cancellationToken,
+                    lastWriteUtc: item.LastWriteUtc);
                 return BatchStatus.Copied;
 
                 BatchStatus? RecoverKnown()
                 {
-                    var recovered = CopyRecovery.Recover(plan.FixtureRoot, temporary, output, expectedHash: item.Hash);
+                    var recovered = CopyRecovery.Recover(plan.FixtureRoot, temporary, output,
+                        expectedHash: item.Hash, lastWriteUtc: item.LastWriteUtc);
                     if (recovered == RecoveryResult.NoReceipt)
                     {
                         using var pending = new DirectoryFence(plan.Destination, temporary, output);
@@ -354,6 +366,9 @@ internal static class FolderBatch
         }
         if (files.Any(file => file.Hash is not { Length: SHA256.HashSizeInBytes } || file.Length < 0))
             throw new ArgumentException("Hash o tamaño de lote no válido.");
+        if (files.Any(file => file.LastWriteUtc.HasValue) &&
+            files.Any(file => file.LastWriteUtc is not { } time || !BatchFile.SupportsLastWriteTime(time)))
+            throw new InvalidDataException("Las fechas de modificación del lote deben ser UTC, válidas y estar presentes en todos los archivos.");
         try { _ = files.Sum(file => file.Length); }
         catch (OverflowException error) { throw new ArgumentException("El tamaño total del lote no es válido.", error); }
     }

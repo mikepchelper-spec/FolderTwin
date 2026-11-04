@@ -35,6 +35,7 @@ internal static class BatchCatalog
     private sealed record Header(string Kind, int Version, Guid JobId, string GenerationId, byte[] Identity);
     private sealed record DirectoryRecord(string Kind, string Path);
     private sealed record FileRecord(string Kind, string Path, long Size, byte[] Hash);
+    private sealed record DatedFileRecord(string Kind, string Path, long Size, byte[] Hash, DateTime LastWriteUtc);
     private sealed record Footer(string Kind, int Files, int Directories, byte[] Hash);
 
     internal static void Publish(BatchPlan plan, Action<CatalogStep>? checkpoint = null)
@@ -194,11 +195,18 @@ internal static class BatchCatalog
         using var body = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using var document = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         int total = 0;
-        Line(new Header("header", 1, plan.Target.Marker, "initial", plan.Target.Identity));
+        int version = plan.Files.Any(file => file.LastWriteUtc.HasValue) ? 2 : 1;
+        Line(new Header("header", version, plan.Target.Marker, "initial", plan.Target.Identity));
         foreach (string directory in plan.Directories.Order(StringComparer.Ordinal))
             Line(new DirectoryRecord("directory", directory));
         foreach (var file in plan.Files.OrderBy(file => file.RelativePath, StringComparer.Ordinal))
-            Line(new FileRecord("file", file.RelativePath, file.Length, file.Hash));
+        {
+            if (version == 1)
+                Line(new FileRecord("file", file.RelativePath, file.Length, file.Hash));
+            else
+                Line(new DatedFileRecord("file", file.RelativePath, file.Length, file.Hash,
+                    file.LastWriteUtc ?? throw new InvalidDataException("Falta una fecha de modificación.")));
+        }
         Line(new Footer("footer", plan.Files.Length, plan.Directories.Length, body.GetHashAndReset()), footer: true);
         return document.GetHashAndReset();
 
@@ -230,7 +238,7 @@ internal static class BatchCatalog
         byte[] buffer = new byte[MaximumLineBytes - 1];
         byte[] headerLine = Line() ?? throw new InvalidDataException("Falta la cabecera.");
         var header = Decode<Header>(headerLine);
-        if (header.Kind != "header" || header.Version != 1 || header.GenerationId != "initial" || header.JobId == Guid.Empty ||
+        if (header.Kind != "header" || header.Version is not (1 or 2) || header.GenerationId != "initial" || header.JobId == Guid.Empty ||
             header.Identity is not { Length: 24 })
             throw new InvalidDataException("Cabecera no soportada.");
         HashBody(headerLine);
@@ -255,11 +263,21 @@ internal static class BatchCatalog
                     lastDirectory = directory.Path;
                     break;
                 case "file":
-                    var file = Decode<FileRecord>(line);
-                    if (file.Path is null || lastFile is not null && string.CompareOrdinal(lastFile, file.Path) >= 0)
+                    BatchFile file;
+                    if (header.Version == 1)
+                    {
+                        var entry = Decode<FileRecord>(line);
+                        file = new(entry.Path, entry.Size, entry.Hash);
+                    }
+                    else
+                    {
+                        var entry = Decode<DatedFileRecord>(line);
+                        file = new(entry.Path, entry.Size, entry.Hash, entry.LastWriteUtc);
+                    }
+                    if (file.RelativePath is null || lastFile is not null && string.CompareOrdinal(lastFile, file.RelativePath) >= 0)
                         throw new InvalidDataException("Orden de archivos no válido.");
-                    files.Add(new(file.Path, file.Size, file.Hash));
-                    lastFile = file.Path;
+                    files.Add(file);
+                    lastFile = file.RelativePath;
                     break;
                 case "footer":
                     var footer = Decode<Footer>(line);
@@ -354,5 +372,6 @@ internal static class BatchCatalog
         WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, item.RelativePath);
         if (file.Length != item.Length || !SHA256.HashData(file).AsSpan().SequenceEqual(item.Hash))
             throw new InvalidDataException("El contenido del respaldo no coincide con el catálogo.");
+        VerifiedCopy.RequireLastWriteTime(file, item.LastWriteUtc);
     }
 }

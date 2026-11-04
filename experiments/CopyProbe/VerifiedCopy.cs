@@ -8,7 +8,7 @@ internal static class VerifiedCopy
     public static void Run(
         string source, string destination, string temporary,
         Action<CopyStep, string>? checkpoint = null, byte[]? expectedHash = null, string? recoveryRoot = null,
-        CancellationToken cancellationToken = default, DestinationBinding? binding = null)
+        CancellationToken cancellationToken = default, DestinationBinding? binding = null, DateTime? lastWriteUtc = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var fence = recoveryRoot is null ? null : new DirectoryFence(recoveryRoot, source, temporary, destination);
@@ -38,6 +38,11 @@ internal static class VerifiedCopy
             checkpoint?.Invoke(CopyStep.Written, temporary);
             cancellationToken.ThrowIfCancellationRequested();
             checkpoint?.Invoke(CopyStep.Flushing, temporary);
+            if (lastWriteUtc is { } time)
+            {
+                output.Flush();
+                File.SetLastWriteTimeUtc(output.SafeFileHandle, time);
+            }
             output.Flush(flushToDisk: true);
             if (fence is not null)
                 WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, Path.GetFileName(source));
@@ -54,6 +59,7 @@ internal static class VerifiedCopy
             if (!SHA256.HashData(input).AsSpan().SequenceEqual(sourceHash) ||
                 (expectedHash is not null && !sourceHash.AsSpan().SequenceEqual(expectedHash)))
                 throw new InvalidDataException("The copy does not match the expected SHA-256.");
+            RequireLastWriteTime(input, lastWriteUtc);
             cancellationToken.ThrowIfCancellationRequested();
             if (directory is not null)
                 CopyRecovery.RecordVerified(temporary, destination, sourceHash, directory, checkpoint);
@@ -61,11 +67,18 @@ internal static class VerifiedCopy
             if (directory is not null)
             {
                 WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, Path.GetFileName(temporary));
+                RequireLastWriteTime(input, lastWriteUtc);
                 WindowsProbeNative.RenameNew(input.SafeFileHandle, directory, Path.GetFileName(destination));
             }
         }
         if (directory is null)
             File.Move(temporary, destination);
         checkpoint?.Invoke(CopyStep.Published, destination);
+    }
+
+    internal static void RequireLastWriteTime(FileStream file, DateTime? expected)
+    {
+        if (expected is { } time && File.GetLastWriteTimeUtc(file.SafeFileHandle) != time)
+            throw new InvalidDataException("La fecha de modificación del archivo no coincide con la registrada.");
     }
 }

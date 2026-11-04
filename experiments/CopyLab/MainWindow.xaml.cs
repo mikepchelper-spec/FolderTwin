@@ -132,6 +132,7 @@ public partial class MainWindow : Window
             BatchPlan plan = await Task.Run(session.Analyze);
             analyzed = true;
             PreviewText.Text = $"{plan.Files.Length:N0} archivos · {plan.Bytes:N0} bytes de contenido · {plan.Directories.Length:N0} carpetas\n" +
+                "Se conserva la fecha de modificación de los archivos.\n" +
                 "La copia puede ocupar más espacio en disco que un original comprimido o disperso.\n" +
                 string.Join("\n", plan.Files.Select(file => file.RelativePath));
             ResultsList.ItemsSource = null;
@@ -598,6 +599,8 @@ public partial class MainWindow : Window
             byte[] altered = (byte[])original.Clone();
             altered[0] ^= 1;
             string empty = Path.Combine(interrupted.Destination, BatchFixture.SampleNames[2]);
+            DateTime originalDate = File.GetLastWriteTimeUtc(interrupted.CopyFile);
+            DateTime emptyDate = File.GetLastWriteTimeUtc(empty);
             File.WriteAllBytes(interrupted.CopyFile, altered);
             File.Delete(empty);
             try
@@ -616,6 +619,8 @@ public partial class MainWindow : Window
             {
                 File.WriteAllBytes(interrupted.CopyFile, original);
                 File.WriteAllBytes(empty, []);
+                File.SetLastWriteTimeUtc(interrupted.CopyFile, originalDate);
+                File.SetLastWriteTimeUtc(empty, emptyDate);
             }
             Click(confirmedWindow.VerifyButton);
             await confirmedWindow.activeTask;

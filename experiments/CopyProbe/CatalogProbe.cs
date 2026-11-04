@@ -9,13 +9,25 @@ internal static class CatalogProbe
 {
     internal static int Run()
     {
-        using (var fixture = CopiedFixture())
+        using (var fixture = new BatchFixture())
         {
+            DateTime stamp = new DateTime(2001, 2, 3, 4, 5, 6, DateTimeKind.Utc).AddTicks(123_456);
+            File.SetLastWriteTimeUtc(fixture.SourceFile, stamp);
+            fixture.Analyze();
+            Check(fixture.Copy().Complete && File.GetLastWriteTimeUtc(fixture.CopyFile) == stamp,
+                "The original modification date did not survive copying.");
             byte[] primary = File.ReadAllBytes(Path.Combine(fixture.Destination, BatchCatalog.PrimaryName));
             Check(primary.AsSpan().SequenceEqual(File.ReadAllBytes(Path.Combine(fixture.Destination, BatchCatalog.BackupName))),
                 "The catalog replicas differ.");
             var catalog = BatchCatalog.Read(fixture.Destination);
             Check(!catalog.Degraded && catalog.Files.Length == 3 && catalog.Directories.Length == 2, "Incorrect catalog entries.");
+            Check(catalog.Files.Single(file => file.RelativePath == BatchFixture.SampleNames[0]).LastWriteUtc == stamp,
+                "The modification date did not survive catalog serialization.");
+            File.SetLastWriteTimeUtc(fixture.CopyFile, stamp.AddDays(1));
+            Check(BatchCatalog.Verify(fixture.Destination, fixture.DestinationBinding).Entries.Any(entry =>
+                entry.RelativePath == BatchFixture.SampleNames[0] && entry.Status == BatchStatus.Failed &&
+                entry.Detail?.Contains("fecha de modificación", StringComparison.Ordinal) == true),
+                "Verification missed a date-only change.");
             fixture.ForgetPlan();
             string absent = Path.Combine(fixture.Root, "Origen ausente");
             string config = Path.Combine(fixture.Root, "restore-binding.json");
@@ -25,13 +37,40 @@ internal static class CatalogProbe
             {
                 RestoreInNewProcess(fixture.Root);
                 fixture.CheckRestored();
+                Check(File.GetLastWriteTimeUtc(fixture.RestoredFile) == stamp, "Restoration did not reapply the date from the catalog.");
             }
             finally
             {
                 Directory.Move(absent, fixture.Source);
                 File.Delete(config);
             }
-            Pass("a fresh process restores from the catalog with the original source absent and no in-memory plan");
+            Pass("a fresh process restores the recorded date with the original source absent, even after a date-only change to the backup");
+        }
+        using (var fixture = new BatchFixture())
+        {
+            var plan = fixture.Analyze();
+            var legacy = plan with { Files = plan.Files.Select(file => file with { LastWriteUtc = null }).ToArray() };
+            PendingBatch.Save(legacy);
+            string metadata = Path.Combine(fixture.Destination, PendingBatch.MetadataName);
+            byte[] before = File.ReadAllBytes(metadata);
+            Check(Encoding.UTF8.GetString(before).Contains("\"version\":1", StringComparison.Ordinal) &&
+                !Encoding.UTF8.GetString(before).Contains("lastWriteUtc", StringComparison.Ordinal), "The legacy writer changed the version 1 layout.");
+            string relative = legacy.Files[0].RelativePath;
+            var interrupted = FolderBatch.Run(legacy, checkpoint: (path, step, _) =>
+            {
+                if (path == relative && step == CopyStep.Verified)
+                    throw new IOException("Injected interruption in a version 1 session.");
+            });
+            Check(!interrupted.Complete && File.Exists(CopyRecovery.ReceiptPath(FolderBatch.TemporaryPath(fixture.Destination, relative))),
+                "The version 1 session did not leave a verified temporary.");
+            fixture.ForgetPlan();
+            var resumed = fixture.Copy();
+            Check(resumed.Complete && resumed.Entries.Any(entry => entry.RelativePath == relative && entry.Status == BatchStatus.Recovered) &&
+                File.ReadAllBytes(metadata).AsSpan().SequenceEqual(before) &&
+                BatchCatalog.Read(fixture.Destination).Files.All(file => file.LastWriteUtc is null) && fixture.Restore().Complete,
+                "A version 1 pending session did not resume and restore without changing its descriptor.");
+            fixture.CheckRestored();
+            Pass("a version 1 descriptor resumes and its confirmed catalog restores without inventing timestamps");
         }
         using (var fixture = CopiedFixture())
         {
@@ -79,7 +118,12 @@ internal static class CatalogProbe
             byte[] original = File.ReadAllBytes(Path.Combine(fixture.Destination, BatchCatalog.PrimaryName));
             foreach (Action<List<JsonObject>> mutation in new Action<List<JsonObject>>[]
             {
-                nodes => nodes[0]["version"] = 2,
+                nodes => nodes[0]["version"] = 3,
+                nodes => nodes[0]["version"] = 1,
+                nodes => nodes.First(node => (string?)node["kind"] == "file").Remove("lastWriteUtc"),
+                nodes => nodes.First(node => (string?)node["kind"] == "file")["lastWriteUtc"] = null,
+                nodes => nodes.First(node => (string?)node["kind"] == "file")["lastWriteUtc"] = "2001-02-03T04:05:06",
+                nodes => nodes.First(node => (string?)node["kind"] == "file")["lastWriteUtc"] = "1601-01-01T00:00:00Z",
                 nodes => nodes[0]["unexpected"] = true,
                 nodes => nodes[0].Remove("generationId"),
                 nodes => nodes.First(node => (string?)node["kind"] == "file")["path"] = @"..\escaped.bin",
@@ -107,7 +151,7 @@ internal static class CatalogProbe
                 nodes => nodes.First(node => (string?)node["kind"] == "file")["kind"] = "unknown"
             })
                 RejectBytes(Rewrite(original, mutation));
-            byte[] duplicate = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(original).Replace("\"version\":1", "\"version\":1,\"version\":1", StringComparison.Ordinal));
+            byte[] duplicate = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(original).Replace("\"version\":2", "\"version\":2,\"version\":2", StringComparison.Ordinal));
             RejectBytes(duplicate);
             RejectBytes(Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(original).Replace("muestra.txt", @"invalid-\ud800.bin", StringComparison.Ordinal)));
             RejectBytes(original[..^1]);
@@ -123,7 +167,8 @@ internal static class CatalogProbe
                 nodes.RemoveAll(node => (string?)node["kind"] is "directory" or "file");
                 for (int index = 0; index <= 10_000; index++)
                     nodes.Insert(nodes.Count - 1, new JsonObject { ["kind"] = "file", ["path"] = $"{index:D5}.bin",
-                        ["size"] = 0, ["hash"] = Convert.ToBase64String(SHA256.HashData([])) });
+                        ["size"] = 0, ["hash"] = Convert.ToBase64String(SHA256.HashData([])),
+                        ["lastWriteUtc"] = "2001-02-03T04:05:06Z" });
                 nodes[^1]["files"] = 10_001;
                 nodes[^1]["directories"] = 0;
             }));

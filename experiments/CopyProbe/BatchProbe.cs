@@ -47,12 +47,14 @@ internal static class BatchProbe
             }
             finally { File.Delete(added); }
             byte[] changed = File.ReadAllBytes(fixture.SourceFile);
+            DateTime originalDate = File.GetLastWriteTimeUtc(fixture.SourceFile);
             changed[0] ^= 1;
             File.WriteAllBytes(fixture.SourceFile, changed);
+            File.SetLastWriteTimeUtc(fixture.SourceFile, originalDate);
             var partial = FolderBatch.Run(plan);
             Check(!partial.Complete && partial.VerifiedFiles == 2 && !File.Exists(fixture.CopyFile),
-                "Same-size source changes passed the preview hash.");
-            Pass("inventory changes and same-size content changes invalidate the analyzed operation");
+                "Source changes with the same size and date passed the preview hash.");
+            Pass("inventory changes and content changes with the same size and date invalidate the analyzed operation");
         }
         using (var fixture = new BatchFixture())
         {
@@ -76,6 +78,30 @@ internal static class BatchProbe
             Check(recovered.Complete && recovered.Entries.Any(entry => entry.RelativePath == BatchFixture.SampleNames[0] &&
                 entry.Status == BatchStatus.Recovered), "A verified pending file was not recovered on retry.");
             Pass("a verified pending file recovers on retry while the other completed files are reverified");
+        }
+        using (var fixture = new BatchFixture())
+        {
+            var first = fixture.Analyze().Files[0];
+            DateTime expected = first.LastWriteUtc!.Value;
+            string temporary = FolderBatch.TemporaryPath(fixture.Destination, first.RelativePath);
+            var interrupted = fixture.Copy(checkpoint: (relative, step, _) =>
+            {
+                if (relative == first.RelativePath && step == CopyStep.Verified)
+                    throw new IOException("Injected interruption with a verified date.");
+            });
+            Check(!interrupted.Complete && File.GetLastWriteTimeUtc(temporary) == expected &&
+                File.Exists(CopyRecovery.ReceiptPath(temporary)), "The pending file did not retain its recorded date.");
+            File.SetLastWriteTimeUtc(temporary, expected.AddDays(-1));
+            fixture.ForgetPlan();
+            var partial = fixture.Copy();
+            string output = Path.Combine(fixture.Destination, first.RelativePath);
+            Check(!partial.Complete && partial.Entries.Any(entry => entry.RelativePath == first.RelativePath &&
+                entry.Detail?.Contains("fecha de modificación", StringComparison.Ordinal) == true) &&
+                File.Exists(temporary) && !File.Exists(output), "Recovery published a temporary with a different date.");
+            File.SetLastWriteTimeUtc(temporary, expected);
+            Check(fixture.Copy().Complete && File.GetLastWriteTimeUtc(output) == expected,
+                "Recovery failed to preserve the recorded date on retry.");
+            Pass("reopening a pending descriptor rejects a changed date and preserves the verified date on retry");
         }
         using (var fixture = new BatchFixture())
         {

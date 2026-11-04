@@ -1,12 +1,12 @@
 # Descriptor experimental de ejecución pendiente
 
-Versión 1, limitada a una copia inicial dentro de una raíz de laboratorio sintética. Define la intención de ejecución, no un punto de restauración confirmado. El formato de los puntos completos está en [CATALOG.md](CATALOG.md).
+El documento de ubicación usa la versión 1 y se limita a una copia inicial dentro de una raíz de laboratorio sintética. Define la intención de ejecución, no un punto de restauración confirmado. El formato de los puntos completos está en [CATALOG.md](CATALOG.md).
 
 ## Archivos y publicación
 
 En la raíz registrada del destino:
 
-- `.foldertwin-pending.jsonl`: lista de carpetas y archivos con tamaños y SHA-256, usando el formato JSONL del catálogo.
+- `.foldertwin-pending.jsonl`: lista de carpetas y archivos con tamaños y SHA-256, usando el formato JSONL del catálogo. La versión 2 registra además la fecha UTC de modificación de cada archivo.
 - `.foldertwin-pending-location.json`: ubicación relativa del origen e identidades que enlazan esa lista con el trabajo.
 
 Ambos usan temporales con sufijo `.tmp`, creación exclusiva, flush, relectura y renombrado por handle sin reemplazo. Orden: JSONL temporal → JSONL final → ubicación temporal → ubicación final. El lector exige los dos finales válidos y enlazados. La copia de datos empieza después de publicarlos.
@@ -33,6 +33,8 @@ Un objeto JSON UTF-8, máximo 64 KiB, propiedades camelCase y todos los campos o
 `fixtureIdentity` identifica la raíz del laboratorio. `sourceRelative` es una ruta de directorio canónica dentro de esa raíz, distinta y separada del destino. `sourceIdentity` identifica el volumen y directorio de origen del análisis. Las identidades tienen la misma representación de 24 bytes que el catálogo. No se guardan rutas absolutas del usuario.
 
 `metadataHash` es SHA-256 de todos los bytes del JSONL, incluidos el pie y su LF. `checksum` es SHA-256 de la serialización canónica del objeto `payload` con las opciones de `PendingBatch`: orden de campos declarado, UTF-8, camelCase, sin indentación y encoder predeterminado de `System.Text.Json`. El lector rechaza campos ausentes, duplicados, desconocidos o nulos, versiones distintas, identidades/tamaños inválidos y profundidad JSON mayor de 16. El checksum comprueba los valores del payload; no autentica frente a alguien que pueda recalcularlo.
+
+Para v2, el reintento compara la fecha registrada en el descriptor con la del temporal o archivo final, además de verificar el contenido. El recibo por archivo conserva su formato. Una fecha diferente deja los datos para revisión. Los descriptores v1 se reabren con la comprobación de contenido original.
 
 La identidad de la raíz debe coincidir con el directorio abierto. El JSONL conserva el ID y marcador del destino; se verifican también contra su handle y marcador real. Copiar ambos documentos y el marcador a otra carpeta no autoriza ese destino. Un descriptor truncado o incoherente no se sustituye automáticamente.
 

@@ -71,7 +71,7 @@ internal static class CopyRecovery
     }
 
     public static RecoveryResult Recover(string root, string temporary, string destination, DestinationBinding? binding = null,
-        byte[]? expectedHash = null)
+        byte[]? expectedHash = null, DateTime? lastWriteUtc = null)
     {
         CheckParents(temporary, destination);
         using var fence = new DirectoryFence(root, temporary, destination);
@@ -112,6 +112,7 @@ internal static class CopyRecovery
         WindowsProbeNative.RequireSupportedData(data.SafeFileHandle, Path.GetFileName(destination));
         if (!SHA256.HashData(data).AsSpan().SequenceEqual(record[Magic.Length..DataHashEnd]))
             return RecoveryResult.HashMismatch;
+        VerifiedCopy.RequireLastWriteTime(data, lastWriteUtc);
 
         if (hasFinal)
             return RecoveryResult.AlreadyPublished;
