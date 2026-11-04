@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation.Peers;
 using System.Windows.Controls;
@@ -11,6 +12,7 @@ public partial class MainWindow : Window
 {
     private readonly BatchFixture session;
     private readonly Queue<string?>? testSelections;
+    private PreviousSession? previous;
     private bool sourceSelected;
     private bool destinationSelected;
     private bool analyzed;
@@ -24,6 +26,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         session = new BatchFixture();
+        SessionText.Text = $"Sesión nueva · {Path.GetFileName(session.Root)}\nSe conserva en la carpeta temporal de Windows cuando inicias una copia.";
         if (smoke)
             testSelections = new Queue<string?>([null, session.Destination, session.Source, session.Destination]);
     }
@@ -50,19 +53,61 @@ public partial class MainWindow : Window
         RefreshActions();
     }
 
-    private string? PickFolder(string title)
+    private string? PickFolder(string title, string? root = null)
     {
         if (testSelections is not null)
             return testSelections.Dequeue();
         var dialog = new OpenFolderDialog
         {
             Title = title,
-            RootDirectory = session.Root,
-            InitialDirectory = session.Root,
+            RootDirectory = root ?? session.Root,
+            InitialDirectory = root ?? session.Root,
             AddToRecent = false,
             DereferenceLinks = false
         };
         return dialog.ShowDialog(this) == true ? dialog.FolderName : null;
+    }
+
+    private void OpenPreviousClick(object sender, RoutedEventArgs e)
+    {
+        if (!OpenPreviousButton.IsEnabled)
+            return;
+        string? root = PickFolder("Elige la carpeta FolderTwin-Batch de la sesión", Path.GetTempPath());
+        if (root is not null)
+            activeTask = OpenPreviousAsync(Path.TrimEndingDirectorySeparator(root));
+    }
+
+    private async Task OpenPreviousAsync(string root)
+    {
+        busy = true;
+        RefreshActions();
+        SetStatus("Comprobando la sesión anterior…");
+        try
+        {
+            var candidate = await Task.Run(() => new PreviousSession(root));
+            bool confirmed = candidate.Confirmed;
+            previous = candidate;
+            copied = confirmed;
+            analyzed = true;
+            SourceText.Text = "Origen de la sesión anterior";
+            DestinationText.Text = "Destino de la sesión anterior";
+            SessionText.Text = $"Sesión abierta · {Path.GetFileName(candidate.Root)}";
+            PreviewText.Text = confirmed
+                ? "Catálogo confirmado. La restauración verifica los archivos y escribe en una carpeta nueva de este laboratorio."
+                : "Lote pendiente. Al reintentar se comprobará lo guardado y se mostrarán las incidencias por archivo.";
+            ResultsList.ItemsSource = null;
+            SetStatus(confirmed ? "Sesión anterior abierta. Puedes restaurar el lote." : "Sesión anterior abierta. Puedes reintentar la copia.");
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException
+            or Win32Exception or ArgumentException or JsonException)
+        {
+            SetStatus("No se pudo abrir la sesión. " + error.Message);
+        }
+        finally
+        {
+            busy = false;
+            RefreshActions();
+        }
     }
 
     private void AnalyzeClick(object sender, RoutedEventArgs e)
@@ -118,18 +163,21 @@ public partial class MainWindow : Window
         RefreshActions();
         ResultsList.ItemsSource = null;
         SetStatus(restore ? "Restaurando y verificando…" : "Copiando y verificando…");
-        if (!restore)
+        if (!restore && previous is null)
             copyStarted = true;
         try
         {
-            BatchResult result = await Task.Run(() => restore ? session.Restore() : session.Copy());
+            BatchResult result = await Task.Run(() => previous is { } reopened
+                ? restore ? reopened.Restore(session) : reopened.Resume()
+                : restore ? session.Restore() : session.Copy());
             if (restore)
                 restored = result.Complete;
             else
                 copied = result.Complete;
             ResultsList.ItemsSource = result.Entries.Select(entry => $"{entry.RelativePath} · {Describe(entry)}").ToArray();
             string[] inUse = result.Entries.Where(entry => entry.InUse).Take(16)
-                .Select(entry => Path.Combine(restore ? session.Destination : session.Source, entry.RelativePath)).ToArray();
+                .Select(entry => Path.Combine(restore ? previous?.Destination ?? session.Destination : previous?.Source ?? session.Source,
+                    entry.RelativePath)).ToArray();
             var users = await Task.Run(() => FileUseDiagnostics.TryGetUsers(inUse));
             string[] applications = users.Select(user => user.Application.Trim())
                 .Where(name => name.Length != 0).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToArray();
@@ -140,6 +188,9 @@ public partial class MainWindow : Window
                 : $"Resultado parcial: {result.VerifiedFiles:N0} de {BatchFixture.SampleNames.Length:N0} archivos verificados. Revisa las incidencias y reintenta.";
             SetStatus(status + (result.Problem is null ? "" : " " + result.Problem) +
                 (result.Note is null ? "" : " " + result.Note) + detail);
+            if (restore && result.Complete)
+                PreviewText.Text = $"Archivos restaurados en {session.Restored}" +
+                    (previous is null ? "" : "\nEsta carpeta de prueba se retira al cerrar la ventana.");
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException
             or Win32Exception or ArgumentException)
@@ -155,10 +206,11 @@ public partial class MainWindow : Window
 
     private void RefreshActions()
     {
-        SourceButton.IsEnabled = DestinationButton.IsEnabled = !busy && !copyStarted;
-        AnalyzeButton.IsEnabled = !busy && !copyStarted && sourceSelected && destinationSelected;
+        OpenPreviousButton.IsEnabled = !busy && !copyStarted && previous is null;
+        SourceButton.IsEnabled = DestinationButton.IsEnabled = OpenPreviousButton.IsEnabled;
+        AnalyzeButton.IsEnabled = OpenPreviousButton.IsEnabled && sourceSelected && destinationSelected;
         CopyButton.IsEnabled = !busy && !copied && analyzed;
-        CopyButton.Content = copyStarted && !copied ? "_Reintentar copia" : "_Copiar y verificar";
+        CopyButton.Content = (copyStarted || previous is not null) && !copied ? "_Reintentar copia" : "_Copiar y verificar";
         RestoreButton.IsEnabled = !busy && copied && !restored;
     }
 
@@ -191,7 +243,8 @@ public partial class MainWindow : Window
     {
         try
         {
-            session.Dispose();
+            if (!copyStarted || testSelections is not null)
+                session.Dispose();
         }
         catch (Exception error) when (testSelections is null &&
             error is IOException or InvalidDataException or UnauthorizedAccessException or Win32Exception)
@@ -258,6 +311,48 @@ public partial class MainWindow : Window
         await activeTask;
         Check(restored && !RestoreButton.IsEnabled && StatusText.Text.Contains("réplica íntegra", StringComparison.Ordinal), StatusText.Text);
         session.CheckRestored();
+
+        using var interrupted = new BatchFixture();
+        interrupted.Analyze();
+        using (var writer = new FileStream(interrupted.SourceFile, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
+            Check(interrupted.Copy().VerifiedFiles == 2, "The previous session was not left partial.");
+        interrupted.ForgetPlan();
+
+        var reopened = new MainWindow(smoke: true);
+        try
+        {
+            reopened.testSelections!.Clear();
+            reopened.testSelections.Enqueue(Path.GetTempPath());
+            reopened.testSelections.Enqueue(interrupted.Root);
+            Click(reopened.OpenPreviousButton);
+            await reopened.activeTask;
+            Check(reopened.previous is null && reopened.OpenPreviousButton.IsEnabled, "An unrelated folder was accepted.");
+            Click(reopened.OpenPreviousButton);
+            await reopened.activeTask;
+            Check(reopened.CopyButton.IsEnabled && !reopened.RestoreButton.IsEnabled && !File.Exists(interrupted.CopyFile),
+                "Opening a pending session wrote files or showed the wrong actions.");
+            Click(reopened.CopyButton);
+            await reopened.activeTask;
+            Check(reopened.copied && reopened.RestoreButton.IsEnabled, reopened.StatusText.Text);
+        }
+        finally { reopened.Close(); }
+        Check(File.Exists(interrupted.CopyFile), "Closing a reopened session removed its data.");
+
+        var confirmedWindow = new MainWindow(smoke: true);
+        try
+        {
+            confirmedWindow.testSelections!.Clear();
+            confirmedWindow.testSelections.Enqueue(interrupted.Root);
+            Click(confirmedWindow.OpenPreviousButton);
+            await confirmedWindow.activeTask;
+            Check(confirmedWindow.RestoreButton.IsEnabled && !confirmedWindow.CopyButton.IsEnabled,
+                "A confirmed session did not offer restoration.");
+            Click(confirmedWindow.RestoreButton);
+            await confirmedWindow.activeTask;
+            Check(confirmedWindow.restored && !File.Exists(interrupted.RestoredFile), confirmedWindow.StatusText.Text);
+            confirmedWindow.session.CheckRestored();
+        }
+        finally { confirmedWindow.Close(); }
 
         static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         static void Check(bool condition, string message)

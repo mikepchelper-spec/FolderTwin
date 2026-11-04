@@ -7,7 +7,15 @@ internal sealed class BatchFixture : IDisposable
     internal static readonly string[] SampleNames = ["muestra.txt", Path.Combine("Documentos á漢字", "notas.bin"), "vacío.bin"];
     internal static readonly string[] DirectoryNames = ["Documentos á漢字", "Carpeta vacía"];
     private readonly byte[] sourceIdentity;
-    private readonly Dictionary<string, byte[]> expectedHashes = new(StringComparer.Ordinal);
+    private static byte[][] Samples()
+    {
+        byte[] content = new byte[65_537];
+        new Random(42).NextBytes(content);
+        return ["FolderTwin · lote sintético de demostración.\n"u8.ToArray(), content, []];
+    }
+
+    private static readonly BatchFile[] ExpectedFiles = Samples().Select((content, index) =>
+        new BatchFile(SampleNames[index], content.LongLength, SHA256.HashData(content))).ToArray();
     internal DestinationBinding DestinationBinding { get; }
     internal DestinationBinding RestoreBinding { get; }
     internal string Root { get; } = Directory.CreateTempSubdirectory(Prefix).FullName;
@@ -27,31 +35,28 @@ internal sealed class BatchFixture : IDisposable
             Directory.CreateDirectory(Path.Combine(Source, directory));
         using (var source = new DirectoryFence(Source))
             sourceIdentity = WindowsProbeNative.DirectoryIdentity(source.Root);
-        Seed(SampleNames[0], "FolderTwin · lote sintético de demostración.\n"u8.ToArray());
-        byte[] content = new byte[65_537];
-        new Random(42).NextBytes(content);
-        Seed(SampleNames[1], content);
-        Seed(SampleNames[2], []);
+        byte[][] samples = Samples();
+        for (int index = 0; index < samples.Length; index++)
+            File.WriteAllBytes(Path.Combine(Source, SampleNames[index]), samples[index]);
         using (var target = new DirectoryFence(Destination))
             DestinationBinding = global::DestinationBinding.Register(target.Root);
         using (var target = new DirectoryFence(Restored))
             RestoreBinding = global::DestinationBinding.Register(target.Root);
     }
 
-    private void Seed(string relative, byte[] content)
-    {
-        File.WriteAllBytes(Path.Combine(Source, relative), content);
-        expectedHashes.Add(relative, SHA256.HashData(content));
-    }
-
     internal BatchPlan Analyze()
     {
         var plan = FolderBatch.Prepare(Root, Source, Destination, DestinationBinding);
-        if (plan.Files.Length != expectedHashes.Count || plan.Files.Any(file => !expectedHashes.TryGetValue(file.RelativePath, out var hash) ||
-            !file.Hash.AsSpan().SequenceEqual(hash)) || !plan.Directories.Order(StringComparer.Ordinal)
-                .SequenceEqual(DirectoryNames.Order(StringComparer.Ordinal)))
-            throw new InvalidDataException("Este laboratorio solo admite los archivos sintéticos generados para la sesión.");
+        ValidateSamples(plan.Files, plan.Directories);
         return Plan = plan;
+    }
+
+    internal static void ValidateSamples(BatchFile[] files, string[] directories)
+    {
+        if (files.Length != ExpectedFiles.Length || !ExpectedFiles.All(expected => files.Any(file =>
+            file.RelativePath == expected.RelativePath && file.Length == expected.Length && file.Hash.AsSpan().SequenceEqual(expected.Hash))) ||
+            !directories.Order(StringComparer.Ordinal).SequenceEqual(DirectoryNames.Order(StringComparer.Ordinal)))
+            throw new InvalidDataException("Este laboratorio solo admite los archivos sintéticos generados para la sesión.");
     }
     internal BatchResult Copy()
     {
@@ -67,9 +72,8 @@ internal sealed class BatchFixture : IDisposable
 
     internal void CheckRestored()
     {
-        foreach (string relative in SampleNames)
-            if (!SHA256.HashData(File.ReadAllBytes(Path.Combine(Restored, relative))).AsSpan()
-                .SequenceEqual(expectedHashes[relative]))
+        foreach (var file in ExpectedFiles)
+            if (!SHA256.HashData(File.ReadAllBytes(Path.Combine(Restored, file.RelativePath))).AsSpan().SequenceEqual(file.Hash))
                 throw new InvalidDataException("El archivo restaurado no coincide con el contenido analizado.");
         foreach (string directory in DirectoryNames)
             if (!Directory.Exists(Path.Combine(Restored, directory)))

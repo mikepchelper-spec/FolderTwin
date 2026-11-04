@@ -128,12 +128,13 @@ internal static class PendingBatch
     }
 
     internal static BatchResult Resume(string fixtureRoot, string destination, CancellationToken cancellationToken = default,
-        Action<string, CopyStep, string>? checkpoint = null)
+        Action<string, CopyStep, string>? checkpoint = null, Action<BatchPlan>? validate = null)
     {
         BatchResult? result = null;
         try
         {
             var plan = Read(fixtureRoot, destination);
+            validate?.Invoke(plan);
             result = FolderBatch.Run(plan, cancellationToken, checkpoint, resume: true);
             if (result.Complete)
                 BatchCatalog.Publish(plan);
