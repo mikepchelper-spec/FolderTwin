@@ -149,45 +149,65 @@ public partial class MainWindow : Window
     private void CopyClick(object sender, RoutedEventArgs e)
     {
         if (CopyButton.IsEnabled)
-            activeTask = RunAsync(restore: false);
+            activeTask = RunAsync(AttemptOperation.Copy);
     }
 
     private void RestoreClick(object sender, RoutedEventArgs e)
     {
         if (RestoreButton.IsEnabled)
-            activeTask = RunAsync(restore: true);
+            activeTask = RunAsync(AttemptOperation.Restore);
     }
 
-    private async Task RunAsync(bool restore)
+    private void VerifyClick(object sender, RoutedEventArgs e)
     {
+        if (VerifyButton.IsEnabled)
+            activeTask = RunAsync(AttemptOperation.Verify);
+    }
+
+    private async Task RunAsync(AttemptOperation operation)
+    {
+        bool restore = operation == AttemptOperation.Restore;
         busy = true;
         RefreshActions();
         ResultsList.ItemsSource = null;
-        SetStatus(restore ? "Restaurando y verificando…" : "Copiando y verificando…");
-        if (!restore && previous is null)
+        SetStatus(operation switch
+        {
+            AttemptOperation.Verify => "Verificando el respaldo…",
+            AttemptOperation.Restore => "Restaurando y verificando…",
+            _ => "Copiando y verificando…"
+        });
+        if (operation == AttemptOperation.Copy && previous is null)
             copyStarted = true;
         BatchResult? outcome = null;
         try
         {
-            BatchResult result = await Task.Run(() => previous is { } reopened
-                ? restore ? reopened.Restore(session) : reopened.Resume()
-                : restore ? session.Restore() : session.Copy());
+            BatchResult result = await Task.Run(() => operation switch
+            {
+                AttemptOperation.Verify => BatchCatalog.Verify(previous?.Destination ?? session.Destination,
+                    previous?.Binding ?? session.DestinationBinding),
+                AttemptOperation.Restore => previous?.Restore(session) ?? session.Restore(),
+                _ => previous?.Resume() ?? session.Copy()
+            });
             outcome = result;
             if (restore)
                 restored = result.Complete;
-            else
+            else if (operation == AttemptOperation.Copy)
                 copied = result.Complete;
-            ResultsList.ItemsSource = result.Entries.Select(entry => $"{entry.RelativePath} · {Describe(entry)}").ToArray();
+            ResultsList.ItemsSource = result.Entries.Select(entry => $"{entry.RelativePath} · {Describe(entry, operation)}").ToArray();
             string[] inUse = result.Entries.Where(entry => entry.InUse).Take(16)
-                .Select(entry => Path.Combine(restore ? previous?.Destination ?? session.Destination : previous?.Source ?? session.Source,
+                .Select(entry => Path.Combine(operation != AttemptOperation.Copy ? previous?.Destination ?? session.Destination : previous?.Source ?? session.Source,
                     entry.RelativePath)).ToArray();
             var users = await Task.Run(() => FileUseDiagnostics.TryGetUsers(inUse));
             string[] applications = users.Select(user => user.Application.Trim())
                 .Where(name => name.Length != 0).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToArray();
             string detail = applications.Length == 0 ? "" : " Aplicaciones detectadas por Windows: " + string.Join(", ", applications) + ".";
             string status = result.Complete
-                ? restore ? $"Restauración verificada: {result.VerifiedFiles:N0} archivos y sus carpetas."
-                    : $"Lote copiado y verificado: {result.VerifiedFiles:N0} archivos. Ya puedes restaurarlo."
+                ? operation switch
+                {
+                    AttemptOperation.Verify => $"Respaldo verificado. Coinciden los {result.VerifiedFiles:N0} archivos y sus carpetas.",
+                    AttemptOperation.Restore => $"Restauración verificada: {result.VerifiedFiles:N0} archivos y sus carpetas.",
+                    _ => $"Lote copiado y verificado: {result.VerifiedFiles:N0} archivos. Ya puedes restaurarlo."
+                }
                 : $"Resultado parcial: {result.VerifiedFiles:N0} de {BatchFixture.SampleNames.Length:N0} archivos verificados. Revisa las incidencias y reintenta.";
             SetStatus(status + (result.Problem is null ? "" : " " + result.Problem) +
                 (result.Note is null ? "" : " " + result.Note) + detail);
@@ -203,20 +223,20 @@ public partial class MainWindow : Window
         finally
         {
             if (outcome is not null)
-                await RefreshHistoryAsync(outcome, restore);
+                await RefreshHistoryAsync(outcome, operation);
             busy = false;
             RefreshActions();
         }
     }
 
-    private async Task RefreshHistoryAsync(BatchResult? outcome = null, bool restore = false)
+    private async Task RefreshHistoryAsync(BatchResult? outcome = null, AttemptOperation operation = AttemptOperation.Copy)
     {
         string root = previous?.Root ?? session.Root;
         var binding = previous?.Binding ?? session.DestinationBinding;
         bool appendFailed = false;
         if (outcome is not null)
         {
-            try { await Task.Run(() => AttemptHistory.Append(root, binding, restore, outcome)); }
+            try { await Task.Run(() => AttemptHistory.Append(root, binding, operation, outcome)); }
             catch (Exception error) when (IsLabError(error)) { appendFailed = true; }
         }
 
@@ -240,7 +260,7 @@ public partial class MainWindow : Window
 
     private static string DescribeAttempt(AttemptRecord record)
     {
-        string action = record.Restore ? "Restauración" : "Copia";
+        string action = record.Verify ? "Verificación" : record.Restore ? "Restauración" : "Copia";
         string state = record.Complete ? "Completa" : record.VerifiedFiles == 0 ? "Sin completar" : "Parcial";
         var lines = new List<string>
         {
@@ -274,6 +294,7 @@ public partial class MainWindow : Window
         CopyButton.IsEnabled = !busy && !copied && analyzed;
         CopyButton.Content = (copyStarted || previous is not null) && !copied ? "_Reintentar copia" : "_Copiar y verificar";
         RestoreButton.IsEnabled = !busy && copied && !restored;
+        VerifyButton.IsEnabled = !busy && copied;
     }
 
     private void SetStatus(string message)
@@ -282,12 +303,12 @@ public partial class MainWindow : Window
         UIElementAutomationPeer.FromElement(StatusText)?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
     }
 
-    private static string Describe(BatchEntryResult entry) => entry.Status switch
+    private static string Describe(BatchEntryResult entry, AttemptOperation operation) => entry.Status switch
     {
         BatchStatus.Copied => "Copia verificada",
         BatchStatus.Recovered => "Temporal recuperado y verificado",
         BatchStatus.AlreadyVerified => "Copia existente verificada",
-        BatchStatus.DirectoryReady => "Carpeta preparada",
+        BatchStatus.DirectoryReady => operation == AttemptOperation.Verify ? "Carpeta presente" : "Carpeta preparada",
         _ => entry.Detail ?? "Pendiente de revisión"
     };
 
@@ -385,10 +406,11 @@ public partial class MainWindow : Window
         {
             BatchResult partial = interrupted.Copy();
             Check(partial.VerifiedFiles == 2, "The previous session was not left partial.");
-            AttemptHistory.Append(interrupted.Root, interrupted.DestinationBinding, restore: false, partial);
+            AttemptHistory.Append(interrupted.Root, interrupted.DestinationBinding, AttemptOperation.Copy, partial);
         }
         string interruptedLog = Path.Combine(interrupted.Root, AttemptHistory.Name);
-        File.AppendAllText(interruptedLog, "{\"FinishedAt\":");
+        string legacyRecord = File.ReadAllText(interruptedLog).Replace(",\"Verify\":false", "", StringComparison.Ordinal);
+        File.WriteAllText(interruptedLog, legacyRecord + "{\"FinishedAt\":");
         interrupted.ForgetPlan();
 
         var reopened = new MainWindow(smoke: true);
@@ -424,8 +446,37 @@ public partial class MainWindow : Window
             confirmedWindow.testSelections.Enqueue(interrupted.Root);
             Click(confirmedWindow.OpenPreviousButton);
             await confirmedWindow.activeTask;
-            Check(confirmedWindow.RestoreButton.IsEnabled && !confirmedWindow.CopyButton.IsEnabled,
+            Check(confirmedWindow.RestoreButton.IsEnabled && confirmedWindow.VerifyButton.IsEnabled && !confirmedWindow.CopyButton.IsEnabled,
                 "A confirmed session did not offer restoration.");
+            byte[] original = File.ReadAllBytes(interrupted.CopyFile);
+            byte[] altered = (byte[])original.Clone();
+            altered[0] ^= 1;
+            string empty = Path.Combine(interrupted.Destination, BatchFixture.SampleNames[2]);
+            File.WriteAllBytes(interrupted.CopyFile, altered);
+            File.Delete(empty);
+            try
+            {
+                Click(confirmedWindow.VerifyButton);
+                await confirmedWindow.activeTask;
+                string[] findings = confirmedWindow.ResultsList.Items.Cast<string>().ToArray();
+                Check(confirmedWindow.StatusText.Text.StartsWith("Resultado parcial: 1 de 3", StringComparison.Ordinal) &&
+                    findings.Any(row => row.StartsWith("muestra.txt", StringComparison.Ordinal) && row.Contains("no coincide", StringComparison.Ordinal)) &&
+                    findings.Any(row => row.StartsWith("vacío.bin", StringComparison.Ordinal) && row.Contains("Falta", StringComparison.Ordinal)),
+                    "Verification failed to identify both changed and missing files.");
+                Check(File.ReadAllBytes(interrupted.CopyFile).SequenceEqual(altered) && !File.Exists(empty) &&
+                    !File.Exists(confirmedWindow.session.RestoredFile), "Verification changed or restored data.");
+            }
+            finally
+            {
+                File.WriteAllBytes(interrupted.CopyFile, original);
+                File.WriteAllBytes(empty, []);
+            }
+            Click(confirmedWindow.VerifyButton);
+            await confirmedWindow.activeTask;
+            Check(confirmedWindow.StatusText.Text.StartsWith("Respaldo verificado", StringComparison.Ordinal) &&
+                ((string)confirmedWindow.HistoryList.Items[0]).Contains("Verificación · Completa", StringComparison.Ordinal) &&
+                ((string)confirmedWindow.HistoryList.Items[1]).Contains("Verificación · Parcial", StringComparison.Ordinal),
+                "Verification results were not kept in history.");
             using (var logLock = new FileStream(interruptedLog, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             {
                 Click(confirmedWindow.RestoreButton);

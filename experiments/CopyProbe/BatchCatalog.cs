@@ -101,6 +101,51 @@ internal static class BatchCatalog
     {
         using var root = new DirectoryFence(backup);
         using var operation = WindowsProbeNative.OpenPlainFile(root.Root, FolderBatch.LockName, FileAccess.Read, FileShare.None);
+        return ReadLocked(root);
+    }
+
+    internal static BatchResult Verify(string backup, DestinationBinding expected)
+    {
+        using var root = new DirectoryFence(backup);
+        using var marker = expected.OpenVerifiedMarker(root.Root);
+        using var operation = WindowsProbeNative.OpenPlainFile(root.Root, FolderBatch.LockName, FileAccess.Read, FileShare.None);
+        var catalog = ReadLocked(root);
+        BatchFixture.ValidateSamples(catalog.Files, catalog.Directories);
+
+        var entries = new List<BatchEntryResult>();
+        foreach (string relative in catalog.Directories)
+            Check(relative, isDirectory: true, () =>
+            {
+                using var directory = new DirectoryFence(Path.Combine(backup, relative));
+            });
+        foreach (var file in catalog.Files)
+            Check(file.RelativePath, isDirectory: false, () => VerifyFile(backup, file));
+
+        return new(entries.ToArray(), Note: catalog.Degraded
+            ? "Se usó una réplica íntegra. La otra copia del catálogo necesita revisión." : null);
+
+        void Check(string relative, bool isDirectory, Action verify)
+        {
+            try
+            {
+                verify();
+                entries.Add(new(relative, isDirectory, isDirectory ? BatchStatus.DirectoryReady : BatchStatus.AlreadyVerified));
+            }
+            catch (FileNotFoundException)
+            {
+                entries.Add(new(relative, isDirectory, BatchStatus.Failed, "Falta en el respaldo."));
+            }
+            catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or Win32Exception)
+            {
+                bool inUse = FileUseDiagnostics.IsSharingViolation(error);
+                entries.Add(new(relative, isDirectory, BatchStatus.Failed,
+                    inUse ? "Está en uso. Reintenta cuando se cierre." : error.Message, inUse));
+            }
+        }
+    }
+
+    private static CatalogSnapshot ReadLocked(DirectoryFence root)
+    {
         byte[] commit;
         using (var file = WindowsProbeNative.OpenPlainFile(root.Root, CommitName, FileAccess.Read, FileShare.Read))
             commit = ReadConfirmation(file);
@@ -285,12 +330,15 @@ internal static class BatchCatalog
             using var directory = new DirectoryFence(Path.Combine(plan.Destination, relative));
         }
         foreach (var item in plan.Files)
-        {
-            string path = Path.Combine(plan.Destination, item.RelativePath);
-            using var parent = new DirectoryFence(plan.Destination, path);
-            using var file = WindowsProbeNative.OpenPlainFile(parent.Parent(path), path, FileAccess.Read, FileShare.Read);
-            if (file.Length != item.Length || !SHA256.HashData(file).AsSpan().SequenceEqual(item.Hash))
-                throw new InvalidDataException("El contenido del destino no coincide con el catálogo.");
-        }
+            VerifyFile(plan.Destination, item);
+    }
+
+    private static void VerifyFile(string backup, BatchFile item)
+    {
+        string path = Path.Combine(backup, item.RelativePath);
+        using var parent = new DirectoryFence(backup, path);
+        using var file = WindowsProbeNative.OpenPlainFile(parent.Parent(path), path, FileAccess.Read, FileShare.Read);
+        if (file.Length != item.Length || !SHA256.HashData(file).AsSpan().SequenceEqual(item.Hash))
+            throw new InvalidDataException("El contenido del respaldo no coincide con el catálogo.");
     }
 }

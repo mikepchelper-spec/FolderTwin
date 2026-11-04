@@ -52,6 +52,8 @@
                         Margin="0,0,8,8" IsEnabled="False" AutomationProperties.AutomationId="Copy" />
                 <Button x:Name="RestoreButton" Content="_Restaurar y verificar" Click="RestoreClick"
                         Margin="0,0,0,8" IsEnabled="False" AutomationProperties.AutomationId="Restore" />
+                <Button x:Name="VerifyButton" Content="_Verificar respaldo" Click="VerifyClick"
+                        Margin="8,0,0,8" IsEnabled="False" AutomationProperties.AutomationId="VerifyBackup" />
             </WrapPanel>
             <TextBlock x:Name="StatusText" Text="Selecciona las dos carpetas para empezar."
                        FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,4,0,4"

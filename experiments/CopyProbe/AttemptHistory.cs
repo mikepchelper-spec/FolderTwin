@@ -2,9 +2,10 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 internal enum AttemptIssueKind { InUse, Cancelled, Review }
+internal enum AttemptOperation { Copy, Restore, Verify }
 internal sealed record AttemptIssue(string Path, AttemptIssueKind Kind);
 internal sealed record AttemptRecord(DateTimeOffset FinishedAt, bool Restore, bool Complete, int VerifiedFiles,
-    bool HasProblem, bool Degraded, AttemptIssue[] Issues);
+    bool HasProblem, bool Degraded, AttemptIssue[] Issues, bool Verify = false);
 internal sealed record AttemptLog(AttemptRecord[] Records, int Unreadable);
 
 // Diagnostic only. Receipts and catalog confirmation remain authoritative.
@@ -21,13 +22,14 @@ internal static class AttemptHistory
         RespectNullableAnnotations = true
     };
 
-    internal static void Append(string sessionRoot, DestinationBinding binding, bool restore, BatchResult result)
+    internal static void Append(string sessionRoot, DestinationBinding binding, AttemptOperation operation, BatchResult result)
     {
         var issues = result.Entries.Where(entry => !entry.Succeeded && KnownPath(entry.RelativePath))
             .Select(entry => new AttemptIssue(entry.RelativePath, entry.InUse ? AttemptIssueKind.InUse :
                 entry.Status == BatchStatus.Cancelled ? AttemptIssueKind.Cancelled : AttemptIssueKind.Review)).ToArray();
-        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(new AttemptRecord(DateTimeOffset.UtcNow, restore,
-            result.Complete, result.VerifiedFiles, result.Problem is not null, result.Note is not null, issues), Json);
+        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(new AttemptRecord(DateTimeOffset.UtcNow, operation == AttemptOperation.Restore,
+            result.Complete, result.VerifiedFiles, result.Problem is not null, result.Note is not null, issues,
+            Verify: operation == AttemptOperation.Verify), Json);
         if (bytes.Length >= MaxRecordBytes)
             throw new InvalidDataException("El registro supera el tamaño permitido.");
 
@@ -89,6 +91,7 @@ internal static class AttemptHistory
         {
             var record = JsonSerializer.Deserialize<AttemptRecord>(line, Json);
             return record is { Issues: not null } && record.VerifiedFiles >= 0 && record.VerifiedFiles <= BatchFixture.SampleNames.Length &&
+                !(record.Restore && record.Verify) &&
                 record.Issues.Length <= BatchFixture.SampleNames.Length + BatchFixture.DirectoryNames.Length &&
                 (!record.Complete || record.VerifiedFiles == BatchFixture.SampleNames.Length && !record.HasProblem && record.Issues.Length == 0) &&
                 record.Issues.All(issue => issue is not null && KnownPath(issue.Path) && Enum.IsDefined(issue.Kind))
