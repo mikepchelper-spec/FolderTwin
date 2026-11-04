@@ -66,8 +66,10 @@ public partial class VersionWindow
                     reopened.OnlyChanges.IsEnabled && reopened.RestorePointButton.IsEnabled, reopened.StatusText.Text);
                 reopened.OnlyChanges.IsChecked = true;
                 await reopened.activeTask;
+                Check(reopened.indexKey is not null && reopened.browser is null, reopened.StatusText.Text);
                 reopened.Files.SelectedItem = reopened.Files.Items.Cast<VersionEntry>().Single(entry => entry.IsDirectory);
                 Click(reopened.OpenDirectoryButton);
+                await reopened.activeTask;
                 var changes = reopened.Files.Items.Cast<VersionEntry>().ToArray();
                 Check(changes.Length == 3 && changes.Any(entry => entry.Change == VersionChange.Added) &&
                     changes.Any(entry => entry.Change == VersionChange.Modified) &&
@@ -78,6 +80,26 @@ public partial class VersionWindow
                 await reopened.activeTask;
                 Check(File.ReadAllText(Path.Combine(outputFile, "Carpeta ñ", "borrado.txt")) == "contenido eliminado" &&
                     !File.Exists(Path.Combine(outputFile, "Carpeta ñ", "informe.txt")), "The deleted file did not restore independently.");
+                string indexPath = Path.Combine(workspace.Root, VersionIndex.CacheDirectory, VersionIndex.DatabaseName);
+                File.Delete(indexPath);
+                Click(reopened.RefreshButton);
+                await reopened.activeTask;
+                Check(reopened.indexKey is not null && File.Exists(indexPath) &&
+                    reopened.Files.Items.Cast<VersionEntry>().Single().Path == "Carpeta ñ",
+                    "The missing index was not rebuilt. " + reopened.StatusText.Text);
+                const string brokenIndex = "índice sintético dañado";
+                File.WriteAllText(indexPath, brokenIndex);
+                Click(reopened.RefreshButton);
+                await reopened.activeTask;
+                Check(reopened.indexKey is null && reopened.browser is not null &&
+                    reopened.StatusText.Text.Contains("Índice local no disponible", StringComparison.Ordinal) &&
+                    File.ReadAllText(indexPath) == brokenIndex,
+                    "The damaged index was changed or bypassed without notice.");
+                reopened.Files.SelectedItem = reopened.Files.Items.Cast<VersionEntry>().Single();
+                Click(reopened.OpenDirectoryButton);
+                await reopened.activeTask;
+                Check(reopened.Files.Items.Cast<VersionEntry>().SequenceEqual(changes),
+                    "The direct catalog view differed from the indexed view.");
                 Click(reopened.VerifyButton);
                 await reopened.activeTask;
                 Check(reopened.StatusText.Text.Contains("SHA-256", StringComparison.Ordinal), reopened.StatusText.Text);

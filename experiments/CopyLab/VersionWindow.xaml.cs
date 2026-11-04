@@ -23,10 +23,14 @@ public partial class VersionWindow : Window
     }
 
     private readonly LabWorkspace workspace;
+    private readonly VersionIndex index;
     private readonly Func<string, string?>? testPicker;
     private VersionStore? store;
     private string? source;
     private VersionBrowser? browser;
+    private string? indexKey;
+    private string? comparisonId;
+    private const string IndexUnavailable = " Índice local no disponible. Vista leída desde los catálogos.";
     private string directory = "";
     private PointRow[] points = [];
     private PointRow? previous;
@@ -36,6 +40,7 @@ public partial class VersionWindow : Window
     internal VersionWindow(LabWorkspace workspace, Func<string, string?>? testPicker = null)
     {
         this.workspace = workspace;
+        index = new(workspace);
         this.testPicker = testPicker;
         InitializeComponent();
         RefreshActions();
@@ -59,7 +64,8 @@ public partial class VersionWindow : Window
             StoreText.Text = store.Destination;
             OnlyChanges.IsChecked = false;
             await RefreshAsync();
-            SetStatus(create ? "Almacén creado." : "Almacén abierto.");
+            if (points.Length == 0)
+                SetStatus(create ? "Almacén creado." : "Almacén abierto.");
         });
     }
 
@@ -102,7 +108,7 @@ public partial class VersionWindow : Window
         try { await Task.Run(write); }
         catch (Exception error) when (IsExpected(error)) { message = "El punto requiere revisión. " + error.Message; }
         await RefreshAsync(id);
-        SetStatus(message);
+        SetStatus(message + (browser is null ? "" : IndexUnavailable));
     }
 
     private void RefreshClick(object sender, RoutedEventArgs e)
@@ -137,6 +143,8 @@ public partial class VersionWindow : Window
     private async Task ShowSelectionAsync()
     {
         browser = null;
+        indexKey = null;
+        comparisonId = null;
         previous = null;
         ComparisonText.Text = "";
         SetDirectory("");
@@ -160,31 +168,77 @@ public partial class VersionWindow : Window
         }
         else
             ComparisonText.Text = $"Punto {row.Date} · anterior {previous.Date}";
-        string? comparison = OnlyChanges.IsChecked == true ? previous?.Id : null;
+        comparisonId = OnlyChanges.IsChecked == true ? previous?.Id : null;
         var current = store!;
         var selection = await Task.Run(() =>
         {
-            var catalogs = current.ReadCatalogs(point.Id, comparison);
-            return (Browser: new VersionBrowser(catalogs.Current, catalogs.Previous), catalogs.Current.Degraded);
+            var catalogs = current.ReadCatalogs(point.Id, comparisonId);
+            var key = VersionIndex.Key(catalogs.Current, catalogs.Previous);
+            VersionBrowser Build() => new(catalogs.Current, catalogs.Previous);
+            try
+            {
+                index.Ensure(key, Build);
+                return (Key: (string?)key, Fallback: (VersionBrowser?)null, catalogs.Current.Degraded);
+            }
+            catch (Exception error) when (VersionIndex.IsUnavailable(error))
+            {
+                return (Key: (string?)null, Fallback: (VersionBrowser?)Build(), catalogs.Current.Degraded);
+            }
         });
-        browser = selection.Browser;
-        SetDirectory("");
-        SetStatus(selection.Degraded ? "Se usó una réplica íntegra del catálogo." : "Punto confirmado. Puedes verificarlo o restaurarlo.");
+        browser = selection.Fallback;
+        indexKey = selection.Key;
+        await LoadDirectoryAsync("");
+        string message = selection.Degraded ? "Se usó una réplica íntegra del catálogo." : "Punto confirmado. Puedes verificarlo o restaurarlo.";
+        SetStatus(message + (browser is null ? "" : IndexUnavailable));
     }
 
-    private void ParentClick(object sender, RoutedEventArgs e) => SetDirectory(VersionBrowser.Parent(directory));
+    private void ParentClick(object sender, RoutedEventArgs e)
+    {
+        if (!busy && directory.Length != 0)
+            Start(() => LoadDirectoryAsync(VersionBrowser.Parent(directory)));
+    }
 
     private void OpenDirectoryClick(object sender, RoutedEventArgs e)
     {
-        if (Files.SelectedItem is VersionEntry { IsDirectory: true } entry)
-            SetDirectory(entry.Path);
+        if (!busy && Files.SelectedItem is VersionEntry { IsDirectory: true } entry)
+            Start(() => LoadDirectoryAsync(entry.Path));
     }
 
-    private void SetDirectory(string path)
+    private async Task LoadDirectoryAsync(string path)
+    {
+        bool onlyChanges = OnlyChanges.IsChecked == true;
+        VersionEntry[] entries;
+        if (indexKey is { } key)
+        {
+            try
+            {
+                entries = await Task.Run(() => index.Children(key, path, onlyChanges));
+                SetDirectory(path, entries);
+                SetStatus($"{entries.Length:N0} elementos en esta carpeta.");
+                return;
+            }
+            catch (Exception error) when (VersionIndex.IsUnavailable(error))
+            {
+                var current = store!;
+                var row = (PointRow)Timeline.SelectedItem;
+                browser = await Task.Run(() =>
+                {
+                    var catalogs = current.ReadCatalogs(row.Id, comparisonId);
+                    return new VersionBrowser(catalogs.Current, catalogs.Previous);
+                });
+                indexKey = null;
+            }
+        }
+        entries = browser?.Children(path, onlyChanges) ?? [];
+        SetDirectory(path, entries);
+        SetStatus($"{entries.Length:N0} elementos en esta carpeta." + (browser is null ? "" : IndexUnavailable));
+    }
+
+    private void SetDirectory(string path, VersionEntry[]? entries = null)
     {
         directory = path;
         DirectoryText.Text = path.Length == 0 ? "Carpeta raíz" : path;
-        Files.ItemsSource = browser?.Children(path, OnlyChanges.IsChecked == true);
+        Files.ItemsSource = entries;
         RefreshActions();
     }
 

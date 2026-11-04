@@ -45,11 +45,16 @@ internal sealed class VersionBrowser
     }
 
     internal VersionEntry[] Children(string folder, bool onlyChanges) => children[folder]
-        .Where(entry => onlyChanges ? entry.Change != VersionChange.None || entry.IsDirectory && changedFolders.Contains(entry.Path) :
-            entry.Change != VersionChange.Removed)
+        .Where(entry => onlyChanges ? ShowChange(entry) : entry.Change != VersionChange.Removed)
         .OrderByDescending(entry => entry.IsDirectory)
         .ThenBy(entry => entry.Path, StringComparer.Ordinal)
         .ToArray();
+
+    internal IEnumerable<(VersionEntry Entry, bool ShowChange)> CacheRows() =>
+        children.SelectMany(folder => folder).Select(entry => (entry, ShowChange(entry)));
+
+    private bool ShowChange(VersionEntry entry) =>
+        entry.Change != VersionChange.None || entry.IsDirectory && changedFolders.Contains(entry.Path);
 
     internal static string Parent(string path) => Path.GetDirectoryName(path) ?? "";
 }
