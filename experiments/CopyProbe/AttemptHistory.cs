@@ -5,7 +5,7 @@ internal enum AttemptIssueKind { InUse, Cancelled, Review }
 internal enum AttemptOperation { Copy, Restore, Verify }
 internal sealed record AttemptIssue(string Path, AttemptIssueKind Kind);
 internal sealed record AttemptRecord(DateTimeOffset FinishedAt, bool Restore, bool Complete, int VerifiedFiles,
-    bool HasProblem, bool Degraded, AttemptIssue[] Issues, bool Verify = false);
+    bool HasProblem, bool Degraded, AttemptIssue[] Issues, bool Verify = false, bool Cancelled = false);
 internal sealed record AttemptLog(AttemptRecord[] Records, int Unreadable);
 
 // Diagnostic only. Receipts and catalog confirmation remain authoritative.
@@ -29,7 +29,7 @@ internal static class AttemptHistory
                 entry.Status == BatchStatus.Cancelled ? AttemptIssueKind.Cancelled : AttemptIssueKind.Review)).ToArray();
         byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(new AttemptRecord(DateTimeOffset.UtcNow, operation == AttemptOperation.Restore,
             result.Complete, result.VerifiedFiles, result.Problem is not null, result.Note is not null, issues,
-            Verify: operation == AttemptOperation.Verify), Json);
+            Verify: operation == AttemptOperation.Verify, Cancelled: result.Cancelled), Json);
         if (bytes.Length >= MaxRecordBytes)
             throw new InvalidDataException("El registro supera el tamaño permitido.");
 
@@ -93,7 +93,8 @@ internal static class AttemptHistory
             return record is { Issues: not null } && record.VerifiedFiles >= 0 && record.VerifiedFiles <= BatchFixture.SampleNames.Length &&
                 !(record.Restore && record.Verify) &&
                 record.Issues.Length <= BatchFixture.SampleNames.Length + BatchFixture.DirectoryNames.Length &&
-                (!record.Complete || record.VerifiedFiles == BatchFixture.SampleNames.Length && !record.HasProblem && record.Issues.Length == 0) &&
+                (!record.Complete || record.VerifiedFiles == BatchFixture.SampleNames.Length &&
+                    !record.HasProblem && !record.Cancelled && record.Issues.Length == 0) &&
                 record.Issues.All(issue => issue is not null && KnownPath(issue.Path) && Enum.IsDefined(issue.Kind))
                 ? record : null;
         }

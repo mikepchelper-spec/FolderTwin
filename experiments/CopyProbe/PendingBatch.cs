@@ -128,16 +128,20 @@ internal static class PendingBatch
     }
 
     internal static BatchResult Resume(string fixtureRoot, string destination, CancellationToken cancellationToken = default,
-        Action<string, CopyStep, string>? checkpoint = null, Action<BatchPlan>? validate = null)
+        Action<string, CopyStep, string>? checkpoint = null, Action<BatchPlan>? validate = null, bool finishCurrentFileOnCancel = false)
     {
         BatchResult? result = null;
         try
         {
             var plan = Read(fixtureRoot, destination);
             validate?.Invoke(plan);
-            result = FolderBatch.Run(plan, cancellationToken, checkpoint, resume: true);
+            result = FolderBatch.Run(plan, cancellationToken, checkpoint, resume: true, finishCurrentFileOnCancel: finishCurrentFileOnCancel);
             if (result.Complete)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    return result with { Cancelled = true };
                 BatchCatalog.Publish(plan);
+            }
             return result;
         }
         catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or JsonException or Win32Exception or UnauthorizedAccessException)
@@ -146,12 +150,13 @@ internal static class PendingBatch
         }
     }
 
-    internal static BatchResult Start(BatchPlan plan)
+    internal static BatchResult Start(BatchPlan plan, CancellationToken cancellationToken = default,
+        Action<string, CopyStep, string>? checkpoint = null)
     {
         try
         {
             Save(plan);
-            return Resume(plan.FixtureRoot, plan.Destination);
+            return Resume(plan.FixtureRoot, plan.Destination, cancellationToken, checkpoint, finishCurrentFileOnCancel: true);
         }
         catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or JsonException or Win32Exception or UnauthorizedAccessException)
         {

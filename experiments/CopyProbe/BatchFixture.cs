@@ -58,9 +58,10 @@ internal sealed class BatchFixture : IDisposable
             !directories.Order(StringComparer.Ordinal).SequenceEqual(DirectoryNames.Order(StringComparer.Ordinal)))
             throw new InvalidDataException("Este laboratorio solo admite los archivos sintéticos generados para la sesión.");
     }
-    internal BatchResult Copy()
+    internal BatchResult Copy(CancellationToken cancellationToken = default, Action<string, CopyStep, string>? checkpoint = null)
     {
-        return Plan is null ? PendingBatch.Resume(Root, Destination) : PendingBatch.Start(Plan);
+        return Plan is null ? PendingBatch.Resume(Root, Destination, cancellationToken, checkpoint, finishCurrentFileOnCancel: true)
+            : PendingBatch.Start(Plan, cancellationToken, checkpoint);
     }
     internal BatchResult Restore()
     {

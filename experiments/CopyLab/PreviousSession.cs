@@ -30,11 +30,11 @@ internal sealed class PreviousSession
         }
     }
 
-    internal BatchResult Resume() => PendingBatch.Resume(Root, Destination, validate: plan =>
+    internal BatchResult Resume(CancellationToken cancellationToken) => PendingBatch.Resume(Root, Destination, cancellationToken, validate: plan =>
     {
         ValidateSamples(plan);
         RequireSameDestination(plan.Target);
-    });
+    }, finishCurrentFileOnCancel: true);
 
     internal BatchResult Restore(BatchFixture output)
     {

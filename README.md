@@ -34,6 +34,8 @@ Usa `-- --resume` para terminar trabajadores de prueba y reabrir sus lotes pendi
 
 Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Elige **Origen** y **Destino**, pulsa **Analizar carpetas** y revisa los tres archivos previstos. Después usa **Copiar y verificar** y **Restaurar y verificar**. La ventana muestra los resultados por ruta y ofrece **Reintentar copia** si el lote queda parcial. Declara la copia completa después de confirmar el catálogo.
 
+Durante una copia, **Cancelar copia** solicita detener el lote en el próximo punto seguro. Si un archivo está en curso, el motor termina ese paso y conserva lo ya verificado para el reintento. Si la confirmación del catálogo ya empezó, el lote puede terminar.
+
 La ventana muestra el nombre de la sesión y conserva su carpeta temporal si iniciaste la copia. En otra ejecución, pulsa **Abrir sesión anterior** y elige esa carpeta `FolderTwin-Batch-…`. El laboratorio ofrece reintentar un lote pendiente o restaurar uno confirmado. Al restaurar una sesión anterior, muestra la ruta de una carpeta de prueba nueva que se retira al cerrar. CI comprueba estos recorridos con `-- --smoke`.
 
 En un lote confirmado, pulsa **Verificar respaldo** para comprobar las carpetas y comparar el tamaño y SHA-256 de cada archivo con el catálogo. La ventana señala las rutas ausentes, alteradas o que no pudo leer. La comprobación es de solo lectura sobre el respaldo.

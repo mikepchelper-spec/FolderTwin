@@ -20,6 +20,8 @@ public partial class MainWindow : Window
     private bool copied;
     private bool restored;
     private bool busy;
+    private CancellationTokenSource? copyCancellation;
+    private Action<string, CopyStep, string>? copyCheckpoint;
     private Task activeTask = Task.CompletedTask;
 
     internal MainWindow(bool smoke)
@@ -164,9 +166,21 @@ public partial class MainWindow : Window
             activeTask = RunAsync(AttemptOperation.Verify);
     }
 
+    private void CancelCopyClick(object sender, RoutedEventArgs e)
+    {
+        if (copyCancellation is not { IsCancellationRequested: false } cancellation)
+            return;
+        cancellation.Cancel();
+        RefreshActions();
+        SetStatus("Cancelación solicitada. Espera a que termine el paso actual.");
+    }
+
     private async Task RunAsync(AttemptOperation operation)
     {
         bool restore = operation == AttemptOperation.Restore;
+        using var cancellation = operation == AttemptOperation.Copy ? new CancellationTokenSource() : null;
+        copyCancellation = cancellation;
+        CancellationToken token = cancellation?.Token ?? CancellationToken.None;
         busy = true;
         RefreshActions();
         ResultsList.ItemsSource = null;
@@ -186,8 +200,10 @@ public partial class MainWindow : Window
                 AttemptOperation.Verify => BatchCatalog.Verify(previous?.Destination ?? session.Destination,
                     previous?.Binding ?? session.DestinationBinding),
                 AttemptOperation.Restore => previous?.Restore(session) ?? session.Restore(),
-                _ => previous?.Resume() ?? session.Copy()
+                _ => previous?.Resume(token) ?? session.Copy(token, copyCheckpoint)
             });
+            copyCancellation = null;
+            RefreshActions();
             outcome = result;
             if (restore)
                 restored = result.Complete;
@@ -201,7 +217,9 @@ public partial class MainWindow : Window
             string[] applications = users.Select(user => user.Application.Trim())
                 .Where(name => name.Length != 0).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToArray();
             string detail = applications.Length == 0 ? "" : " Aplicaciones detectadas por Windows: " + string.Join(", ", applications) + ".";
-            string status = result.Complete
+            string status = result.Cancelled
+                ? $"Copia cancelada. Se conserva lo ya verificado ({result.VerifiedFiles:N0} de {BatchFixture.SampleNames.Length:N0}). Puedes reintentar el lote."
+                : result.Complete
                 ? operation switch
                 {
                     AttemptOperation.Verify => $"Respaldo verificado. Coinciden los {result.VerifiedFiles:N0} archivos y sus carpetas.",
@@ -222,6 +240,8 @@ public partial class MainWindow : Window
         }
         finally
         {
+            copyCancellation = null;
+            RefreshActions();
             if (outcome is not null)
                 await RefreshHistoryAsync(outcome, operation);
             busy = false;
@@ -261,10 +281,12 @@ public partial class MainWindow : Window
     private static string DescribeAttempt(AttemptRecord record)
     {
         string action = record.Verify ? "Verificación" : record.Restore ? "Restauración" : "Copia";
-        string state = record.Complete ? "Completa" : record.VerifiedFiles == 0 ? "Sin completar" : "Parcial";
+        string state = record.Cancelled ? "Cancelada" : record.Complete ? "Completa" :
+            record.VerifiedFiles == 0 ? "Sin completar" : "Parcial";
         var lines = new List<string>
         {
-            $"{record.FinishedAt.ToLocalTime():g} · {action} · {state} · {record.VerifiedFiles:N0} archivos verificados"
+            $"{record.FinishedAt.ToLocalTime():g} · {action} · {state} · " +
+                (record.VerifiedFiles == 1 ? "1 archivo verificado" : $"{record.VerifiedFiles:N0} archivos verificados")
         };
         if (record.HasProblem)
             lines.Add("La operación requiere revisión.");
@@ -295,6 +317,8 @@ public partial class MainWindow : Window
         CopyButton.Content = (copyStarted || previous is not null) && !copied ? "_Reintentar copia" : "_Copiar y verificar";
         RestoreButton.IsEnabled = !busy && copied && !restored;
         VerifyButton.IsEnabled = !busy && copied;
+        CancelCopyButton.Visibility = copyCancellation is null ? Visibility.Collapsed : Visibility.Visible;
+        CancelCopyButton.IsEnabled = copyCancellation is { IsCancellationRequested: false };
     }
 
     private void SetStatus(string message)
@@ -365,6 +389,21 @@ public partial class MainWindow : Window
         await activeTask;
         Check(analyzed && CopyButton.IsEnabled && PreviewText.Text.Contains("3 archivos", StringComparison.Ordinal),
             "The valid preview did not enable the copy.");
+        string firstFile = session.Plan!.Files[0].RelativePath;
+        copyCheckpoint = (_, step, _) =>
+        {
+            if (step == CopyStep.Writing)
+                Dispatcher.Invoke(() => Click(CancelCopyButton));
+        };
+        Click(CopyButton);
+        await activeTask;
+        copyCheckpoint = null;
+        Check(StatusText.Text.StartsWith("Copia cancelada.", StringComparison.Ordinal) && CopyButton.IsEnabled &&
+            !RestoreButton.IsEnabled && CancelCopyButton.Visibility == Visibility.Collapsed &&
+            File.Exists(Path.Combine(session.Destination, firstFile)) && !File.Exists(session.CopyFile) &&
+            !File.Exists(Path.Combine(session.Destination, BatchCatalog.CommitName)) &&
+            !Directory.EnumerateFiles(session.Destination, "*.tmp", SearchOption.AllDirectories).Any(),
+            "Cancelling during a file did not leave the completed file and a retryable batch.");
         using (var writer = new FileStream(session.SourceFile, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
         {
             Click(CopyButton);
@@ -395,9 +434,10 @@ public partial class MainWindow : Window
         Check(restored && !RestoreButton.IsEnabled && StatusText.Text.Contains("réplica íntegra", StringComparison.Ordinal), StatusText.Text);
         session.CheckRestored();
         string[] ownHistory = HistoryList.Items.Cast<string>().ToArray();
-        Check(ownHistory.Length == 4 && ownHistory[0].Contains("Se usó una sola réplica", StringComparison.Ordinal) &&
+        Check(ownHistory.Length == 5 && ownHistory[0].Contains("Se usó una sola réplica", StringComparison.Ordinal) &&
             ownHistory[1].Contains("Sin completar", StringComparison.Ordinal) &&
-            ownHistory[3].Contains("muestra.txt · Archivo en uso", StringComparison.Ordinal),
+            ownHistory[3].Contains("muestra.txt · Archivo en uso", StringComparison.Ordinal) &&
+            ownHistory[4].Contains("Copia · Cancelada · 1 archivo verificado", StringComparison.Ordinal),
             "Copy or restore attempt history was lost.");
 
         using var interrupted = new BatchFixture();
@@ -409,7 +449,9 @@ public partial class MainWindow : Window
             AttemptHistory.Append(interrupted.Root, interrupted.DestinationBinding, AttemptOperation.Copy, partial);
         }
         string interruptedLog = Path.Combine(interrupted.Root, AttemptHistory.Name);
-        string legacyRecord = File.ReadAllText(interruptedLog).Replace(",\"Verify\":false", "", StringComparison.Ordinal);
+        string legacyRecord = File.ReadAllText(interruptedLog)
+            .Replace(",\"Verify\":false", "", StringComparison.Ordinal)
+            .Replace(",\"Cancelled\":false", "", StringComparison.Ordinal);
         File.WriteAllText(interruptedLog, legacyRecord + "{\"FinishedAt\":");
         interrupted.ForgetPlan();
 

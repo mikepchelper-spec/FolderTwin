@@ -15,9 +15,9 @@ internal sealed record BatchEntryResult(string RelativePath, bool IsDirectory, B
 {
     public bool Succeeded => Status is BatchStatus.Copied or BatchStatus.Recovered or BatchStatus.AlreadyVerified or BatchStatus.DirectoryReady;
 }
-internal sealed record BatchResult(BatchEntryResult[] Entries, string? Problem = null, string? Note = null)
+internal sealed record BatchResult(BatchEntryResult[] Entries, string? Problem = null, string? Note = null, bool Cancelled = false)
 {
-    public bool Complete => Problem is null && Entries.All(entry => entry.Succeeded);
+    public bool Complete => !Cancelled && Problem is null && Entries.All(entry => entry.Succeeded);
     public int VerifiedFiles => Entries.Count(entry => !entry.IsDirectory && entry.Succeeded);
 }
 
@@ -57,7 +57,7 @@ internal static class FolderBatch
     }
 
     internal static BatchResult Run(BatchPlan plan, CancellationToken cancellationToken = default,
-        Action<string, CopyStep, string>? checkpoint = null, bool resume = false)
+        Action<string, CopyStep, string>? checkpoint = null, bool resume = false, bool finishCurrentFileOnCancel = false)
     {
         var results = new List<BatchEntryResult>();
         DirectoryFence? source = null;
@@ -161,7 +161,8 @@ internal static class FolderBatch
                 }
                 VerifiedCopy.Run(input, output, temporary,
                     (step, path) => checkpoint?.Invoke(item.RelativePath, step, path), expectedHash: item.Hash,
-                    recoveryRoot: plan.FixtureRoot, cancellationToken: cancellationToken);
+                    recoveryRoot: plan.FixtureRoot,
+                    cancellationToken: finishCurrentFileOnCancel ? CancellationToken.None : cancellationToken);
                 return BatchStatus.Copied;
 
                 BatchStatus? RecoverKnown()
@@ -215,7 +216,7 @@ internal static class FolderBatch
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return new(results.ToArray(), "Operación cancelada antes de completar el lote.");
+            return new(results.ToArray(), Cancelled: true);
         }
         catch (Exception error) when (IsExpectedFailure(error))
         {
