@@ -72,6 +72,25 @@ try {
     if ($changed.DriveLetter -ne $newLetter -or [IO.Directory]::Exists($root)) { throw 'Drive letter did not change.' }
     Write-Output "The disposable volume moved from $letter to $newLetter."
     $env:FOLDERTWIN_LAB_LETTER = $newLetter
+
+    Dismount-DiskImage -ImagePath $image | Out-Null
+    if ((Get-DiskImage -ImagePath $image).Attached -or [IO.Directory]::Exists("${newLetter}:\$label")) {
+        throw 'The disposable volume did not detach.'
+    }
+    Invoke-Probe 'absent'
+
+    Mount-DiskImage -ImagePath $image -NoDriveLetter | Out-Null
+    $remounted = Get-Partition -DiskNumber (Get-OwnedDisk).Number -PartitionNumber $partition.PartitionNumber
+    if ($remounted.IsBoot -or $remounted.IsSystem -or ($remounted | Get-Volume).FileSystemLabel -ne $label) {
+        throw 'Wrong partition after reattaching the disposable image.'
+    }
+    if ([int]$remounted.DriveLetter -eq 0) {
+        Add-PartitionAccessPath -InputObject $remounted -AccessPath "${newLetter}:"
+    } elseif ($remounted.DriveLetter -ne $newLetter) {
+        Set-Partition -InputObject $remounted -NewDriveLetter $newLetter
+    }
+    $remounted = Get-Partition -DiskNumber (Get-OwnedDisk).Number -PartitionNumber $partition.PartitionNumber
+    if ($remounted.DriveLetter -ne $newLetter) { throw 'Unexpected drive letter after reattaching.' }
     Invoke-Probe 'reopen'
 }
 finally {

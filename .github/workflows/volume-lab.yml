@@ -19,5 +19,5 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Build the probe
         run: dotnet build experiments/CopyProbe --configuration Release --output "$env:RUNNER_TEMP\FolderTwin-Probe-Build"
-      - name: Exercise a full volume and drive-letter reassignment
+      - name: Exercise disk full, reassignment, and reconnection
         run: ./experiments/CopyProbe/Run-VolumeLab.ps1

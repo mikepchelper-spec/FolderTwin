@@ -18,9 +18,11 @@ if (args is ["--uncached"])
 if (args is ["--paths"])
     return PathProbe.Run();
 if (args is ["--volume-lab", "fill"])
-    return VolumeProbe.Run(reopen: false);
+    return VolumeProbe.Run("fill");
+if (args is ["--volume-lab", "absent"])
+    return VolumeProbe.Run("absent");
 if (args is ["--volume-lab", "reopen"])
-    return VolumeProbe.Run(reopen: true);
+    return VolumeProbe.Run("reopen");
 if (args.Length != 0)
 {
     Console.Error.WriteLine("Unknown scenario. This experiment does not accept paths.");

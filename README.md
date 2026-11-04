@@ -26,7 +26,7 @@ Usa `-- --uncached` para comparar la verificación con y sin la caché de Window
 
 Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Elige las carpetas **Origen** y **Destino** que se muestran en el selector. Después usa **Copiar y verificar** y **Restaurar y verificar**. La ventana trabaja con un archivo generado para la sesión y retira sus archivos temporales al cerrar normalmente. CI ejecuta el recorrido con `-- --smoke`.
 
-Para repetir el ensayo de disco lleno y cambio de letra, ejecuta **Disposable volume lab** en la pestaña Actions de GitHub. Usa un disco virtual de 128 MiB en un runner Windows desechable. [Alcance y resultados](PLAN.md#laboratorio-de-volumen-desechable).
+Para repetir el ensayo de disco lleno, cambio de letra y reconexión, ejecuta **Disposable volume lab** en la pestaña Actions de GitHub. Usa un disco virtual de 128 MiB en un runner Windows desechable. [Alcance y resultados](PLAN.md#laboratorio-de-volumen-desechable).
 
 La revisión de opiniones externas incorpora diagnóstico de archivos en uso, recuperación por carpetas/fecha, bandeja y cuarentena previa al borrado. Las optimizaciones de E/S y consumo se deciden mediante pruebas. El plan distingue medidas de protección de garantías todavía no demostradas.
 

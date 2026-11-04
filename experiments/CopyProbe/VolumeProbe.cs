@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Security.Cryptography;
 
 internal static class VolumeProbe
@@ -5,7 +6,7 @@ internal static class VolumeProbe
     private const int MiB = 1024 * 1024;
     private static ReadOnlySpan<byte> Previous => "synthetic previous backup"u8;
 
-    public static int Run(bool reopen)
+    public static int Run(string phase)
     {
         if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
             Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT") != "github-hosted")
@@ -21,12 +22,29 @@ internal static class VolumeProbe
             Path.GetDirectoryName(state) != runnerTemp || Path.GetFileName(state) != $"FolderTwin-Vhd-{label}")
             throw new InvalidOperationException("The volume lab configuration is invalid.");
 
+        string configuration = Path.Combine(state, "destination.json");
+        if (phase == "absent")
+        {
+            DestinationBinding saved = DestinationBinding.Load(configuration);
+            string unavailable = saved.LastVolumePath;
+            try
+            {
+                CopyRecovery.Recover(unavailable, Path.Combine(unavailable, "pending.tmp"),
+                    Path.Combine(unavailable, "final.bin"), saved);
+            }
+            catch (IOException error) when (error.InnerException is Win32Exception { NativeErrorCode: 2 or 3 or 15 or 21 or 55 or 1167 })
+            {
+                Console.WriteLine("PASS recovery refused the unavailable volume while it was detached.");
+                return 0;
+            }
+            throw new InvalidDataException("Recovery did not report the detached destination as unavailable.");
+        }
+
         var drive = new DriveInfo($"{letter}:\\");
         if (drive.TotalSize is < 110 * MiB or > 128 * MiB || drive.VolumeLabel != label || drive.DriveFormat != "NTFS")
             throw new InvalidOperationException("The volume does not match the disposable lab disk.");
 
         string root = Path.Combine(drive.RootDirectory.FullName, label);
-        string configuration = Path.Combine(state, "destination.json");
         using var fence = new DirectoryFence(root);
         using (var gate = WindowsProbeNative.OpenPlainFile(fence.Root, "runner.txt", FileAccess.Read, FileShare.Read))
         using (var reader = new StreamReader(gate))
@@ -43,7 +61,7 @@ internal static class VolumeProbe
         new Random(42).NextBytes(content);
         byte[] expected = SHA256.HashData(content);
 
-        if (reopen)
+        if (phase == "reopen")
         {
             DestinationBinding saved = DestinationBinding.Load(configuration);
             using (var guidFence = new DirectoryFence(saved.LastVolumePath))
@@ -59,7 +77,7 @@ internal static class VolumeProbe
             CheckHash(final, expected);
             CheckHash(previous, SHA256.HashData(Previous));
             Check(File.Exists(fullPending) && !File.Exists(fullFinal), "The disk-full temporary was not preserved.");
-            Console.WriteLine("PASS the saved GUID and new drive letter identify the same destination; pending copy recovered.");
+            Console.WriteLine("PASS the reattached volume matches its saved identity; pending copy recovered.");
             return 0;
         }
 
