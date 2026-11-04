@@ -87,8 +87,6 @@ internal sealed class BatchFixture : IDisposable
         bool Matches(BatchFile expected) => files.Any(file => file.RelativePath == expected.RelativePath &&
             file.Length == expected.Length && file.Hash.AsSpan().SequenceEqual(expected.Hash));
     }
-    internal static bool IsSamplePath(string path) => SampleNames.Contains(path, StringComparer.Ordinal) ||
-        DirectoryNames.Contains(path, StringComparer.Ordinal) || path == ExtraFileName;
     internal BatchResult Copy(CancellationToken cancellationToken = default, Action<string, CopyStep, string>? checkpoint = null,
         IProgress<BatchProgress>? progress = null, Action<BatchProgress>? waitBetweenFiles = null)
     {

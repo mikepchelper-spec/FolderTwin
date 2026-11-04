@@ -70,7 +70,8 @@ internal sealed class LabWorkspace
             throw new InvalidDataException("El análisis pertenece a otro espacio.");
         CheckRoots(plan.Source, plan.Destination);
         FolderBatch.ValidateEntries(plan.Files, plan.Directories);
-        cancellationToken.ThrowIfCancellationRequested();
+        if (cancellationToken.IsCancellationRequested)
+            return new([], Cancelled: true);
         using var target = new DirectoryFence(plan.Destination);
         plan.Target.RequireDirectoryIdentity(target.Root);
         if (!WindowsProbeNative.PlainFileExists(target.Root, DestinationBinding.MarkerName))
@@ -120,6 +121,20 @@ internal sealed class LabWorkspace
         using var root = OpenRegisteredRoot();
         CheckChild(job.Destination);
         return BatchCatalog.Verify(job.Destination, job.Binding, progress);
+    }
+
+    internal AttemptLog ReadHistory(string destination, DestinationBinding binding)
+    {
+        using var root = OpenRegisteredRoot();
+        CheckChild(destination);
+        return AttemptHistory.Read(Root, binding, destination);
+    }
+
+    internal void AppendHistory(string destination, DestinationBinding binding, AttemptOperation operation, BatchResult result)
+    {
+        using var root = OpenRegisteredRoot();
+        CheckChild(destination);
+        AttemptHistory.Append(Root, binding, operation, result, destination);
     }
 
     internal BatchResult Restore(WorkspaceJob job, string output, IProgress<BatchProgress>? progress = null)
@@ -175,7 +190,7 @@ internal sealed class LabWorkspace
         FolderBatch.ValidateRoots(Root, source, destination);
     }
 
-    private void CheckChild(string path)
+    internal void CheckChild(string path)
     {
         string name = Path.GetFileName(path);
         DirectoryFence.CheckName(name);

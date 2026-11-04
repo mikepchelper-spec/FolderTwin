@@ -36,11 +36,21 @@ public partial class MainWindow : Window
             testSelections = new Queue<string?>([null, session.Destination, session.Source, session.Destination]);
     }
 
-    private void ChooseSource(object sender, RoutedEventArgs e) =>
-        SelectFolder("Elegir origen", session.Source, SourceText, ref sourceSelected, alternate: session.AlternateSource);
+    private void ChooseSource(object sender, RoutedEventArgs e)
+    {
+        if (workspace is { } current)
+            SelectWorkspaceFolder(current, source: true);
+        else
+            SelectFolder("Elegir origen", session.Source, SourceText, ref sourceSelected, alternate: session.AlternateSource);
+    }
 
-    private void ChooseDestination(object sender, RoutedEventArgs e) =>
-        SelectFolder("Elegir destino", session.Destination, DestinationText, ref destinationSelected);
+    private void ChooseDestination(object sender, RoutedEventArgs e)
+    {
+        if (workspace is { } current)
+            SelectWorkspaceFolder(current, source: false);
+        else
+            SelectFolder("Elegir destino", session.Destination, DestinationText, ref destinationSelected);
+    }
 
     private void SelectFolder(string title, string expected, TextBlock label, ref bool selected, string? alternate = null)
     {
@@ -137,15 +147,23 @@ public partial class MainWindow : Window
         try
         {
             string source = selectedSource ?? throw new InvalidDataException("Elige el origen antes de analizar.");
-            BatchPlan plan = await Task.Run(() => session.Analyze(source));
+            workspacePreview = workspace is { } current
+                ? await Task.Run(() => current.Analyze(source, workspaceDestination!))
+                : null;
+            BatchPlan plan = workspacePreview?.Plan ?? await Task.Run(() => session.Analyze(source));
             analyzedFileCount = plan.Files.Length;
-            analyzed = true;
+            analyzed = workspacePreview is not { } preview || (ulong)plan.Bytes + LabWorkspace.ReserveBytes <= preview.AvailableBytes;
+            string capacity = workspacePreview is { } space
+                ? $"Espacio disponible al analizar · {space.AvailableBytes:N0} bytes. Reserva · {LabWorkspace.ReserveBytes:N0} bytes.\n"
+                : "";
             PreviewText.Text = $"{plan.Files.Length:N0} archivos · {plan.Bytes:N0} bytes de contenido · {plan.Directories.Length:N0} carpetas\n" +
+                capacity +
                 "Se conservan las fechas de creación y modificación y el atributo Oculto de los archivos. Los permisos se heredan de la carpeta de destino.\n" +
                 "La copia puede ocupar más espacio en disco que un original comprimido o disperso.\n" +
-                string.Join("\n", plan.Files.Select(file => file.RelativePath));
+                string.Join("\n", plan.Files.Take(20).Select(file => file.RelativePath)) +
+                (plan.Files.Length > 20 ? $"\nOtros {plan.Files.Length - 20:N0} archivos." : "");
             ResultsList.ItemsSource = null;
-            SetStatus("Revisión completada. Puedes copiar el lote de prueba.");
+            SetStatus(analyzed ? "Revisión completada. Puedes copiar el lote de prueba." : "El espacio disponible no alcanza para copiar el lote.");
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException
             or Win32Exception or ArgumentException)
@@ -168,8 +186,17 @@ public partial class MainWindow : Window
 
     private void RestoreClick(object sender, RoutedEventArgs e)
     {
-        if (RestoreButton.IsEnabled)
-            activeTask = RunAsync(AttemptOperation.Restore);
+        if (!RestoreButton.IsEnabled)
+            return;
+        string? output = null;
+        if (workspace is { } current)
+        {
+            string? folder = PickFolder("Elige una subcarpeta vacía para restaurar", current.Root);
+            if (folder is null)
+                return;
+            output = Path.TrimEndingDirectorySeparator(folder);
+        }
+        activeTask = RunAsync(AttemptOperation.Restore, output);
     }
 
     private void VerifyClick(object sender, RoutedEventArgs e)
@@ -204,7 +231,7 @@ public partial class MainWindow : Window
         RefreshActions();
     }
 
-    private async Task RunAsync(AttemptOperation operation)
+    private async Task RunAsync(AttemptOperation operation, string? output = null)
     {
         bool restore = operation == AttemptOperation.Restore;
         using var cancellation = operation == AttemptOperation.Copy ? new CancellationTokenSource() : null;
@@ -221,7 +248,7 @@ public partial class MainWindow : Window
             AttemptOperation.Restore => "Restaurando y verificando…",
             _ => "Copiando y verificando…"
         });
-        if (operation == AttemptOperation.Copy && previous is null)
+        if (operation == AttemptOperation.Copy && previous is null && workspace is null)
             copyStarted = true;
         bool showProgress = true;
         OperationProgress.Visibility = Visibility.Visible;
@@ -236,13 +263,15 @@ public partial class MainWindow : Window
         BatchResult? outcome = null;
         try
         {
-            BatchResult result = await Task.Run(() => operation switch
-            {
-                AttemptOperation.Verify => BatchCatalog.Verify(previous?.Destination ?? session.Destination,
-                    previous?.Binding ?? session.DestinationBinding, progress),
-                AttemptOperation.Restore => previous?.Restore(session, progress) ?? session.Restore(progress),
-                _ => previous?.Resume(token, progress, WaitWhilePaused) ?? session.Copy(token, copyCheckpoint, progress, WaitWhilePaused)
-            });
+            BatchResult result = await Task.Run(() => workspace is { } current
+                ? RunWorkspace(current, operation, output, token, progress, WaitWhilePaused)
+                : operation switch
+                {
+                    AttemptOperation.Verify => BatchCatalog.Verify(previous?.Destination ?? session.Destination,
+                        previous?.Binding ?? session.DestinationBinding, progress),
+                    AttemptOperation.Restore => previous?.Restore(session, progress) ?? session.Restore(progress),
+                    _ => previous?.Resume(token, progress, WaitWhilePaused) ?? session.Copy(token, copyCheckpoint, progress, WaitWhilePaused)
+                });
             HideProgress();
             copyCancellation = null;
             copyPause = null;
@@ -251,16 +280,29 @@ public partial class MainWindow : Window
             if (restore)
                 restored = result.Complete;
             else if (operation == AttemptOperation.Copy)
+            {
                 copied = result.Complete;
+                if (workspace is not null)
+                {
+                    copyStarted = true;
+                    if (copied)
+                    {
+                        var binding = workspaceJob?.Binding ?? workspacePreview!.Plan.Target;
+                        workspaceJob = new(workspaceDestination!, binding, workspaceJob?.FileCount ?? analyzedFileCount, Source: null);
+                    }
+                }
+            }
             ResultsList.ItemsSource = result.Entries.Select(entry => $"{entry.RelativePath} · {Describe(entry, operation)}").ToArray();
+            string diagnosticRoot = operation != AttemptOperation.Copy
+                ? workspaceDestination ?? previous?.Destination ?? session.Destination
+                : previous?.Source ?? selectedSource ?? session.Source;
             string[] inUse = result.Entries.Where(entry => entry.InUse).Take(16)
-                .Select(entry => Path.Combine(operation != AttemptOperation.Copy ? previous?.Destination ?? session.Destination : previous?.Source ?? selectedSource ?? session.Source,
-                    entry.RelativePath)).ToArray();
+                .Select(entry => Path.Combine(diagnosticRoot, entry.RelativePath)).ToArray();
             var users = await Task.Run(() => FileUseDiagnostics.TryGetUsers(inUse));
             string[] applications = users.Select(user => user.Application.Trim())
                 .Where(name => name.Length != 0).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToArray();
             string detail = applications.Length == 0 ? "" : " Aplicaciones detectadas por Windows: " + string.Join(", ", applications) + ".";
-            int totalFiles = previous?.FileCount ?? analyzedFileCount;
+            int totalFiles = workspaceJob?.FileCount ?? previous?.FileCount ?? analyzedFileCount;
             string status = result.Cancelled
                 ? $"Copia cancelada. Se conserva lo ya verificado ({result.VerifiedFiles:N0} de {totalFiles:N0}). Puedes reintentar el lote."
                 : result.Complete
@@ -274,7 +316,7 @@ public partial class MainWindow : Window
             SetStatus(status + (result.Problem is null ? "" : " " + result.Problem) +
                 (result.Note is null ? "" : " " + result.Note) + detail);
             if (restore && result.Complete)
-                PreviewText.Text = $"Archivos restaurados en {session.Restored}" +
+                PreviewText.Text = $"Archivos restaurados en {output ?? session.Restored}" +
                     (previous is null ? "" : "\nEsta carpeta de prueba se retira al cerrar la ventana.");
         }
         catch (Exception error) when (IsLabError(error))
@@ -326,18 +368,29 @@ public partial class MainWindow : Window
 
     private async Task RefreshHistoryAsync(BatchResult? outcome = null, AttemptOperation operation = AttemptOperation.Copy)
     {
-        string root = previous?.Root ?? session.Root;
-        var binding = previous?.Binding ?? session.DestinationBinding;
+        string root = workspace?.Root ?? previous?.Root ?? session.Root;
+        var binding = workspaceJob?.Binding ?? workspacePreview?.Plan.Target ?? previous?.Binding ?? session.DestinationBinding;
         bool appendFailed = false;
         if (outcome is not null)
         {
-            try { await Task.Run(() => AttemptHistory.Append(root, binding, operation, outcome)); }
+            try
+            {
+                await Task.Run(() =>
+                {
+                    if (workspace is { } current)
+                        current.AppendHistory(workspaceDestination!, binding, operation, outcome);
+                    else
+                        AttemptHistory.Append(root, binding, operation, outcome);
+                });
+            }
             catch (Exception error) when (IsLabError(error)) { appendFailed = true; }
         }
 
         try
         {
-            AttemptLog log = await Task.Run(() => AttemptHistory.Read(root, binding));
+            AttemptLog log = await Task.Run(() => workspace is { } current
+                ? current.ReadHistory(workspaceDestination!, binding)
+                : AttemptHistory.Read(root, binding));
             HistoryList.ItemsSource = log.Records.Take(20).Select(DescribeAttempt).ToArray();
             HistoryStatus.Text = log.Records.Length == 0 ? "Aún no hay intentos registrados."
                 : $"Se muestran {Math.Min(20, log.Records.Length):N0} de {log.Records.Length:N0} intentos, del más reciente al más antiguo.";
@@ -377,6 +430,8 @@ public partial class MainWindow : Window
             };
             lines.Add($"{issue.Path} · {reason}");
         }
+        if (record.OmittedIssues != 0)
+            lines.Add($"Otras incidencias en este intento · {record.OmittedIssues:N0}");
         return string.Join("\n", lines);
     }
 
@@ -385,12 +440,18 @@ public partial class MainWindow : Window
 
     private void RefreshActions()
     {
-        OpenPreviousButton.IsEnabled = !busy && !copyStarted && previous is null;
-        SourceButton.IsEnabled = DestinationButton.IsEnabled = OpenPreviousButton.IsEnabled;
-        AnalyzeButton.IsEnabled = OpenPreviousButton.IsEnabled && sourceSelected && destinationSelected;
+        bool editable = !busy && !copyStarted && previous is null && workspaceJob is null;
+        CreateWorkspaceButton.IsEnabled = OpenWorkspaceButton.IsEnabled = !busy && (workspace is not null || editable);
+        OpenPreviousButton.IsEnabled = editable && workspace is null;
+        OpenWorkspaceJobButton.Visibility = BrowseWorkspaceButton.Visibility =
+            workspace is null ? Visibility.Collapsed : Visibility.Visible;
+        OpenWorkspaceJobButton.IsEnabled = !busy && workspace is not null;
+        BrowseWorkspaceButton.IsEnabled = !busy;
+        SourceButton.IsEnabled = DestinationButton.IsEnabled = editable;
+        AnalyzeButton.IsEnabled = editable && sourceSelected && destinationSelected;
         CopyButton.IsEnabled = !busy && !copied && analyzed;
-        CopyButton.Content = (copyStarted || previous is not null) && !copied ? "_Reintentar copia" : "_Copiar y verificar";
-        RestoreButton.IsEnabled = !busy && copied && !restored;
+        CopyButton.Content = (copyStarted || previous is not null || workspaceJob is not null) && !copied ? "_Reintentar copia" : "_Copiar y verificar";
+        RestoreButton.IsEnabled = !busy && copied && (!restored || workspace is not null);
         VerifyButton.IsEnabled = !busy && copied;
         CancelCopyButton.Visibility = copyCancellation is null ? Visibility.Collapsed : Visibility.Visible;
         CancelCopyButton.IsEnabled = copyCancellation is { IsCancellationRequested: false };
@@ -428,7 +489,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            if (!copyStarted || testSelections is not null)
+            if (!copyStarted || workspace is not null || testSelections is not null)
                 session.Dispose();
         }
         catch (Exception error) when (testSelections is null &&
@@ -702,6 +763,8 @@ public partial class MainWindow : Window
             finally { retryWindow.Close(); }
         }
         finally { alternateWindow.Close(); }
+
+        await RunWorkspaceSmokeAsync();
 
         async Task WaitForPauseAsync()
         {

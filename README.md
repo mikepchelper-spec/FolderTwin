@@ -34,7 +34,9 @@ Usa `-- --catalog` para probar los catálogos JSONL duplicados, su confirmación
 
 Usa `-- --resume` para terminar trabajadores de prueba y reabrir sus lotes pendientes desde otros procesos. Reconoce lo ya verificado, recupera temporales con registro válido y deja pendientes los archivos que aún necesitan el origen. Los datos sin verificar quedan para revisión. [Descriptor de ejecución](experiments/CopyProbe/PENDING.md).
 
-Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Selecciona la carpeta **Origen** (tres archivos) u **Origen ampliado** (cuatro archivos) y luego **Destino**. Pulsa **Analizar carpetas** y revisa el lote elegido. Después usa **Copiar y verificar** y **Restaurar y verificar**. La ventana muestra los resultados por ruta y ofrece **Reintentar copia** si el lote queda parcial. Declara la copia completa después de confirmar el catálogo.
+Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Pulsa **Nuevo espacio temporal** y luego **Ver carpeta temporal**. En el Explorador, crea subcarpetas directas para el origen, el destino y la restauración. Coloca únicamente archivos sintéticos en el origen y deja vacías las otras carpetas. También están disponibles las carpetas de demostración **Origen**, **Origen ampliado** y **Destino** al iniciar la ventana.
+
+Elige el origen y el destino y pulsa **Analizar carpetas**. La vista previa muestra el recuento, el tamaño de contenido y, para los trabajos configurables, el espacio disponible y la reserva. Elige **Copiar y verificar**. Si el lote queda parcial, revisa las incidencias y usa **Reintentar copia**. Tras la confirmación, puedes usar **Verificar respaldo** o **Restaurar y verificar**. El trabajo configurable permite elegir una subcarpeta vacía distinta para cada restauración.
 
 Durante una copia, **Cancelar copia** solicita detener el lote en el próximo punto seguro. Si un archivo está en curso, el motor termina ese paso y conserva lo ya verificado para el reintento. Si la confirmación del catálogo ya empezó, el lote puede terminar.
 
@@ -42,7 +44,7 @@ Durante la copia, el reintento, la restauración y la verificación, la ventana 
 
 **Pausar copia** espera al próximo límite entre archivos. La ventana indica cuándo el lote queda en pausa y permite continuarlo o cancelarlo.
 
-La ventana muestra el nombre de la sesión y conserva su carpeta temporal si iniciaste la copia. En otra ejecución, pulsa **Abrir sesión anterior** y elige esa carpeta `FolderTwin-Batch-…`. El laboratorio ofrece reintentar un lote pendiente o restaurar uno confirmado. Al restaurar una sesión anterior, muestra la ruta de una carpeta de prueba nueva que se retira al cerrar. CI comprueba estos recorridos con `-- --smoke`.
+Los espacios configurables se conservan al cerrar. Para retomarlos, pulsa **Abrir espacio**, elige la carpeta `FolderTwin-Workspace-…` y usa **Abrir trabajo** para seleccionar el destino. Para una sesión de los lotes de demostración, usa **Abrir demostración anterior** y elige su carpeta `FolderTwin-Batch-…`. La restauración de una demostración anterior usa una carpeta de prueba nueva que se retira al cerrar. CI comprueba ambos recorridos con `-- --smoke`.
 
 En un lote confirmado, pulsa **Verificar respaldo** para comprobar las carpetas y comparar el tamaño y SHA-256 de cada archivo con el catálogo. La ventana señala las rutas ausentes, alteradas o que no pudo leer. La comprobación es de solo lectura sobre el respaldo.
 
@@ -54,7 +56,7 @@ El laboratorio también señala los enlaces duros y los atributos extendidos de 
 
 Los nuevos lotes guardan y restauran las fechas de creación y modificación de los archivos en UTC y su atributo Oculto. Al copiar o restaurar, los archivos y carpetas nuevos heredan los permisos del destino. Las sesiones anteriores se pueden reabrir y restaurar con los metadatos que guardaron. Las fechas de carpetas y los demás atributos siguen fuera del alcance del laboratorio.
 
-Abre **Historial de intentos** para ver las últimas 20 copias, restauraciones o verificaciones de la sesión, incluidas las incidencias de intentos anteriores. El historial guarda nombres relativos del lote sintético y categorías de incidencia en la carpeta de la sesión. Si hay registros ilegibles o falla la escritura del historial, la ventana lo indica aparte del resultado de la operación.
+Abre **Historial de intentos** para ver las últimas 20 copias, restauraciones o verificaciones de la sesión. En los espacios configurables, cada destino tiene su propio historial fuera del respaldo. Guarda nombres relativos y categorías de incidencia. Si hay registros ilegibles, incidencias que exceden el límite del registro o un fallo de escritura, la ventana lo indica.
 
 Si un archivo está en uso, el laboratorio intenta mostrar las aplicaciones que detecta Windows mediante Restart Manager. Si no puede identificarlas, conserva el aviso y permite reintentar. El diagnóstico no cierra aplicaciones.
 
