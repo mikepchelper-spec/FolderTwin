@@ -14,7 +14,9 @@ internal sealed record InventoryResult(InventoryEntry[] Entries, InventoryIssue[
 // Metadata observations, not a snapshot or a promise that file contents can be read.
 internal static class FolderInventory
 {
-    internal static InventoryResult Scan(string root, int maximumEntries = 10_000, int maximumDepth = 64,
+    internal const int DefaultMaximumEntries = 10_000;
+
+    internal static InventoryResult Scan(string root, int maximumEntries = DefaultMaximumEntries, int maximumDepth = 64,
         CancellationToken cancellationToken = default, Action<string>? beforeDirectory = null)
     {
         if (maximumEntries < 1)

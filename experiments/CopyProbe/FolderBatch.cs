@@ -54,9 +54,9 @@ internal static class FolderBatch
     }
 
     internal static BatchPlan AnalyzeSource(string fixtureRoot, string source, string destination,
-        DestinationBinding binding, byte[] sourceIdentity)
+        DestinationBinding binding, byte[] sourceIdentity, int maximumEntries = FolderInventory.DefaultMaximumEntries)
     {
-        var inventory = FolderInventory.Scan(source);
+        var inventory = FolderInventory.Scan(source, maximumEntries: maximumEntries);
         if (!inventory.Complete)
             throw new InvalidDataException(DescribeIncompleteSource(inventory.Issues));
         if (inventory.Entries.FirstOrDefault(entry => IsControl(entry.RelativePath)) is { } reserved)
@@ -308,7 +308,8 @@ internal static class FolderBatch
     internal static void RequireSameInventory(BatchPlan plan)
     {
         // A stored file can retain its data, temporary, lock, receipt, and draft.
-        int limit = plan.SourceBinding is null ? 10_000 : plan.Files.Length * 5 + plan.Directories.Length + 16;
+        int limit = plan.SourceBinding is null ? Math.Max(1, plan.Files.Length + plan.Directories.Length) :
+            plan.Files.Length * 5 + plan.Directories.Length + 16;
         var current = FolderInventory.Scan(plan.Source, maximumEntries: limit);
         if (!current.Complete)
             throw new InvalidDataException(DescribeIncompleteSource(current.Issues));
@@ -377,9 +378,9 @@ internal static class FolderBatch
             !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal));
     }
 
-    internal static void ValidateEntries(BatchFile[] files, string[] directories)
+    internal static void ValidateEntries(BatchFile[] files, string[] directories, int maximumEntries = FolderInventory.DefaultMaximumEntries)
     {
-        if (files.Length + directories.Length > 10_000)
+        if (files.Length + directories.Length > maximumEntries)
             throw new ArgumentException("El lote supera el límite del laboratorio.");
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var directoryNames = directories.ToHashSet(StringComparer.Ordinal);

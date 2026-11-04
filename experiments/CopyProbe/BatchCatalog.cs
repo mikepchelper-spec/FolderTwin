@@ -21,6 +21,8 @@ internal static class BatchCatalog
     internal const string BackupName = ".foldertwin-catalog-backup.jsonl";
     internal const string CommitName = ".foldertwin-catalog.commit";
     internal const int MaximumBytes = 8 * 1024 * 1024;
+    internal const int VersionMaximumBytes = 128 * 1024 * 1024;
+    internal const int VersionMaximumEntries = 350_000;
     internal const int MaximumLineBytes = 64 * 1024;
     private const int CommitPayloadSize = 80;
     private const int CommitSize = CommitPayloadSize + 32;
@@ -42,6 +44,9 @@ internal static class BatchCatalog
     private sealed record FileRecordV3(string Kind, string Path, long Size, byte[] Hash,
         DateTime LastWriteUtc, DateTime CreationUtc, bool Hidden);
     private sealed record Footer(string Kind, int Files, int Directories, byte[] Hash);
+
+    private static int EntryLimit(string generation) => generation == "initial" ? FolderInventory.DefaultMaximumEntries : VersionMaximumEntries;
+    private static int ByteLimit(string generation) => generation == "initial" ? MaximumBytes : VersionMaximumBytes;
 
     internal static void Publish(BatchPlan plan, Action<CatalogStep>? checkpoint = null)
     {
@@ -205,6 +210,9 @@ internal static class BatchCatalog
 
     internal static byte[] WriteMetadata(Stream output, BatchPlan plan, string generation = "initial")
     {
+        if (plan.Files.Length + plan.Directories.Length > EntryLimit(generation))
+            throw new InvalidDataException("Demasiadas entradas en el catálogo.");
+        int byteLimit = ByteLimit(generation);
         using var body = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using var document = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         int total = 0;
@@ -228,7 +236,7 @@ internal static class BatchCatalog
         {
             byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(value, Json);
             total = checked(total + bytes.Length + 1);
-            if (bytes.Length + 1 > MaximumLineBytes || total > MaximumBytes)
+            if (bytes.Length + 1 > MaximumLineBytes || total > byteLimit)
                 throw new InvalidDataException("El catálogo supera los límites del laboratorio.");
             output.Write(bytes);
             output.WriteByte(10);
@@ -245,8 +253,9 @@ internal static class BatchCatalog
     // Streaming framing with bounded records; only the validated entries are retained.
     internal static CatalogSnapshot Parse(Stream input, string generation = "initial")
     {
-        if (input.Length is < 1 or > MaximumBytes)
+        if (input.Length < 1 || input.Length > ByteLimit(generation))
             throw new InvalidDataException("Tamaño de catálogo no válido.");
+        int entryLimit = EntryLimit(generation);
         using var body = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using var document = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         byte[] buffer = new byte[MaximumLineBytes - 1];
@@ -305,13 +314,13 @@ internal static class BatchCatalog
                         throw new InvalidDataException("El cierre, recuento o hash del catálogo no es válido.");
                     var validatedFiles = files.ToArray();
                     var validatedDirectories = directories.ToArray();
-                    FolderBatch.ValidateEntries(validatedFiles, validatedDirectories);
+                    FolderBatch.ValidateEntries(validatedFiles, validatedDirectories, entryLimit);
                     return new(new DestinationBinding { Version = 1, Marker = header.JobId, Identity = header.Identity, LastVolumePath = "" },
                         validatedDirectories, validatedFiles, document.GetHashAndReset());
                 default:
                     throw new InvalidDataException("Tipo de registro no soportado.");
             }
-            if (directories.Count + files.Count > 10_000)
+            if (directories.Count + files.Count > entryLimit)
                 throw new InvalidDataException("Demasiadas entradas en el catálogo.");
             HashBody(line);
         }

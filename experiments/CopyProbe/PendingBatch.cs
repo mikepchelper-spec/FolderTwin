@@ -99,12 +99,12 @@ internal static class PendingBatch
         }
     }
 
-    internal static void ValidatePlan(BatchPlan plan)
+    internal static void ValidatePlan(BatchPlan plan, int maximumEntries = FolderInventory.DefaultMaximumEntries)
     {
         if (plan.SourceBinding is not null)
             throw new ArgumentException("Este descriptor solo admite trabajos de copia.");
         FolderBatch.ValidateRoots(plan.FixtureRoot, plan.Source, plan.Destination);
-        FolderBatch.ValidateEntries(plan.Files, plan.Directories);
+        FolderBatch.ValidateEntries(plan.Files, plan.Directories, maximumEntries);
         if (plan.SourceIdentity is not { Length: 24 })
             throw new ArgumentException("Identidad de origen no válida.");
     }

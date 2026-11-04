@@ -150,6 +150,20 @@ La ventana **Versiones** permite crear o abrir almacenes, crear un punto, reinte
 
 El laboratorio mantiene su índice SQLite en `.foldertwin-index/index.db` dentro del espacio temporal registrado, fuera del origen y del almacén, en un volumen fijo. Usa SQLite de Windows y confirma `WAL` y `synchronous=FULL` al importar. Valida los catálogos antes de consultar la vista y usa sus hashes para identificarla. Importa cada vista en una transacción y navega por carpeta. Si falta la base, vuelve a importar la vista. Si SQLite falla, la ventana conserva la base y vuelve a leer los catálogos. La prueba WPF borra una base sintética, comprueba que se reconstruya, la corrompe, compara ambas vistas y vuelve a verificar y restaurar. Las mediciones de escala y el uso de la ubicación prevista fuera del laboratorio siguen pendientes. [SQLite de Windows](https://learn.microsoft.com/en-us/dotnet/standard/data/sqlite/custom-versions) y [WAL](https://www.sqlite.org/wal.html).
 
+### Mediciones del versionado
+
+En Windows, ejecutar `dotnet run --project experiments/CopyProbe -c Release -- --version-scale 1024 1024`. Los argumentos indican cuántos archivos crear y cuántos contenidos distintos distribuir entre ellos. Cada contenido es un entero de ocho bytes. La prueba mide la enumeración, la creación y confirmación de un punto, su listado y la revisión de los objetos. Aparta el origen, reabre el almacén y restaura una ruta de muestra. Usa un espacio temporal propio y lo retira al terminar. CI usa 10.240 archivos y 32 contenidos distintos para atravesar el límite de entradas del catálogo inicial.
+
+Cada fase registra tiempo, bytes de lectura y escritura que Windows atribuye al proceso y el pico acumulado de memoria residente. Los contadores de E/S incluyen solicitudes que puede atender la caché. La enumeración de metadatos puede mostrar cero bytes en los contadores de lectura de datos. El tiempo de respaldo incluye análisis, escrituras, verificaciones y confirmación. [Contadores de E/S del proceso](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getprocessiocounters).
+
+| Archivos / objetos distintos | Inventario | Respaldo | Listado | Verificación | Restaurar una ruta | Pico acumulado | Objeto por carpeta, mediana / máximo |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1.024 / 1.024 | 0,009 s | 10,518 s | 0,045 s | 0,178 s | 0,081 s | 53,7 MiB | 4 / 10 |
+| 8.192 / 8.192 | 0,030 s | 102,834 s | 0,349 s | 2,469 s | 0,157 s | 67,7 MiB | 32 / 46 |
+| 10.240 / 32 | 0,058 s | 11,221 s | 0,418 s | 0,248 s | 0,234 s | 66,2 MiB | 1 / 2 |
+
+Mediciones de referencia en Windows 11 (compilación 26100) y .NET 10.0.14, con el espacio temporal en NTFS local. Los bytes de lectura y escritura atribuidos a cada respaldo fueron 996.912 / 843.710, 7.962.708 / 6.741.849 y 9.463.448 / 7.039.116, respectivamente. Las dos últimas ejecuciones coincidieron parcialmente con la preparación de otro conjunto sintético. Las cifras muestran el orden de magnitud de ese equipo. Faltan el resultado a escala de 329.000 archivos y la comparación de las dos distribuciones con 329.000 y un millón de objetos.
+
 | Etapa | Entrega | Para pasar a la siguiente |
 |---|---|---|
 | 0 — Especificación | Modos, matriz de metadatos y estados de publicación/recuperación | Definir fixture, confinamiento de rutas y protocolo de diario. Especificar JSONL y duplicación antes de etapa 3; todavía no declarar la arquitectura validada. |

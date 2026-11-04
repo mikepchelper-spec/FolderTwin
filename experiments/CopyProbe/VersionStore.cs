@@ -91,8 +91,8 @@ internal sealed class VersionStore
         byte[] identity = WindowsProbeNative.DirectoryIdentity(origin.Root);
         if (identity.AsSpan().SequenceEqual(binding.Identity))
             throw new InvalidDataException("El origen y el almacén son la misma carpeta.");
-        var plan = FolderBatch.AnalyzeSource(workspace.Root, source, Destination, binding, identity);
-        PendingBatch.ValidatePlan(plan);
+        var plan = FolderBatch.AnalyzeSource(workspace.Root, source, Destination, binding, identity, BatchCatalog.VersionMaximumEntries);
+        PendingBatch.ValidatePlan(plan, BatchCatalog.VersionMaximumEntries);
         FolderBatch.RequireSameInventory(plan);
         using var pending = WindowsProbeNative.OpenOrCreatePlainDirectory(store.Root, PendingDirectory);
         var files = IntentFiles(pending, generation);
