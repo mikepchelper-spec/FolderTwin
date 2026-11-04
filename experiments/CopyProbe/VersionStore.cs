@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Microsoft.Win32.SafeHandles;
 
 internal sealed record VersionPoint(string Id, DateTimeOffset CreatedUtc, int FileCount, bool Degraded);
+internal sealed record PendingVersion(string Id, string Source, int FileCount);
 
 internal sealed class VersionStore
 {
@@ -10,6 +11,8 @@ internal sealed class VersionStore
     private const string PrimaryDirectory = "manifests";
     private const string ReplicaDirectory = "manifests_backup";
     private const string CommitDirectory = "commits";
+    private const string PendingDirectory = "pending";
+    private const string LocationSuffix = ".location.json";
     private const string ObjectDirectory = "objects";
     private const string Algorithm = "sha256";
     private const string TimeFormat = "yyyyMMdd'T'HHmmssfffffff'Z'";
@@ -35,7 +38,7 @@ internal sealed class VersionStore
         using (var operation = WindowsProbeNative.OpenPlainFile(store.Root, FolderBatch.LockName, FileAccess.ReadWrite,
             FileShare.None, FileMode.CreateNew))
         {
-            foreach (string directory in new[] { PrimaryDirectory, ReplicaDirectory, CommitDirectory })
+            foreach (string directory in new[] { PrimaryDirectory, ReplicaDirectory, CommitDirectory, PendingDirectory })
                 using (WindowsProbeNative.OpenOrCreatePlainDirectory(store.Root, directory)) { }
             using (var objects = WindowsProbeNative.OpenOrCreatePlainDirectory(store.Root, ObjectDirectory))
             using (WindowsProbeNative.OpenOrCreatePlainDirectory(objects, Algorithm)) { }
@@ -71,7 +74,8 @@ internal sealed class VersionStore
     internal static string NewGenerationId() =>
         DateTimeOffset.UtcNow.ToString(TimeFormat, CultureInfo.InvariantCulture) + "-" + Guid.NewGuid().ToString("N");
 
-    internal void CreatePoint(string source, string generation, Action<CatalogStep>? checkpoint = null)
+    internal void CreatePoint(string source, string generation, Action<CatalogStep>? checkpoint = null,
+        Action<PendingStep>? pendingCheckpoint = null, Action<CopyStep, string>? objectCheckpoint = null)
     {
         _ = GenerationTime(generation);
         using var scope = workspace.OpenRegisteredRoot();
@@ -80,37 +84,124 @@ internal sealed class VersionStore
         using var store = new DirectoryFence(Destination);
         using var marker = binding.OpenVerifiedMarker(store.Root);
         using var operation = OpenLock(store.Root, FileAccess.ReadWrite);
+        if (IsCommitted(store.Root, generation))
+            throw new InvalidDataException("La generación ya está confirmada.");
         byte[] identity = WindowsProbeNative.DirectoryIdentity(origin.Root);
         if (identity.AsSpan().SequenceEqual(binding.Identity))
             throw new InvalidDataException("El origen y el almacén son la misma carpeta.");
         var plan = FolderBatch.AnalyzeSource(workspace.Root, source, Destination, binding, identity);
-        FolderBatch.ValidateEntries(plan.Files, plan.Directories);
-        _ = BatchCatalog.WriteMetadata(Stream.Null, plan, generation);
-        LabWorkspace.RequireSpace(0, LabWorkspace.AvailableSpace(store.Root));
-        using var objects = WindowsProbeNative.OpenPlainDirectory(store.Root, ObjectDirectory);
-        using var algorithm = WindowsProbeNative.OpenPlainDirectory(objects, Algorithm);
-        foreach (var file in DistinctObjects(plan.Files))
-        {
-            string digest = Digest(file);
-            string final = ObjectPath(digest);
-            using var bucket = WindowsProbeNative.OpenOrCreatePlainDirectory(algorithm, digest[..2]);
-            if (!WindowsProbeNative.PlainFileExists(bucket, digest))
-            {
-                string temporary = Path.Combine(Path.GetDirectoryName(final)!, FolderBatch.ControlPrefix + digest + ".tmp");
-                var recovered = CopyRecovery.Recover(workspace.Root, temporary, final, expectedHash: file.Hash);
-                if (recovered == RecoveryResult.NoReceipt)
-                    VerifiedCopy.Run(Path.Combine(source, file.RelativePath), final, temporary, expectedHash: file.Hash, recoveryRoot: workspace.Root);
-                else if (recovered is not (RecoveryResult.Published or RecoveryResult.AlreadyPublished))
-                    throw new InvalidDataException($"El objeto {digest} requiere revisión. Estado {recovered}.");
-            }
-            VerifyObject(bucket, digest, file);
-        }
+        PendingBatch.ValidatePlan(plan);
         FolderBatch.RequireSameInventory(plan);
-        WithCatalogFiles(store.Root, generation, files =>
+        using var pending = WindowsProbeNative.OpenOrCreatePlainDirectory(store.Root, PendingDirectory);
+        var files = IntentFiles(pending, generation);
+        if (WindowsProbeNative.PlainFileExists(pending, files.Location))
+            throw new InvalidDataException("Ya hay un plan para esa generación. Usa reintentar.");
+        LabWorkspace.RequireSpace(0, LabWorkspace.AvailableSpace(store.Root));
+        PendingBatch.SaveLocked(plan, scope.Root, files, pendingCheckpoint);
+        CopyAndConfirm(store.Root, plan, generation, checkpoint, objectCheckpoint);
+    }
+
+    internal PendingVersion[] ListPending()
+    {
+        using var scope = workspace.OpenRegisteredRoot();
+        using var store = new DirectoryFence(Destination);
+        using var marker = binding.OpenVerifiedMarker(store.Root);
+        using var operation = OpenLock(store.Root, FileAccess.Read);
+        using var pending = OpenPending(store.Root);
+        if (pending is null)
+            return [];
+        return WindowsProbeNative.ReadDirectory(pending)
+            .Where(entry => entry.Name.EndsWith(LocationSuffix, StringComparison.Ordinal))
+            .Select(entry => entry.Name[..^LocationSuffix.Length])
+            .OrderDescending(StringComparer.Ordinal)
+            .Where(id => !IsCommitted(store.Root, id))
+            .Select(id =>
+            {
+                var plan = ReadIntent(scope.Root, store.Root, pending, id);
+                return new PendingVersion(id, plan.Source, plan.Files.Length);
+            }).ToArray();
+    }
+
+    internal void ResumePoint(string generation, Action<CatalogStep>? checkpoint = null)
+    {
+        _ = GenerationTime(generation);
+        using var scope = workspace.OpenRegisteredRoot();
+        using var store = new DirectoryFence(Destination);
+        using var marker = binding.OpenVerifiedMarker(store.Root);
+        using var operation = OpenLock(store.Root, FileAccess.ReadWrite);
+        if (IsCommitted(store.Root, generation))
         {
-            BatchCatalog.PublishLocked(plan, files, generation, () => VerifyObjects(store.Root, plan.Files), checkpoint);
-            return true;
-        });
+            VerifyObjects(store.Root, ReadPoint(store.Root, generation).Files);
+            return;
+        }
+        using var pending = WindowsProbeNative.OpenPlainDirectory(store.Root, PendingDirectory);
+        var plan = ReadIntent(scope.Root, store.Root, pending, generation);
+        CopyAndConfirm(store.Root, plan, generation, checkpoint, objectCheckpoint: null);
+    }
+
+    private BatchPlan ReadIntent(SafeFileHandle scope, SafeFileHandle store, SafeFileHandle pending, string generation)
+    {
+        var plan = PendingBatch.ReadLocked(workspace.Root, Destination, scope, store, IntentFiles(pending, generation));
+        workspace.CheckRoots(plan.Source, Destination);
+        if (plan.Target.Marker != binding.Marker || plan.SourceIdentity.AsSpan().SequenceEqual(binding.Identity))
+            throw new InvalidDataException("La generación pendiente pertenece a otro almacén.");
+        return plan;
+    }
+
+    private void CopyAndConfirm(SafeFileHandle store, BatchPlan plan, string generation, Action<CatalogStep>? checkpoint,
+        Action<CopyStep, string>? objectCheckpoint)
+    {
+        DirectoryFence? origin = null;
+        try
+        {
+            CopyObjects();
+            if (origin is not null)
+                FolderBatch.RequireSameInventory(plan);
+            WithCatalogFiles(store, generation, files =>
+            {
+                BatchCatalog.PublishLocked(plan, files, generation, () => VerifyObjects(store, plan.Files), checkpoint);
+                return true;
+            });
+        }
+        finally { origin?.Dispose(); }
+
+        void CopyObjects()
+        {
+            using var objects = WindowsProbeNative.OpenPlainDirectory(store, ObjectDirectory);
+            using var algorithm = WindowsProbeNative.OpenPlainDirectory(objects, Algorithm);
+            foreach (var file in DistinctObjects(plan.Files))
+            {
+                string digest = Digest(file);
+                string final = ObjectPath(digest);
+                using var bucket = WindowsProbeNative.OpenOrCreatePlainDirectory(algorithm, digest[..2]);
+                if (!WindowsProbeNative.PlainFileExists(bucket, digest))
+                {
+                    string temporary = Path.Combine(Path.GetDirectoryName(final)!, FolderBatch.ControlPrefix + digest + ".tmp");
+                    var recovered = CopyRecovery.Recover(workspace.Root, temporary, final, expectedHash: file.Hash);
+                    if (recovered == RecoveryResult.NoReceipt)
+                    {
+                        if (origin is null)
+                        {
+                            origin = new DirectoryFence(plan.Source);
+                            if (!WindowsProbeNative.DirectoryIdentity(origin.Root).AsSpan().SequenceEqual(plan.SourceIdentity))
+                                throw new InvalidDataException("La carpeta de origen cambió desde el análisis.");
+                            FolderBatch.RequireSameInventory(plan);
+                        }
+                        string input = Path.Combine(plan.Source, file.RelativePath);
+                        using var parent = new DirectoryFence(plan.Source, input);
+                        using var observed = WindowsProbeNative.OpenPlainFile(parent.Parent(input), input, FileAccess.Read, FileShare.Read);
+                        WindowsProbeNative.RequireSupportedData(observed.SafeFileHandle, file.RelativePath);
+                        if (observed.Length != file.Length || !SHA256.HashData(observed).AsSpan().SequenceEqual(file.Hash))
+                            throw new InvalidDataException($"El contenido de «{file.RelativePath}» cambió desde el análisis.");
+                        VerifiedCopy.Run(input, final, temporary, objectCheckpoint,
+                            expectedHash: file.Hash, recoveryRoot: workspace.Root);
+                    }
+                    else if (recovered is not (RecoveryResult.Published or RecoveryResult.AlreadyPublished))
+                        throw new InvalidDataException($"El objeto {digest} requiere revisión. Estado {recovered}.");
+                }
+                VerifyObject(bucket, digest, file);
+            }
+        }
     }
 
     internal VersionPoint[] ListPoints()
@@ -169,6 +260,22 @@ internal sealed class VersionStore
 
     private static FileStream OpenLock(SafeFileHandle root, FileAccess access) =>
         WindowsProbeNative.OpenPlainFile(root, FolderBatch.LockName, access, FileShare.None);
+
+    private static bool IsCommitted(SafeFileHandle store, string generation)
+    {
+        _ = GenerationTime(generation);
+        using var commits = WindowsProbeNative.OpenPlainDirectory(store, CommitDirectory);
+        return WindowsProbeNative.PlainFileExists(commits, generation + ".commit");
+    }
+
+    private static SafeFileHandle? OpenPending(SafeFileHandle store)
+    {
+        try { return WindowsProbeNative.OpenPlainDirectory(store, PendingDirectory); }
+        catch (FileNotFoundException) { return null; }
+    }
+
+    private static PendingFiles IntentFiles(SafeFileHandle pending, string generation) =>
+        new(pending, generation + ".jsonl", generation + LocationSuffix, generation);
 
     private static CatalogSnapshot ReadPoint(SafeFileHandle store, string generation)
     {

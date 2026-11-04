@@ -3,8 +3,10 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Win32.SafeHandles;
 
 internal enum PendingStep { MetadataFlushed, MetadataPublished, LocationFlushed, LocationPublished }
+internal readonly record struct PendingFiles(SafeFileHandle Parent, string Metadata, string Location, string Generation = "initial");
 
 // Immutable execution intent. Progress is reconstructed from the per-file receipts,
 // not from persisted success flags. These files never confirm a recovery point.
@@ -27,65 +29,66 @@ internal static class PendingBatch
 
     internal static void Save(BatchPlan plan, Action<PendingStep>? checkpoint = null)
     {
-        if (plan.SourceBinding is not null)
-            throw new ArgumentException("Este descriptor solo admite trabajos de copia.");
-        FolderBatch.ValidateRoots(plan.FixtureRoot, plan.Source, plan.Destination);
-        FolderBatch.ValidateEntries(plan.Files, plan.Directories);
-        if (plan.SourceIdentity is not { Length: 24 })
-            throw new ArgumentException("Identidad de origen no válida.");
-        byte[] metadataHash = BatchCatalog.WriteMetadata(Stream.Null, plan);
+        ValidatePlan(plan);
         using var fixture = new DirectoryFence(plan.FixtureRoot);
         using var root = new DirectoryFence(plan.Destination);
         using var marker = plan.Target.OpenVerifiedMarker(root.Root);
         using var operation = WindowsProbeNative.OpenPlainFile(root.Root, FolderBatch.LockName, FileAccess.ReadWrite,
             FileShare.None, FileMode.OpenOrCreate);
-        var location = new Location(1, WindowsProbeNative.DirectoryIdentity(fixture.Root),
+        SaveLocked(plan, fixture.Root, new(root.Root, MetadataName, LocationName), checkpoint);
+    }
+
+    internal static void SaveLocked(BatchPlan plan, SafeFileHandle fixture, PendingFiles files,
+        Action<PendingStep>? checkpoint = null)
+    {
+        byte[] metadataHash = BatchCatalog.WriteMetadata(Stream.Null, plan, files.Generation);
+        var location = new Location(1, WindowsProbeNative.DirectoryIdentity(fixture),
             Path.GetRelativePath(plan.FixtureRoot, plan.Source), plan.SourceIdentity, metadataHash);
         byte[] encoded = JsonSerializer.SerializeToUtf8Bytes(new Envelope(location,
             SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(location, Json))), Json);
         if (encoded.Length > MaximumLocationBytes)
             throw new InvalidDataException("El descriptor de ejecución supera el límite del laboratorio.");
 
-        if (!WindowsProbeNative.PlainFileExists(root.Root, MetadataName))
+        if (!WindowsProbeNative.PlainFileExists(files.Parent, files.Metadata))
         {
-            string draft = MetadataName + ".tmp";
-            if (!WindowsProbeNative.PlainFileExists(root.Root, draft))
+            string draft = files.Metadata + ".tmp";
+            if (!WindowsProbeNative.PlainFileExists(files.Parent, draft))
             {
-                using var output = WindowsProbeNative.OpenPlainFile(root.Root, draft, FileAccess.Write, FileShare.None, FileMode.CreateNew);
-                if (!BatchCatalog.WriteMetadata(output, plan).AsSpan().SequenceEqual(metadataHash))
+                using var output = WindowsProbeNative.OpenPlainFile(files.Parent, draft, FileAccess.Write, FileShare.None, FileMode.CreateNew);
+                if (!BatchCatalog.WriteMetadata(output, plan, files.Generation).AsSpan().SequenceEqual(metadataHash))
                     throw new InvalidDataException("El plan cambió al escribir el descriptor.");
                 output.Flush(flushToDisk: true);
             }
-            using var verified = WindowsProbeNative.OpenPlainFile(root.Root, draft, FileAccess.Read, FileShare.Read, rename: true);
+            using var verified = WindowsProbeNative.OpenPlainFile(files.Parent, draft, FileAccess.Read, FileShare.Read, rename: true);
             RequireMetadata(verified);
             checkpoint?.Invoke(PendingStep.MetadataFlushed);
-            WindowsProbeNative.RenameNew(verified.SafeFileHandle, root.Root, MetadataName);
+            WindowsProbeNative.RenameNew(verified.SafeFileHandle, files.Parent, files.Metadata);
         }
-        using (var existing = WindowsProbeNative.OpenPlainFile(root.Root, MetadataName, FileAccess.Read, FileShare.Read))
+        using (var existing = WindowsProbeNative.OpenPlainFile(files.Parent, files.Metadata, FileAccess.Read, FileShare.Read))
             RequireMetadata(existing);
         checkpoint?.Invoke(PendingStep.MetadataPublished);
 
-        if (!WindowsProbeNative.PlainFileExists(root.Root, LocationName))
+        if (!WindowsProbeNative.PlainFileExists(files.Parent, files.Location))
         {
-            string draft = LocationName + ".tmp";
-            if (!WindowsProbeNative.PlainFileExists(root.Root, draft))
+            string draft = files.Location + ".tmp";
+            if (!WindowsProbeNative.PlainFileExists(files.Parent, draft))
             {
-                using var output = WindowsProbeNative.OpenPlainFile(root.Root, draft, FileAccess.Write, FileShare.None, FileMode.CreateNew);
+                using var output = WindowsProbeNative.OpenPlainFile(files.Parent, draft, FileAccess.Write, FileShare.None, FileMode.CreateNew);
                 output.Write(encoded);
                 output.Flush(flushToDisk: true);
             }
-            using var verified = WindowsProbeNative.OpenPlainFile(root.Root, draft, FileAccess.Read, FileShare.Read, rename: true);
+            using var verified = WindowsProbeNative.OpenPlainFile(files.Parent, draft, FileAccess.Read, FileShare.Read, rename: true);
             RequireLocation(verified);
             checkpoint?.Invoke(PendingStep.LocationFlushed);
-            WindowsProbeNative.RenameNew(verified.SafeFileHandle, root.Root, LocationName);
+            WindowsProbeNative.RenameNew(verified.SafeFileHandle, files.Parent, files.Location);
         }
-        using (var existing = WindowsProbeNative.OpenPlainFile(root.Root, LocationName, FileAccess.Read, FileShare.Read))
+        using (var existing = WindowsProbeNative.OpenPlainFile(files.Parent, files.Location, FileAccess.Read, FileShare.Read))
             RequireLocation(existing);
         checkpoint?.Invoke(PendingStep.LocationPublished);
 
         void RequireMetadata(Stream file)
         {
-            if (!BatchCatalog.Parse(file).DocumentHash.AsSpan().SequenceEqual(metadataHash))
+            if (!BatchCatalog.Parse(file, files.Generation).DocumentHash.AsSpan().SequenceEqual(metadataHash))
                 throw new InvalidDataException("Ya existe un plan pendiente diferente o dañado.");
         }
         void RequireLocation(Stream file)
@@ -96,20 +99,36 @@ internal static class PendingBatch
         }
     }
 
+    internal static void ValidatePlan(BatchPlan plan)
+    {
+        if (plan.SourceBinding is not null)
+            throw new ArgumentException("Este descriptor solo admite trabajos de copia.");
+        FolderBatch.ValidateRoots(plan.FixtureRoot, plan.Source, plan.Destination);
+        FolderBatch.ValidateEntries(plan.Files, plan.Directories);
+        if (plan.SourceIdentity is not { Length: 24 })
+            throw new ArgumentException("Identidad de origen no válida.");
+    }
+
     internal static BatchPlan Read(string fixtureRoot, string destination)
     {
         using var fixture = new DirectoryFence(fixtureRoot, Path.Combine(destination, "pending-scope-check"));
         using var root = new DirectoryFence(destination);
         using var operation = WindowsProbeNative.OpenPlainFile(root.Root, FolderBatch.LockName, FileAccess.Read, FileShare.None);
+        return ReadLocked(fixtureRoot, destination, fixture.Root, root.Root, new(root.Root, MetadataName, LocationName));
+    }
+
+    internal static BatchPlan ReadLocked(string fixtureRoot, string destination, SafeFileHandle fixture, SafeFileHandle root,
+        PendingFiles files)
+    {
         Envelope envelope;
-        using (var file = WindowsProbeNative.OpenPlainFile(root.Root, LocationName, FileAccess.Read, FileShare.Read))
+        using (var file = WindowsProbeNative.OpenPlainFile(files.Parent, files.Location, FileAccess.Read, FileShare.Read))
             envelope = JsonSerializer.Deserialize<Envelope>(ReadLocationBytes(file), Json)
                 ?? throw new InvalidDataException("Falta el descriptor de ejecución.");
         var location = envelope.Payload;
         if (location.Version != 1 || location.FixtureIdentity is not { Length: 24 } || location.SourceIdentity is not { Length: 24 } ||
             location.MetadataHash is not { Length: 32 } || envelope.Checksum is not { Length: 32 } ||
             !SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(location, Json)).AsSpan().SequenceEqual(envelope.Checksum) ||
-            !WindowsProbeNative.DirectoryIdentity(fixture.Root).AsSpan().SequenceEqual(location.FixtureIdentity))
+            !WindowsProbeNative.DirectoryIdentity(fixture).AsSpan().SequenceEqual(location.FixtureIdentity))
             throw new InvalidDataException("Descriptor de ejecución dañado o de otro laboratorio.");
         _ = new UTF8Encoding(false, true).GetByteCount(location.SourceRelative);
         if (Path.IsPathRooted(location.SourceRelative))
@@ -117,13 +136,13 @@ internal static class PendingBatch
         string source = Path.Combine(fixtureRoot, location.SourceRelative);
         FolderBatch.ValidateRoots(fixtureRoot, source, destination);
         CatalogSnapshot metadata;
-        using (var file = WindowsProbeNative.OpenPlainFile(root.Root, MetadataName, FileAccess.Read, FileShare.Read))
-            metadata = BatchCatalog.Parse(file);
+        using (var file = WindowsProbeNative.OpenPlainFile(files.Parent, files.Metadata, FileAccess.Read, FileShare.Read))
+            metadata = BatchCatalog.Parse(file, files.Generation);
         if (!metadata.DocumentHash.AsSpan().SequenceEqual(location.MetadataHash))
             throw new InvalidDataException("El descriptor y la lista de archivos no coinciden.");
         var target = new DestinationBinding { Version = 1, Marker = metadata.Binding.Marker, Identity = metadata.Binding.Identity,
-            LastVolumePath = WindowsProbeNative.VolumePath(root.Root) };
-        using var marker = target.OpenVerifiedMarker(root.Root);
+            LastVolumePath = WindowsProbeNative.VolumePath(root) };
+        using var marker = target.OpenVerifiedMarker(root);
         return new(fixtureRoot, source, destination, location.SourceIdentity, target, metadata.Directories, metadata.Files);
     }
 

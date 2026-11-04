@@ -26,6 +26,8 @@ internal static class VersionProbe
             File.WriteAllText(changed, "primera versión");
             File.WriteAllText(removed, "todavía recuperable");
             var store = VersionStore.Initialize(workspace, destination);
+            Directory.Delete(Path.Combine(destination, "pending")); // Older stores did not have this directory.
+            Check(store.ListPending().Length == 0, "A store without the pending directory could not reopen.");
             string first = VersionStore.NewGenerationId();
             store.CreatePoint(source, first);
             Check(ObjectCount() == 3 && store.ListPoints().Single().Id == first, "The first generation did not deduplicate identical paths.");
@@ -46,17 +48,19 @@ internal static class VersionProbe
             store = VersionStore.Open(LabWorkspace.Open(workspace.Root), destination);
             Check(store.ListPoints().Single().Id == first && ObjectCount() == 4,
                 "An unconfirmed generation became visible or duplicated unchanged objects.");
+            Check(store.ListPending().Single() == new PendingVersion(second, source, 3),
+                "The saved generation did not reopen with its original source and count.");
             Reject(() => store.Restore(second, failedOutput));
             Check(!Directory.EnumerateFileSystemEntries(failedOutput).Any(), "An unconfirmed restore modified its output.");
-            store.CreatePoint(source, second);
-            var points = store.ListPoints();
-            Check(points.Length == 2 && points[0].Id == second && points[1].Id == first &&
-                points[0].FileCount == 3 && points[1].FileCount == 4 && ObjectCount() == 4,
-                "Retry did not confirm both points with only four distinct objects.");
-            Console.WriteLine("PASS two generations share identical objects; interrupted publication is invisible and retryable.");
-
             string missing = Path.Combine(workspace.Root, "origen apartado");
             Directory.Move(source, missing);
+            store.ResumePoint(second);
+            var points = store.ListPoints();
+            Check(points.Length == 2 && points[0].Id == second && points[1].Id == first &&
+                points[0].FileCount == 3 && points[1].FileCount == 4 && ObjectCount() == 4 && store.ListPending().Length == 0,
+                "Retry did not confirm both points with only four distinct objects.");
+            Console.WriteLine("PASS interrupted publication reopens as pending and confirms without the original source when all objects exist.");
+
             string primary = Path.Combine(destination, "manifests", first + ".jsonl");
             File.WriteAllText(primary, "truncated");
             var earlier = store.Restore(first, outputA);
@@ -97,6 +101,7 @@ internal static class VersionProbe
                 File.ReadAllBytes(sharedObject).SequenceEqual(damaged), "Corruption was overwritten or authorized a new point.");
             Reject(() => store.Verify(@"..\escape"));
             Console.WriteLine("PASS corruption in a shared object is reported for both points and blocks new publication without overwriting it.");
+            CheckDurableIntent(workspace);
             return 0;
 
             int ObjectCount() => Directory.EnumerateFiles(Path.Combine(destination, "objects", "sha256"), "*", SearchOption.AllDirectories)
@@ -108,6 +113,80 @@ internal static class VersionProbe
         }
 
         string NewFolder(string name) => Directory.CreateDirectory(Path.Combine(workspace.Root, name)).FullName;
+    }
+
+    private static void CheckDurableIntent(LabWorkspace workspace)
+    {
+        string source = Directory.CreateDirectory(Path.Combine(workspace.Root, "origen recuperación")).FullName;
+        string file = Path.Combine(source, "objeto.bin");
+        byte[] content = [12, 34, 56];
+        File.WriteAllBytes(file, content);
+        foreach (var boundary in Enum.GetValues<PendingStep>())
+        {
+            string destination = Directory.CreateDirectory(Path.Combine(workspace.Root, boundary.ToString())).FullName;
+            var store = VersionStore.Initialize(workspace, destination);
+            string generation = VersionStore.NewGenerationId();
+            Reject(() => store.CreatePoint(source, generation, pendingCheckpoint: step =>
+            {
+                if (step == boundary)
+                    throw new IOException("Injected descriptor interruption.");
+            }), "Injected descriptor interruption");
+            store = VersionStore.Open(LabWorkspace.Open(workspace.Root), destination);
+            Check(store.ListPoints().Length == 0 &&
+                !Directory.EnumerateFiles(Path.Combine(destination, "objects"), "*", SearchOption.AllDirectories).Any(),
+                "An interrupted descriptor allowed object writes or confirmation.");
+            if (boundary == PendingStep.LocationPublished)
+            {
+                Check(store.ListPending().Single().Id == generation, "A completed descriptor was not discoverable.");
+                string moved = Path.Combine(workspace.Root, "original apartado");
+                Directory.Move(source, moved);
+                try
+                {
+                    Directory.CreateDirectory(source);
+                    File.WriteAllBytes(file, content);
+                    Reject(() => store.ResumePoint(generation), "cambió desde el análisis");
+                    Check(store.ListPoints().Length == 0, "A replacement source was accepted.");
+                }
+                finally
+                {
+                    File.Delete(file);
+                    Directory.Delete(source);
+                    Directory.Move(moved, source);
+                }
+                File.WriteAllBytes(file, [56, 34, 12]);
+                Reject(() => store.ResumePoint(generation), "cambió desde el análisis");
+                Check(!Directory.EnumerateFiles(Path.Combine(destination, "objects"), "*.tmp", SearchOption.AllDirectories).Any(),
+                    "A changed source left an unverified object temporary.");
+                File.WriteAllBytes(file, content);
+                store.ResumePoint(generation);
+            }
+            else
+            {
+                Check(store.ListPending().Length == 0, "An incomplete descriptor was listed as resumable.");
+                store.CreatePoint(source, generation);
+            }
+            Check(store.ListPoints().Single().Id == generation && store.ListPending().Length == 0,
+                "Retry did not safely complete the generation.");
+        }
+        Console.WriteLine("PASS every descriptor transition is recoverable; a replacement source cannot fill a missing object.");
+
+        string objectStore = Directory.CreateDirectory(Path.Combine(workspace.Root, "temporal recuperable")).FullName;
+        var interrupted = VersionStore.Initialize(workspace, objectStore);
+        string pending = VersionStore.NewGenerationId();
+        Reject(() => interrupted.CreatePoint(source, pending, objectCheckpoint: (step, _) =>
+        {
+            if (step == CopyStep.Verified)
+                throw new IOException("Injected object interruption.");
+        }), "Injected object interruption");
+        Directory.Move(source, Path.Combine(workspace.Root, "origen temporal apartado"));
+        interrupted = VersionStore.Open(LabWorkspace.Open(workspace.Root), objectStore);
+        Check(interrupted.ListPending().Single().Id == pending, "The object interruption lost its generation descriptor.");
+        interrupted.ResumePoint(pending);
+        interrupted.ResumePoint(pending);
+        interrupted.Verify(pending);
+        Check(interrupted.ListPoints().Length == 1 && interrupted.ListPending().Length == 0,
+            "The verified temporary did not recover idempotently without the source.");
+        Console.WriteLine("PASS a verified temporary object can be promoted without the source after reopening.");
     }
 
     private static void Reject(Action operation, string? detail = null)

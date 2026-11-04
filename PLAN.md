@@ -144,6 +144,8 @@ La distribución de alfa usa el SDK fijado en `global.json` y un paquete portabl
 
 La etapa 3 tiene un almacén experimental de generaciones con objetos SHA-256 y dos catálogos por fecha. El ensayo `--versions` confirma dos puntos con cuatro objetos únicos, deja invisible un punto interrumpido hasta reintentarlo, restaura ambas fechas con el origen ausente, rechaza réplicas contradictorias y detecta un objeto compartido corrupto. Faltan el historial por fecha en WPF, el índice reconstruible y las pruebas de escala. [Formato de generaciones](experiments/CopyProbe/VERSIONES.md).
 
+El almacén guarda el descriptor de cada generación antes de escribir objetos. Al reabrir, descubre las generaciones pendientes con descriptor completo y reutiliza el plan original. Se probaron interrupciones inyectadas en las cuatro transiciones del descriptor, origen sustituido por una carpeta con los mismos bytes, cambios de contenido con el mismo tamaño y promoción de un temporal verificado sin el origen. Las confirmaciones excluyen esas generaciones de la lista de pendientes.
+
 | Etapa | Entrega | Para pasar a la siguiente |
 |---|---|---|
 | 0 — Especificación | Modos, matriz de metadatos y estados de publicación/recuperación | Definir fixture, confinamiento de rutas y protocolo de diario. Especificar JSONL y duplicación antes de etapa 3; todavía no declarar la arquitectura validada. |

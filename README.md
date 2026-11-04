@@ -42,7 +42,7 @@ Usa `-- --batch` para copiar y restaurar un lote sintético con subcarpetas, un 
 
 Usa `-- --workspace` para probar trabajos con rutas y nombres de archivo libres en espacios temporales registrados por FolderTwin. Comprueba el espacio disponible, los rechazos antes de escribir, la reapertura de un lote parcial y la restauración sin el origen. Esta prueba genera y elimina sus propios datos sintéticos.
 
-Usa `-- --versions` para probar dos generaciones con objetos SHA-256 compartidos. El ensayo crea sus propios datos, interrumpe una publicación, restaura ambas generaciones con el origen ausente y detecta la corrupción de un objeto común. El modo de versiones todavía se ejecuta en el arnés. [Formato de generaciones](experiments/CopyProbe/VERSIONES.md).
+Usa `-- --versions` para probar dos generaciones con objetos SHA-256 compartidos. El ensayo crea sus propios datos, reabre generaciones pendientes, recupera un temporal verificado con el origen ausente, restaura ambas fechas y detecta la corrupción de un objeto común. El modo de versiones todavía se ejecuta en el arnés. [Formato de generaciones](experiments/CopyProbe/VERSIONES.md).
 
 Usa `-- --catalog` para probar los catálogos JSONL duplicados, su confirmación y la restauración desde otro proceso con el origen ausente. El lector rechaza catálogos truncados, rutas inseguras y réplicas contradictorias. Una réplica íntegra de un lote confirmado permite restaurar con un aviso sobre la copia dañada. [Formato experimental](experiments/CopyProbe/CATALOG.md).
 
