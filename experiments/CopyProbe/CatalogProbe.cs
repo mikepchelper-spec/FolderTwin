@@ -223,10 +223,7 @@ internal static class CatalogProbe
 
     internal static int RestoreChild(string root)
     {
-        string relative = Path.GetRelativePath(Path.GetTempPath(), root);
-        if (!Path.IsPathFullyQualified(root) || Path.GetFullPath(root) != root || relative != Path.GetFileName(root) ||
-            !relative.StartsWith("FolderTwin-Batch-", StringComparison.Ordinal))
-            throw new InvalidDataException("Unexpected synthetic restore fixture.");
+        BatchFixture.ValidateRoot(root);
         using var fence = new DirectoryFence(root);
         using var configHandle = WindowsProbeNative.OpenPlainFile(fence.Root, "restore-binding.json", FileAccess.Read, FileShare.Read);
         var target = DestinationBinding.Load(Path.Combine(root, "restore-binding.json"));

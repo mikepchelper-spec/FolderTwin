@@ -238,6 +238,7 @@ public partial class MainWindow : Window
                 ResultsList.Items.Cast<string>().Any(row => row.Contains("está en uso", StringComparison.Ordinal)) &&
                 !AnalyzeButton.IsEnabled && CopyButton.IsEnabled, "A partial batch or its retry was hidden.");
         }
+        session.ForgetPlan();
         Click(CopyButton);
         await activeTask;
         Check(copied && File.Exists(session.CopyFile) && RestoreButton.IsEnabled, StatusText.Text);

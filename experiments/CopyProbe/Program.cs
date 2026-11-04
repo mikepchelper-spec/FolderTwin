@@ -23,6 +23,12 @@ if (args is ["--batch"])
     return BatchProbe.Run();
 if (args is ["--catalog"])
     return CatalogProbe.Run();
+if (args is ["--resume"])
+    return ResumeProbe.Run();
+if (args is ["--interrupt-pending-child", var pendingInterruptedRoot, var pendingBoundary])
+    return ResumeProbe.InterruptChild(pendingInterruptedRoot, pendingBoundary);
+if (args is ["--resume-pending-child", var pendingResumeRoot, var pendingOutcome, var pendingCount])
+    return ResumeProbe.ResumeChild(pendingResumeRoot, pendingOutcome, pendingCount);
 if (args is ["--restore-catalog-child", var catalogFixture])
     return CatalogProbe.RestoreChild(catalogFixture);
 if (args is ["--volume-lab", "fill"])

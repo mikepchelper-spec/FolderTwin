@@ -30,6 +30,8 @@ Usa `-- --batch` para copiar y restaurar un lote sintético con subcarpetas, un 
 
 Usa `-- --catalog` para probar los catálogos JSONL duplicados, su confirmación y la restauración desde otro proceso con el origen ausente. El lector rechaza catálogos truncados, rutas inseguras y réplicas contradictorias. Una réplica íntegra de un lote confirmado permite restaurar con un aviso sobre la copia dañada. [Formato experimental](experiments/CopyProbe/CATALOG.md).
 
+Usa `-- --resume` para terminar trabajadores de prueba y reabrir sus lotes pendientes desde otros procesos. Reconoce lo ya verificado, recupera temporales con registro válido y deja pendientes los archivos que aún necesitan el origen. Los datos sin verificar quedan para revisión. [Descriptor de ejecución](experiments/CopyProbe/PENDING.md).
+
 Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Elige las carpetas **Origen** y **Destino** que se muestran en el selector y pulsa **Analizar carpetas**. Revisa los tres archivos previstos. Después usa **Copiar y verificar** y **Restaurar y verificar**. La ventana muestra los resultados por ruta y ofrece **Reintentar copia** si el lote queda parcial. Solo declara la copia completa después de confirmar el catálogo y restaura leyendo ese catálogo del destino. Trabaja exclusivamente con los archivos sintéticos generados para la sesión y retira sus archivos temporales al cerrar normalmente. CI ejecuta el recorrido con `-- --smoke`.
 
 Si un archivo está en uso, el laboratorio intenta mostrar las aplicaciones que detecta Windows mediante Restart Manager. Si no puede identificarlas, conserva el aviso y permite reintentar. El diagnóstico no cierra aplicaciones.

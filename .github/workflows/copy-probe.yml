@@ -35,3 +35,5 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --batch
       - name: Verify confirmed catalogs and independent restoration
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --catalog
+      - name: Verify durable pending intent and worker termination recovery
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --resume

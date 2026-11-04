@@ -40,7 +40,7 @@ internal static class BatchCatalog
     internal static void Publish(BatchPlan plan, Action<CatalogStep>? checkpoint = null)
     {
         FolderBatch.ValidateEntries(plan.Files, plan.Directories);
-        byte[] expected = Write(Stream.Null, plan); // Check size/format limits before creating files.
+        byte[] expected = WriteMetadata(Stream.Null, plan); // Check size/format limits before creating files.
         using var root = new DirectoryFence(plan.Destination);
         using var marker = plan.Target.OpenVerifiedMarker(root.Root);
         using var operation = WindowsProbeNative.OpenPlainFile(root.Root, FolderBatch.LockName, FileAccess.ReadWrite, FileShare.None);
@@ -83,7 +83,7 @@ internal static class BatchCatalog
                 if (!WindowsProbeNative.PlainFileExists(root.Root, draft))
                 {
                     using var output = WindowsProbeNative.OpenPlainFile(root.Root, draft, FileAccess.Write, FileShare.None, FileMode.CreateNew);
-                    if (!Write(output, plan).AsSpan().SequenceEqual(expected))
+                    if (!WriteMetadata(output, plan).AsSpan().SequenceEqual(expected))
                         throw new InvalidDataException("El catálogo cambió durante la escritura.");
                     output.Flush(flushToDisk: true);
                 }
@@ -134,7 +134,7 @@ internal static class BatchCatalog
         }
     }
 
-    private static byte[] Write(Stream output, BatchPlan plan)
+    internal static byte[] WriteMetadata(Stream output, BatchPlan plan)
     {
         using var body = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using var document = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);

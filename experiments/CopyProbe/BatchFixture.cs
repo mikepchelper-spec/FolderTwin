@@ -3,13 +3,14 @@ using System.Security.Cryptography;
 // Disposable, fixed synthetic data shared by the console and WPF laboratories.
 internal sealed class BatchFixture : IDisposable
 {
+    internal const string Prefix = "FolderTwin-Batch-";
     internal static readonly string[] SampleNames = ["muestra.txt", Path.Combine("Documentos á漢字", "notas.bin"), "vacío.bin"];
     internal static readonly string[] DirectoryNames = ["Documentos á漢字", "Carpeta vacía"];
     private readonly byte[] sourceIdentity;
     private readonly Dictionary<string, byte[]> expectedHashes = new(StringComparer.Ordinal);
     internal DestinationBinding DestinationBinding { get; }
     internal DestinationBinding RestoreBinding { get; }
-    internal string Root { get; } = Directory.CreateTempSubdirectory("FolderTwin-Batch-").FullName;
+    internal string Root { get; } = Directory.CreateTempSubdirectory(Prefix).FullName;
     internal string Source => Path.Combine(Root, "Origen");
     internal string Destination => Path.Combine(Root, "Destino");
     internal string Restored => Path.Combine(Root, "Restaurado");
@@ -54,19 +55,7 @@ internal sealed class BatchFixture : IDisposable
     }
     internal BatchResult Copy()
     {
-        var plan = Plan ?? throw new InvalidOperationException("Analiza las carpetas primero.");
-        var result = FolderBatch.Run(plan);
-        if (!result.Complete)
-            return result;
-        try
-        {
-            BatchCatalog.Publish(plan);
-            return result;
-        }
-        catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or System.ComponentModel.Win32Exception or UnauthorizedAccessException)
-        {
-            return result with { Problem = "Los archivos se verificaron, pero el catálogo no se confirmó. " + error.Message };
-        }
+        return Plan is null ? PendingBatch.Resume(Root, Destination) : PendingBatch.Start(Plan);
     }
     internal BatchResult Restore()
     {
@@ -121,7 +110,8 @@ internal sealed class BatchFixture : IDisposable
                 if (binding is not null)
                 {
                     File.Delete(Path.Combine(root, FolderBatch.LockName));
-                    foreach (string name in new[] { BatchCatalog.PrimaryName, BatchCatalog.BackupName, BatchCatalog.CommitName })
+                    foreach (string name in new[] { BatchCatalog.PrimaryName, BatchCatalog.BackupName, BatchCatalog.CommitName,
+                        PendingBatch.MetadataName, PendingBatch.LocationName })
                     {
                         File.Delete(Path.Combine(root, name));
                         File.Delete(Path.Combine(root, name + ".tmp"));
@@ -135,5 +125,13 @@ internal sealed class BatchFixture : IDisposable
             if (Directory.Exists(Path.Combine(root, relative)))
                 Directory.Delete(Path.Combine(root, relative));
         Directory.Delete(root);
+    }
+
+    internal static void ValidateRoot(string root)
+    {
+        string relative = Path.GetRelativePath(Path.GetTempPath(), root);
+        if (!Path.IsPathFullyQualified(root) || Path.GetFullPath(root) != root || relative != Path.GetFileName(root) ||
+            !relative.StartsWith(Prefix, StringComparison.Ordinal))
+            throw new InvalidDataException("Unexpected synthetic batch fixture.");
     }
 }

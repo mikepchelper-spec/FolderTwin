@@ -21,7 +21,7 @@ internal sealed record BatchResult(BatchEntryResult[] Entries, string? Problem =
     public int VerifiedFiles => Entries.Count(entry => !entry.IsDirectory && entry.Succeeded);
 }
 
-// Synthetic NTFS batches only. Pending execution plans remain in memory.
+// Synthetic NTFS batches only. PendingBatch persists copy intent;
 // BatchCatalog separately confirms completed data for independent restoration.
 internal static class FolderBatch
 {
@@ -57,24 +57,24 @@ internal static class FolderBatch
     }
 
     internal static BatchResult Run(BatchPlan plan, CancellationToken cancellationToken = default,
-        Action<string, CopyStep, string>? checkpoint = null)
+        Action<string, CopyStep, string>? checkpoint = null, bool resume = false)
     {
         var results = new List<BatchEntryResult>();
+        DirectoryFence? source = null;
+        FileStream? sourceMarker = null;
+        FileStream? sourceOperation = null;
+        Exception? sourceFailure = null;
+        bool sourceReady = false;
         try
         {
             ValidateRoots(plan.FixtureRoot, plan.Source, plan.Destination);
             ValidateEntries(plan.Files, plan.Directories);
             var expectedFiles = plan.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
-            using var source = new DirectoryFence(plan.Source);
             using var destination = new DirectoryFence(plan.Destination);
-            if (!WindowsProbeNative.DirectoryIdentity(source.Root).AsSpan().SequenceEqual(plan.SourceIdentity))
-                throw new InvalidDataException("La carpeta de origen cambió de identidad.");
-            using var sourceMarker = plan.SourceBinding?.OpenVerifiedMarker(source.Root);
-            using var sourceOperation = plan.SourceBinding is null ? null : WindowsProbeNative.OpenPlainFile(source.Root,
-                LockName, FileAccess.Read, FileShare.None);
             using var targetMarker = plan.Target.OpenVerifiedMarker(destination.Root);
             cancellationToken.ThrowIfCancellationRequested();
-            RequireSameInventory(plan);
+            if (!resume)
+                EnsureSource();
             using var operation = WindowsProbeNative.OpenPlainFile(destination.Root, LockName, FileAccess.ReadWrite,
                 FileShare.None, FileMode.OpenOrCreate);
 
@@ -84,7 +84,8 @@ internal static class FolderBatch
                 Execute(item.RelativePath, false, () => WithDirectories(destination.Root,
                     Path.GetDirectoryName(item.RelativePath) ?? "", () => CopyOne(item)));
             cancellationToken.ThrowIfCancellationRequested();
-            RequireSameInventory(plan);
+            if (sourceReady)
+                RequireSameInventory(plan);
             for (int index = 0; index < results.Count; index++)
             {
                 var entry = results[index];
@@ -144,21 +145,72 @@ internal static class FolderBatch
                 string input = Path.Combine(plan.Source, item.RelativePath);
                 string output = Path.Combine(plan.Destination, item.RelativePath);
                 string temporary = TemporaryPath(plan.Destination, item.RelativePath);
+                BatchStatus? known = resume ? RecoverKnown() : null;
+                if (known.HasValue)
+                    return known.Value;
+                EnsureSource();
                 using var sourceFileFence = new DirectoryFence(plan.Source, input);
                 using var sourceFile = WindowsProbeNative.OpenPlainFile(sourceFileFence.Parent(input), input, FileAccess.Read, FileShare.Read);
                 if (sourceFile.Length != item.Length || !SHA256.HashData(sourceFile).AsSpan().SequenceEqual(item.Hash))
                     throw new InvalidDataException("El contenido cambió desde el análisis. Revisa el archivo.");
-                var recovered = CopyRecovery.Recover(plan.FixtureRoot, temporary, output, expectedHash: item.Hash);
-                if (recovered == RecoveryResult.Published)
-                    return BatchStatus.Recovered;
-                if (recovered == RecoveryResult.AlreadyPublished)
-                    return BatchStatus.AlreadyVerified;
-                if (recovered != RecoveryResult.NoReceipt)
-                    throw new InvalidDataException($"Datos pendientes requieren revisión: {recovered}.");
+                if (!resume)
+                {
+                    known = RecoverKnown();
+                    if (known.HasValue)
+                        return known.Value;
+                }
                 VerifiedCopy.Run(input, output, temporary,
                     (step, path) => checkpoint?.Invoke(item.RelativePath, step, path), expectedHash: item.Hash,
                     recoveryRoot: plan.FixtureRoot, cancellationToken: cancellationToken);
                 return BatchStatus.Copied;
+
+                BatchStatus? RecoverKnown()
+                {
+                    var recovered = CopyRecovery.Recover(plan.FixtureRoot, temporary, output, expectedHash: item.Hash);
+                    if (recovered == RecoveryResult.NoReceipt)
+                    {
+                        using var pending = new DirectoryFence(plan.Destination, temporary, output);
+                        var parent = pending.Parent(output);
+                        if (WindowsProbeNative.PlainFileExists(parent, temporary) ||
+                            WindowsProbeNative.PlainFileExists(parent, CopyRecovery.ReceiptDraftPath(temporary)) ||
+                            WindowsProbeNative.PlainFileExists(parent, output))
+                            throw new InvalidDataException("Hay datos sin verificar o un conflicto en destino. Se conservan para revisión.");
+                    }
+                    return recovered switch
+                    {
+                        RecoveryResult.Published => BatchStatus.Recovered,
+                        RecoveryResult.AlreadyPublished => BatchStatus.AlreadyVerified,
+                        RecoveryResult.NoReceipt => null,
+                        _ => throw new InvalidDataException($"Datos pendientes requieren revisión: {recovered}.")
+                    };
+                }
+            }
+
+            void EnsureSource()
+            {
+                if (sourceReady)
+                    return;
+                if (sourceFailure is null)
+                {
+                    try
+                    {
+                        source = new DirectoryFence(plan.Source);
+                        if (!WindowsProbeNative.DirectoryIdentity(source.Root).AsSpan().SequenceEqual(plan.SourceIdentity))
+                            throw new InvalidDataException("La carpeta de origen cambió de identidad.");
+                        sourceMarker = plan.SourceBinding?.OpenVerifiedMarker(source.Root);
+                        sourceOperation = plan.SourceBinding is null ? null : WindowsProbeNative.OpenPlainFile(source.Root,
+                            LockName, FileAccess.Read, FileShare.None);
+                        RequireSameInventory(plan);
+                        sourceReady = true;
+                        return;
+                    }
+                    catch (Exception error) when (IsExpectedFailure(error))
+                    {
+                        sourceFailure = error;
+                    }
+                }
+                throw new InvalidDataException("Se necesita el origen del análisis para copiar los archivos que faltan. " + sourceFailure.Message,
+                    sourceFailure);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -168,6 +220,12 @@ internal static class FolderBatch
         catch (Exception error) when (IsExpectedFailure(error))
         {
             return new(results.ToArray(), error.Message);
+        }
+        finally
+        {
+            sourceOperation?.Dispose();
+            sourceMarker?.Dispose();
+            source?.Dispose();
         }
     }
 
@@ -212,9 +270,19 @@ internal static class FolderBatch
             throw new InvalidDataException("El inventario del origen cambió. Repite el análisis.");
     }
 
-    private static void ValidateRoots(string fixture, string source, string destination)
+    internal static void ValidateRoots(string fixture, string source, string destination)
     {
-        using var fence = new DirectoryFence(fixture, Path.Combine(source, "root-check"), Path.Combine(destination, "root-check"));
+        using var fence = new DirectoryFence(fixture);
+        foreach (string root in new[] { source, destination })
+        {
+            if (!Path.IsPathFullyQualified(root) || Path.GetFullPath(root) != root)
+                throw new ArgumentException("La raíz del lote no es canónica.");
+            string child = Path.GetRelativePath(fixture, root);
+            if (child == "." || !Within(child))
+                throw new ArgumentException("La raíz del lote está fuera del laboratorio.");
+            foreach (string component in child.Split(Path.DirectorySeparatorChar))
+                DirectoryFence.CheckName(component);
+        }
         string relative = Path.GetRelativePath(source, destination);
         string reverse = Path.GetRelativePath(destination, source);
         if (Within(relative) || Within(reverse))
