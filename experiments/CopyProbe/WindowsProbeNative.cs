@@ -81,6 +81,7 @@ internal static class WindowsProbeNative
         try
         {
             parent.DangerousAddRef(ref acquired);
+            RequirePlain(parent, directory: true);
             fixed (char* buffer = name)
             {
                 ushort length = checked((ushort)(name.Length * sizeof(char)));
@@ -115,14 +116,9 @@ internal static class WindowsProbeNative
 
     private static SafeFileHandle ValidatePlain(SafeFileHandle handle, bool directory)
     {
-        const int attributeTagInfo = 9;
         try
         {
-            if (handle.IsInvalid || !GetAttributeTag(handle, attributeTagInfo, out AttributeTag info, Marshal.SizeOf<AttributeTag>()))
-                throw new IOException("Opening the operation path failed.", new Win32Exception(Marshal.GetLastPInvokeError()));
-            if (info.Attributes.HasFlag(FileAttributes.ReparsePoint) ||
-                info.Attributes.HasFlag(FileAttributes.Directory) != directory)
-                throw new InvalidDataException("Unexpected path type or reparse point.");
+            RequirePlain(handle, directory);
             return handle;
         }
         catch
@@ -130,6 +126,16 @@ internal static class WindowsProbeNative
             handle.Dispose();
             throw;
         }
+    }
+
+    private static void RequirePlain(SafeFileHandle handle, bool directory)
+    {
+        const int attributeTagInfo = 9;
+        if (handle.IsInvalid || !GetAttributeTag(handle, attributeTagInfo, out AttributeTag info, Marshal.SizeOf<AttributeTag>()))
+            throw new IOException("Opening the operation path failed.", new Win32Exception(Marshal.GetLastPInvokeError()));
+        if (info.Attributes.HasFlag(FileAttributes.ReparsePoint) ||
+            info.Attributes.HasFlag(FileAttributes.Directory) != directory)
+            throw new InvalidDataException("Unexpected path type or reparse point.");
     }
 
     internal static byte[] DirectoryIdentity(SafeFileHandle directory)
@@ -180,6 +186,8 @@ internal static class WindowsProbeNative
         try
         {
             directory.DangerousAddRef(ref acquired);
+            RequirePlain(directory, directory: true);
+            RequirePlain(file, directory: false);
             nint directoryHandle = directory.DangerousGetHandle();
             MemoryMarshal.Write(request.AsSpan(IntPtr.Size), in directoryHandle);
             int status = NtSetInformationFile(file, out _, request, (uint)request.Length, fileRenameInformation);

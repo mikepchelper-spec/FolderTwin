@@ -15,14 +15,14 @@ internal static class BindingProbe
         try
         {
             Directory.CreateDirectory(original);
-            using (var directory = WindowsProbeNative.OpenPlainDirectory(original))
-                DestinationBinding.Register(directory).SaveNew(configuration);
+            using (var directory = new DirectoryFence(original))
+                DestinationBinding.Register(directory.Root).SaveNew(configuration);
 
             DestinationBinding binding = DestinationBinding.Load(configuration);
-            using (var directory = WindowsProbeNative.OpenPlainDirectory(binding.LastVolumePath))
+            using (var directory = new DirectoryFence(binding.LastVolumePath))
             {
-                Expect<IOException>(() => DestinationBinding.Register(directory));
-                using var verifiedMarker = binding.OpenVerifiedMarker(directory);
+                Expect<IOException>(() => DestinationBinding.Register(directory.Root));
+                using var verifiedMarker = binding.OpenVerifiedMarker(directory.Root);
             }
             Console.WriteLine("PASS the saved destination reopens via its volume GUID path and keeps its existing marker.");
 

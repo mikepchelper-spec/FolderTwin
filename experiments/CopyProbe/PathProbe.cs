@@ -1,5 +1,8 @@
 using System.Diagnostics;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using Microsoft.Win32.SafeHandles;
 
 internal static class PathProbe
 {
@@ -14,11 +17,13 @@ internal static class PathProbe
         string child = Path.Combine(root, "child");
         string movedChild = Path.Combine(root, "moved-child");
         string outside = Path.Combine(fixture, "outside");
+        string selected = Path.Combine(outside, "selected");
+        string empty = Path.Combine(fixture, "empty");
         string sentinel = Path.Combine(outside, "sentinel.bin");
         try
         {
             Directory.CreateDirectory(child);
-            Directory.CreateDirectory(outside);
+            Directory.CreateDirectory(selected);
             File.WriteAllBytes(sentinel, "synthetic sentinel"u8);
 
             using (var rootHandle = WindowsProbeNative.OpenPlainDirectory(root))
@@ -47,6 +52,44 @@ internal static class PathProbe
                 }
             }
             Console.WriteLine("PASS a junction substituted for a child directory was rejected.");
+
+            string redirected = Path.Combine(child, "selected");
+            Expect<InvalidDataException>(() =>
+            {
+                using var rejected = new DirectoryFence(redirected);
+            });
+            string redirectedPending = Path.Combine(redirected, "pending.tmp");
+            string redirectedFinal = Path.Combine(redirected, "backup.bin");
+            Expect<InvalidDataException>(() => CopyRecovery.Recover(redirected, redirectedPending, redirectedFinal));
+            if (Directory.EnumerateFileSystemEntries(selected).Any())
+                throw new InvalidDataException("A junction ancestor redirected a selected root.");
+            Console.WriteLine("PASS a junction above the selected root cannot redirect recovery.");
+
+            Directory.CreateDirectory(empty);
+            using (var fence = new DirectoryFence(empty))
+            {
+                CopyJunctionData(child, empty);
+                if (!File.GetAttributes(empty).HasFlag(FileAttributes.ReparsePoint))
+                    throw new InvalidDataException("The open test directory did not become a junction.");
+                Expect<InvalidDataException>(() =>
+                {
+                    using var rejected = WindowsProbeNative.OpenPlainFile(fence.Root, "new.bin", FileAccess.Write,
+                        FileShare.None, FileMode.CreateNew);
+                });
+                if (File.Exists(Path.Combine(outside, "new.bin")))
+                    throw new InvalidDataException("An open directory redirected the write after becoming a junction.");
+            }
+            Directory.Delete(empty);
+            Console.WriteLine("PASS a directory converted to a junction after opening is rejected before a relative create.");
+
+            foreach (string unsupported in new[] { @"\\server\share\backup", @"\\.\C:\backup", "C:backup" })
+                Expect<ArgumentException>(() =>
+                {
+                    using var rejected = new DirectoryFence(unsupported);
+                });
+            Console.WriteLine("PASS UNC, device namespaces, and drive-relative roots are rejected before opening.");
+
+            Directory.Delete(selected);
             Directory.Delete(child);
             Directory.Move(movedChild, child);
             CheckCopyAndRecovery(fixture, root, child, movedChild, outside, sentinel);
@@ -57,7 +100,7 @@ internal static class PathProbe
         {
             File.Delete(Path.Combine(root, "source.bin"));
             // Nonrecursive deletion removes a junction itself, without following it.
-            foreach (string directory in new[] { child, movedChild, Path.Combine(movedRoot, "child"), root, movedRoot })
+            foreach (string directory in new[] { empty, child, movedChild, Path.Combine(movedRoot, "child"), root, movedRoot })
                 if (Directory.Exists(directory))
                 {
                     if (!File.GetAttributes(directory).HasFlag(FileAttributes.ReparsePoint))
@@ -68,6 +111,8 @@ internal static class PathProbe
                 }
             if (Directory.Exists(outside))
             {
+                if (Directory.Exists(selected))
+                    Directory.Delete(selected);
                 File.Delete(sentinel);
                 Directory.Delete(outside);
             }
@@ -177,4 +222,33 @@ internal static class PathProbe
         if (process.ExitCode != 0)
             throw new IOException($"Creating the test junction failed ({process.ExitCode}).");
     }
+
+    private static void CopyJunctionData(string junction, string emptyDirectory)
+    {
+        const uint openExisting = 3;
+        const uint readAccess = 0x80000000;
+        const uint writeAccess = 0x40000000;
+        const uint openDirectoryAndReparsePoint = 0x02200000;
+        const uint getReparsePoint = 0x000900a8;
+        const uint setReparsePoint = 0x000900a4;
+
+        using var original = WindowsProbeNative.CreateFile(junction, readAccess, FileShare.ReadWrite, 0, openExisting,
+            openDirectoryAndReparsePoint, 0);
+        if (original.IsInvalid)
+            throw new Win32Exception(Marshal.GetLastPInvokeError(), "Opening the synthetic junction failed.");
+        byte[] data = new byte[16 * 1024];
+        if (!DeviceIoControl(original, getReparsePoint, null, 0, data, data.Length, out int size, 0))
+            throw new Win32Exception(Marshal.GetLastPInvokeError(), "Reading the synthetic junction failed.");
+
+        using var target = WindowsProbeNative.CreateFile(emptyDirectory, writeAccess, FileShare.ReadWrite, 0, openExisting,
+            openDirectoryAndReparsePoint, 0);
+        if (target.IsInvalid ||
+            !DeviceIoControl(target, setReparsePoint, data, size, null, 0, out _, 0))
+            throw new Win32Exception(Marshal.GetLastPInvokeError(), "Setting the synthetic junction in place failed.");
+    }
+
+    [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeviceIoControl(SafeFileHandle file, uint code, byte[]? input, int inputSize,
+        [Out] byte[]? output, int outputSize, out int bytes, nint overlapped);
 }
