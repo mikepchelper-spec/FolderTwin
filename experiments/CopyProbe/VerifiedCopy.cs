@@ -7,14 +7,20 @@ internal static class VerifiedCopy
     // The caller supplies paths inside a fresh synthetic fixture on one volume.
     public static void Run(
         string source, string destination, string temporary,
-        Action<CopyStep, string>? checkpoint = null, byte[]? expectedHash = null, bool recoverable = false,
+        Action<CopyStep, string>? checkpoint = null, byte[]? expectedHash = null, string? recoveryRoot = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        using var operation = recoverable ? CopyRecovery.Begin(temporary, destination) : null;
+        using var fence = recoveryRoot is null ? null : new DirectoryFence(recoveryRoot, source, temporary, destination);
+        var directory = fence?.Parent(destination);
+        using var operation = directory is null ? null : CopyRecovery.Begin(directory, temporary, destination);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read))
-        using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        using (var input = fence is null
+            ? new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read)
+            : WindowsProbeNative.OpenPlainFile(fence.Parent(source), source, FileAccess.Read, FileShare.Read))
+        using (var output = directory is null
+            ? new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+            : WindowsProbeNative.OpenPlainFile(directory, temporary, FileAccess.Write, FileShare.None, FileMode.CreateNew))
         {
             byte[] buffer = new byte[64 * 1024];
             int count;
@@ -33,17 +39,22 @@ internal static class VerifiedCopy
         checkpoint?.Invoke(CopyStep.Flushed, temporary);
 
         byte[] sourceHash = hash.GetHashAndReset();
-        using (var input = File.OpenRead(temporary))
+        using (var input = directory is null
+            ? File.OpenRead(temporary)
+            : WindowsProbeNative.OpenPlainFile(directory, temporary, FileAccess.Read, FileShare.Read, rename: true))
         {
             if (!SHA256.HashData(input).AsSpan().SequenceEqual(sourceHash) ||
                 (expectedHash is not null && !sourceHash.AsSpan().SequenceEqual(expectedHash)))
                 throw new InvalidDataException("The copy does not match the expected SHA-256.");
             cancellationToken.ThrowIfCancellationRequested();
-            if (recoverable)
-                CopyRecovery.RecordVerified(temporary, destination, sourceHash, checkpoint);
+            if (directory is not null)
+                CopyRecovery.RecordVerified(temporary, destination, sourceHash, directory, checkpoint);
+            checkpoint?.Invoke(CopyStep.Verified, temporary);
+            if (directory is not null)
+                WindowsProbeNative.RenameNew(input.SafeFileHandle, directory, Path.GetFileName(destination));
         }
-        checkpoint?.Invoke(CopyStep.Verified, temporary);
-        File.Move(temporary, destination);
+        if (directory is null)
+            File.Move(temporary, destination);
         checkpoint?.Invoke(CopyStep.Published, destination);
     }
 }

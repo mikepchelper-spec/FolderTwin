@@ -138,16 +138,16 @@ CheckRecoveryLeavesFiles(fixture, RecoveryResult.InvalidReceipt);
 Pass("Recovery rejects an altered receipt of the correct length");
 
 PreparePending(fixture);
-Check(CopyRecovery.Recover(fixture.Temporary, fixture.Restored) == RecoveryResult.InvalidReceipt,
+Check(CopyRecovery.Recover(fixture.Root, fixture.Temporary, fixture.Restored) == RecoveryResult.InvalidReceipt,
     "Receipt was accepted for a different destination");
 Check(File.Exists(fixture.Temporary) && !File.Exists(fixture.Restored), "Wrong destination was published");
 Pass("Recovery binds the receipt to its original destination name");
 
 PreparePending(fixture);
 using (var operation = new FileStream(CopyRecovery.LockPath(fixture.Temporary), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-    Expect<IOException>(() => CopyRecovery.Recover(fixture.Temporary, fixture.Backup));
-Expect<IOException>(() => VerifiedCopy.Run(fixture.Source, fixture.Backup, fixture.Temporary, recoverable: true));
-Check(CopyRecovery.Recover(fixture.Temporary, fixture.Backup) == RecoveryResult.Published, "Retry did not publish");
+    Expect<IOException>(() => CopyRecovery.Recover(fixture.Root, fixture.Temporary, fixture.Backup));
+Expect<IOException>(() => VerifiedCopy.Run(fixture.Source, fixture.Backup, fixture.Temporary, recoveryRoot: fixture.Root));
+Check(CopyRecovery.Recover(fixture.Root, fixture.Temporary, fixture.Backup) == RecoveryResult.Published, "Retry did not publish");
 File.WriteAllBytes(fixture.Backup, "corrupted copy"u8);
 CheckRecoveryLeavesFiles(fixture, RecoveryResult.HashMismatch);
 Pass("Recovery excludes concurrent access, retries, and rejects an altered final file");
@@ -165,7 +165,7 @@ foreach (CopyStep fault in new[] { CopyStep.Writing, CopyStep.Flushing, CopyStep
         {
             if (step == fault && (step != CopyStep.Writing || ++writes == 2))
                 throw error;
-        }, recoverable: true);
+        }, recoveryRoot: fixture.Root);
         throw new InvalidOperationException("A failed operation completed.");
     }
     catch (IOException caught) when (ReferenceEquals(caught, error))
@@ -188,11 +188,22 @@ using (var cancellation = new CancellationTokenSource())
     {
         if (step == CopyStep.Writing && ++writes == 2)
             cancellation.Cancel();
-    }, recoverable: true, cancellationToken: cancellation.Token));
+    }, recoveryRoot: fixture.Root, cancellationToken: cancellation.Token));
 }
 Check(new FileInfo(fixture.Temporary).Length == 65_536 && !File.Exists(fixture.Backup), "Cancellation published data");
 CheckRecoveryLeavesFiles(fixture, RecoveryResult.NoReceipt);
 Pass("Cancellation during copy preserves the partial temporary without publishing");
+
+fixture.Seed("new backup"u8);
+Expect<IOException>(() => VerifiedCopy.Run(fixture.Source, fixture.Backup, fixture.Temporary, (step, _) =>
+{
+    if (step == CopyStep.Verified)
+        File.WriteAllBytes(fixture.Backup, "late destination"u8);
+}, recoveryRoot: fixture.Root));
+CheckFile(fixture.Backup, SHA256.HashData("late destination"u8));
+CheckFile(fixture.Temporary, SHA256.HashData("new backup"u8));
+CheckRecoveryLeavesFiles(fixture, RecoveryResult.Conflict);
+Pass("Handle-based publication preserves a destination created after verification");
 
 Console.WriteLine($"{passed} synthetic checks passed.");
 return 0;
@@ -245,9 +256,9 @@ static void CheckInterruptedCopy(string boundary)
         }
 
         RecoveryResult expected = boundary == "after" ? RecoveryResult.AlreadyPublished : RecoveryResult.Published;
-        Check(CopyRecovery.Recover(interrupted.Temporary, interrupted.Backup) == expected, "Unexpected recovery outcome");
+        Check(CopyRecovery.Recover(interrupted.Root, interrupted.Temporary, interrupted.Backup) == expected, "Unexpected recovery outcome");
         Check(!File.Exists(interrupted.Temporary), "Published copy still has a temporary name");
-        Check(CopyRecovery.Recover(interrupted.Temporary, interrupted.Backup) == RecoveryResult.AlreadyPublished,
+        Check(CopyRecovery.Recover(interrupted.Root, interrupted.Temporary, interrupted.Backup) == RecoveryResult.AlreadyPublished,
             "Repeating recovery did not recognize the published file");
         VerifiedCopy.Run(interrupted.Backup, interrupted.Restored, interrupted.RestoreTemporary, expectedHash: hash);
         CheckFile(interrupted.Restored, hash);
@@ -276,7 +287,7 @@ static int RunInterruptedCopy(CopyStep checkpoint)
             Console.WriteLine(fixture.Root);
             Console.ReadLine();
         }
-    }, recoverable: true);
+    }, recoveryRoot: fixture.Root);
     return 0;
 }
 
@@ -287,7 +298,7 @@ static void PreparePending(Fixture fixture)
     {
         if (step == CopyStep.Verified)
             throw new InjectedFailure();
-    }, recoverable: true));
+    }, recoveryRoot: fixture.Root));
 }
 
 static void CheckRecoveryLeavesFiles(Fixture fixture, RecoveryResult expected)
@@ -295,7 +306,7 @@ static void CheckRecoveryLeavesFiles(Fixture fixture, RecoveryResult expected)
     string[] paths = [fixture.Source, fixture.Temporary, fixture.Backup,
         CopyRecovery.ReceiptPath(fixture.Temporary), CopyRecovery.ReceiptDraftPath(fixture.Temporary)];
     byte[]?[] before = paths.Select(path => File.Exists(path) ? File.ReadAllBytes(path) : null).ToArray();
-    Check(CopyRecovery.Recover(fixture.Temporary, fixture.Backup) == expected, $"Expected recovery result {expected}");
+    Check(CopyRecovery.Recover(fixture.Root, fixture.Temporary, fixture.Backup) == expected, $"Expected recovery result {expected}");
     for (int i = 0; i < paths.Length; i++)
     {
         if (before[i] is byte[] bytes)

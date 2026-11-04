@@ -22,7 +22,7 @@ Con el SDK de .NET 10, ejecuta `dotnet run --project experiments/CopyProbe` en W
 
 Añade `-- --compare` para comparar el flujo de .NET, CopyFile2 y Robocopy sobre el mismo conjunto sintético. Consulta el [resultado y sus límites](PLAN.md#resultado-de-la-comparación-de-transferencia).
 
-Usa `-- --uncached` para comparar la verificación con y sin la caché de Windows, o `-- --paths` para ensayar renombrados y una junction dentro de una carpeta desechable. [Resultados del laboratorio](PLAN.md#fallos-de-es-rutas-y-verificación-sin-caché).
+Usa `-- --uncached` para comparar la verificación con y sin la caché de Windows, o `-- --paths` para probar qué ocurre al sustituir una carpeta durante la copia o antes de recuperar. [Resultados del laboratorio](PLAN.md#fallos-de-es-rutas-y-verificación-sin-caché).
 
 La revisión de opiniones externas incorpora diagnóstico de archivos en uso, recuperación por carpetas/fecha, bandeja y cuarentena previa al borrado. Las optimizaciones de E/S y consumo se deciden mediante pruebas. El plan distingue medidas de protección de garantías todavía no demostradas.
 

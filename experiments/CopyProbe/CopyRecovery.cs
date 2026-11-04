@@ -1,10 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Win32.SafeHandles;
 
 internal enum RecoveryResult
 {
     NoReceipt,
     InvalidReceipt,
+    WrongDirectory,
     MissingData,
     Conflict,
     HashMismatch,
@@ -16,22 +18,26 @@ internal enum RecoveryResult
 // operation use the same temporary and final paths and cooperate with its lock.
 internal static class CopyRecovery
 {
-    private static ReadOnlySpan<byte> Magic => "FTREADY1"u8;
+    private static ReadOnlySpan<byte> Magic => "FTREADY2"u8;
     private const int DataHashEnd = 8 + SHA256.HashSizeInBytes;
-    private const int PayloadSize = DataHashEnd + SHA256.HashSizeInBytes;
+    private const int NameHashEnd = DataHashEnd + SHA256.HashSizeInBytes;
+    private const int PayloadSize = NameHashEnd + 24;
     private const int ReceiptSize = PayloadSize + SHA256.HashSizeInBytes;
 
     public static string ReceiptPath(string temporary) => temporary + ".ready";
     public static string ReceiptDraftPath(string temporary) => ReceiptPath(temporary) + ".tmp";
     public static string LockPath(string temporary) => temporary + ".lock";
 
-    public static FileStream Begin(string temporary, string destination)
+    public static FileStream Begin(SafeFileHandle directory, string temporary, string destination)
     {
-        var operation = Acquire(temporary, destination);
+        CheckParents(temporary, destination);
+        var operation = WindowsProbeNative.OpenPlainFile(directory, LockPath(temporary), FileAccess.ReadWrite, FileShare.None,
+            FileMode.OpenOrCreate);
         try
         {
-            if (IsRegularFile(ReceiptPath(temporary)) || IsRegularFile(ReceiptDraftPath(temporary)) ||
-                IsRegularFile(temporary) || IsRegularFile(destination))
+            if (WindowsProbeNative.PlainFileExists(directory, ReceiptPath(temporary)) ||
+                WindowsProbeNative.PlainFileExists(directory, ReceiptDraftPath(temporary)) ||
+                WindowsProbeNative.PlainFileExists(directory, temporary) || WindowsProbeNative.PlainFileExists(directory, destination))
                 throw new IOException("This operation already has files. Inspect recovery first.");
             return operation;
         }
@@ -42,83 +48,77 @@ internal static class CopyRecovery
         }
     }
 
-    public static void RecordVerified(string temporary, string destination, ReadOnlySpan<byte> hash,
+    public static void RecordVerified(string temporary, string destination, ReadOnlySpan<byte> hash, SafeFileHandle directory,
         Action<CopyStep, string>? checkpoint)
     {
         Span<byte> record = stackalloc byte[ReceiptSize];
         Magic.CopyTo(record);
         hash.CopyTo(record[Magic.Length..DataHashEnd]);
-        SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFileName(destination)), record[DataHashEnd..PayloadSize]);
+        SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFileName(destination)), record[DataHashEnd..NameHashEnd]);
+        WindowsProbeNative.DirectoryIdentity(directory).CopyTo(record[NameHashEnd..PayloadSize]);
         SHA256.HashData(record[..PayloadSize], record[PayloadSize..]);
         string draft = ReceiptDraftPath(temporary);
-        using (var receipt = new FileStream(draft, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        using (var receipt = WindowsProbeNative.OpenPlainFile(directory, draft, FileAccess.Write, FileShare.None,
+            FileMode.CreateNew, rename: true))
         {
             checkpoint?.Invoke(CopyStep.WritingReceipt, draft);
             receipt.Write(record);
             checkpoint?.Invoke(CopyStep.FlushingReceipt, draft);
             receipt.Flush(flushToDisk: true);
+            checkpoint?.Invoke(CopyStep.ReceiptFlushed, draft);
+            WindowsProbeNative.RenameNew(receipt.SafeFileHandle, directory, Path.GetFileName(ReceiptPath(temporary)));
         }
-        checkpoint?.Invoke(CopyStep.ReceiptFlushed, draft);
-        File.Move(draft, ReceiptPath(temporary));
     }
 
-    public static RecoveryResult Recover(string temporary, string destination)
+    public static RecoveryResult Recover(string root, string temporary, string destination)
     {
-        using var operation = Acquire(temporary, destination);
+        CheckParents(temporary, destination);
+        using var fence = new DirectoryFence(root, temporary, destination);
+        var directory = fence.Parent(destination);
         string receiptPath = ReceiptPath(temporary);
-        if (!IsRegularFile(receiptPath))
+        if (!WindowsProbeNative.PlainFileExists(directory, LockPath(temporary)))
+            return WindowsProbeNative.PlainFileExists(directory, receiptPath) ? RecoveryResult.InvalidReceipt : RecoveryResult.NoReceipt;
+        using var operation = WindowsProbeNative.OpenPlainFile(directory, LockPath(temporary), FileAccess.ReadWrite, FileShare.None);
+        if (!WindowsProbeNative.PlainFileExists(directory, receiptPath))
             return RecoveryResult.NoReceipt;
 
         Span<byte> record = stackalloc byte[ReceiptSize];
-        using (var receipt = new FileStream(receiptPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        using (var receipt = WindowsProbeNative.OpenPlainFile(directory, receiptPath, FileAccess.Read, FileShare.Read))
         {
             if (receipt.ReadAtLeast(record, record.Length, throwOnEndOfStream: false) != record.Length ||
                 receipt.ReadByte() != -1 ||
                 !record[..Magic.Length].SequenceEqual(Magic) ||
                 !SHA256.HashData(record[..PayloadSize]).AsSpan().SequenceEqual(record[PayloadSize..]) ||
                 !SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFileName(destination))).AsSpan()
-                    .SequenceEqual(record[DataHashEnd..PayloadSize]))
+                    .SequenceEqual(record[DataHashEnd..NameHashEnd]))
                 return RecoveryResult.InvalidReceipt;
         }
+        if (!WindowsProbeNative.DirectoryIdentity(directory).AsSpan().SequenceEqual(record[NameHashEnd..PayloadSize]))
+            return RecoveryResult.WrongDirectory;
 
-        bool hasTemporary = IsRegularFile(temporary);
-        bool hasFinal = IsRegularFile(destination);
+        bool hasTemporary = WindowsProbeNative.PlainFileExists(directory, temporary);
+        bool hasFinal = WindowsProbeNative.PlainFileExists(directory, destination);
         if (hasTemporary && hasFinal)
             return RecoveryResult.Conflict;
         if (!hasTemporary && !hasFinal)
             return RecoveryResult.MissingData;
 
-        using (var data = new FileStream(hasTemporary ? temporary : destination, FileMode.Open, FileAccess.Read, FileShare.Read))
-            if (!SHA256.HashData(data).AsSpan().SequenceEqual(record[Magic.Length..DataHashEnd]))
-                return RecoveryResult.HashMismatch;
+        using var data = WindowsProbeNative.OpenPlainFile(directory, hasTemporary ? temporary : destination,
+            FileAccess.Read, FileShare.Read, rename: hasTemporary);
+        if (!SHA256.HashData(data).AsSpan().SequenceEqual(record[Magic.Length..DataHashEnd]))
+            return RecoveryResult.HashMismatch;
 
         if (hasFinal)
             return RecoveryResult.AlreadyPublished;
 
-        File.Move(temporary, destination);
+        WindowsProbeNative.RenameNew(data.SafeFileHandle, directory, Path.GetFileName(destination));
         return RecoveryResult.Published;
     }
 
-    private static FileStream Acquire(string temporary, string destination)
+    private static void CheckParents(string temporary, string destination)
     {
         if (Path.GetDirectoryName(temporary) != Path.GetDirectoryName(destination))
             throw new ArgumentException("Recovery requires both files in the same directory.");
-        string path = LockPath(temporary);
-        IsRegularFile(path);
-        return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
     }
 
-    private static bool IsRegularFile(string path)
-    {
-        try
-        {
-            if ((File.GetAttributes(path) & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0)
-                throw new IOException("An operation path is a directory or reparse point.");
-            return true;
-        }
-        catch (FileNotFoundException)
-        {
-            return false;
-        }
-    }
 }
