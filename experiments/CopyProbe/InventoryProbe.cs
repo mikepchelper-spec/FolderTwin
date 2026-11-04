@@ -100,6 +100,17 @@ internal static class InventoryProbe
             Check(FolderInventory.Omission(FileAttributes.Encrypted) == InventoryIssueKind.Encrypted,
                 "Encrypted metadata was accepted.");
             Console.WriteLine("PASS unsupported names are explicit; synthetic offline, recall, and encrypted attribute policies reject those entries.");
+            string invalidUnicode = Path.Combine(root, "invalid-\ud800.bin");
+            files.Add(invalidUnicode);
+            using (var directory = new DirectoryFence(root))
+            using (var file = WindowsProbeNative.OpenPlainFile(directory.Root, invalidUnicode, FileAccess.Write,
+                FileShare.None, FileMode.CreateNew))
+            {
+            }
+            var invalidName = FolderInventory.Scan(root);
+            Check(!invalidName.Complete && invalidName.Issues.Any(issue => issue.Kind == InventoryIssueKind.ReadFailure),
+                "An invalid UTF-16 name was silently replaced during decoding.");
+            Console.WriteLine("PASS an invalid UTF-16 name leaves the directory inventory incomplete instead of changing its name.");
             Check(File.ReadAllBytes(Path.Combine(outside, "sentinel.bin")).AsSpan().SequenceEqual("untouched sentinel"u8),
                 "The outside sentinel changed.");
             return 0;

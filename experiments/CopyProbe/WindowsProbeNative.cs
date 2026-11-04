@@ -5,6 +5,7 @@ using Microsoft.Win32.SafeHandles;
 
 internal static class WindowsProbeNative
 {
+    private static readonly Encoding DirectoryNameEncoding = new UnicodeEncoding(false, false, true);
     [DllImport("kernel32.dll", EntryPoint = "CreateFileW", CharSet = CharSet.Unicode, SetLastError = true)]
     internal static extern SafeFileHandle CreateFile(string path, uint access, FileShare share, nint security,
         uint disposition, uint flags, nint template);
@@ -178,7 +179,15 @@ internal static class WindowsProbeNative
                 if (nameLength == 0 || nameLength % 2 != 0 || nameLength > buffer.Length - offset - headerSize ||
                     (next != 0 && (next % 8 != 0 || next < headerSize + nameLength || next > buffer.Length - offset - headerSize)))
                     throw new InvalidDataException("Invalid directory entry length.");
-                string name = Encoding.Unicode.GetString(buffer, offset + headerSize, checked((int)nameLength));
+                string name;
+                try
+                {
+                    name = DirectoryNameEncoding.GetString(buffer, offset + headerSize, checked((int)nameLength));
+                }
+                catch (DecoderFallbackException error)
+                {
+                    throw new InvalidDataException("Unsupported UTF-16 directory name.", error);
+                }
                 long length = BitConverter.ToInt64(buffer, offset + 40);
                 if (length < 0)
                     throw new InvalidDataException("Invalid directory entry size.");
