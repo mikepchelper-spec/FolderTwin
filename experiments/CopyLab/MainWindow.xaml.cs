@@ -9,11 +9,12 @@ namespace CopyLab;
 
 public partial class MainWindow : Window
 {
-    private readonly LabSession session;
+    private readonly BatchFixture session;
     private readonly Queue<string?>? testSelections;
     private bool sourceSelected;
     private bool destinationSelected;
     private bool analyzed;
+    private bool copyStarted;
     private bool copied;
     private bool restored;
     private bool busy;
@@ -22,7 +23,7 @@ public partial class MainWindow : Window
     internal MainWindow(bool smoke)
     {
         InitializeComponent();
-        session = new LabSession();
+        session = new BatchFixture();
         if (smoke)
             testSelections = new Queue<string?>([null, session.Destination, session.Source, session.Destination]);
     }
@@ -79,12 +80,12 @@ public partial class MainWindow : Window
         RefreshActions();
         try
         {
-            InventoryResult result = await Task.Run(session.Analyze);
-            analyzed = result.Complete;
-            PreviewText.Text = analyzed
-                ? $"Archivo nuevo · muestra.txt · {result.Bytes:N0} bytes\nSe copiará a Destino y se restaurará en una carpeta separada."
-                : $"Análisis incompleto · {result.Issues.Length:N0} incidencia(s). Revisa el origen antes de copiar.";
-            SetStatus(analyzed ? "Revisión completada. Puedes copiar el archivo de prueba." : "El análisis necesita revisión.");
+            BatchPlan plan = await Task.Run(session.Analyze);
+            analyzed = true;
+            PreviewText.Text = $"{plan.Files.Length:N0} archivos · {plan.Bytes:N0} bytes · {plan.Directories.Length:N0} carpetas\n" +
+                string.Join("\n", plan.Files.Select(file => file.RelativePath));
+            ResultsList.ItemsSource = null;
+            SetStatus("Revisión completada. Puedes copiar el lote de prueba.");
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException
             or Win32Exception or ArgumentException)
@@ -116,28 +117,27 @@ public partial class MainWindow : Window
         busy = true;
         RefreshActions();
         SetStatus(restore ? "Restaurando y verificando…" : "Copiando y verificando…");
+        if (!restore)
+            copyStarted = true;
         try
         {
+            BatchResult result = await Task.Run(() => restore ? session.Restore() : session.Copy());
             if (restore)
-            {
-                await Task.Run(session.Restore);
-                restored = true;
-                SetStatus("Restauración verificada. El archivo en Restaurado coincide con el original.");
-            }
+                restored = result.Complete;
             else
-            {
-                await Task.Run(session.Copy);
-                copied = true;
-                SetStatus("Copia verificada. Ya puedes probar la restauración.");
-            }
-        }
-        catch (Exception error) when (FileUseDiagnostics.IsSharingViolation(error))
-        {
-            var users = await Task.Run(() => FileUseDiagnostics.TryGetUsers(restore ? session.CopyFile : session.SourceFile));
+                copied = result.Complete;
+            ResultsList.ItemsSource = result.Entries.Select(entry => $"{entry.RelativePath} · {Describe(entry)}").ToArray();
+            string[] inUse = result.Entries.Where(entry => entry.InUse).Take(16)
+                .Select(entry => Path.Combine(restore ? session.Destination : session.Source, entry.RelativePath)).ToArray();
+            var users = await Task.Run(() => FileUseDiagnostics.TryGetUsers(inUse));
             string[] applications = users.Select(user => user.Application.Trim())
                 .Where(name => name.Length != 0).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToArray();
             string detail = applications.Length == 0 ? "" : " Aplicaciones detectadas por Windows: " + string.Join(", ", applications) + ".";
-            SetStatus("La prueba no se completó. Un archivo está en uso. Cierra el archivo y vuelve a intentarlo." + detail);
+            string status = result.Complete
+                ? restore ? $"Restauración verificada: {result.VerifiedFiles:N0} archivos y sus carpetas."
+                    : $"Lote copiado y verificado: {result.VerifiedFiles:N0} archivos. Ya puedes restaurarlo."
+                : $"Resultado parcial: {result.VerifiedFiles:N0} de {session.Plan!.Files.Length:N0} archivos verificados. Revisa las incidencias y reintenta.";
+            SetStatus(status + (result.Problem is null ? "" : " " + result.Problem) + detail);
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException
             or Win32Exception or ArgumentException)
@@ -153,9 +153,10 @@ public partial class MainWindow : Window
 
     private void RefreshActions()
     {
-        SourceButton.IsEnabled = DestinationButton.IsEnabled = !busy && !copied;
-        AnalyzeButton.IsEnabled = !busy && !copied && sourceSelected && destinationSelected;
-        CopyButton.IsEnabled = AnalyzeButton.IsEnabled && analyzed;
+        SourceButton.IsEnabled = DestinationButton.IsEnabled = !busy && !copyStarted;
+        AnalyzeButton.IsEnabled = !busy && !copyStarted && sourceSelected && destinationSelected;
+        CopyButton.IsEnabled = !busy && !copied && analyzed;
+        CopyButton.Content = copyStarted && !copied ? "_Reintentar copia" : "_Copiar y verificar";
         RestoreButton.IsEnabled = !busy && copied && !restored;
     }
 
@@ -164,6 +165,15 @@ public partial class MainWindow : Window
         StatusText.Text = message;
         UIElementAutomationPeer.FromElement(StatusText)?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
     }
+
+    private static string Describe(BatchEntryResult entry) => entry.Status switch
+    {
+        BatchStatus.Copied => "Copia verificada",
+        BatchStatus.Recovered => "Temporal recuperado y verificado",
+        BatchStatus.AlreadyVerified => "Copia existente verificada",
+        BatchStatus.DirectoryReady => "Carpeta preparada",
+        _ => entry.Detail ?? "Pendiente de revisión"
+    };
 
     protected override void OnClosing(CancelEventArgs e)
     {
@@ -215,15 +225,16 @@ public partial class MainWindow : Window
         }
         Click(AnalyzeButton);
         await activeTask;
-        Check(analyzed && CopyButton.IsEnabled && PreviewText.Text.Contains("muestra.txt", StringComparison.Ordinal),
+        Check(analyzed && CopyButton.IsEnabled && PreviewText.Text.Contains("3 archivos", StringComparison.Ordinal),
             "The valid preview did not enable the copy.");
         using (var writer = new FileStream(session.SourceFile, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
         {
             Click(CopyButton);
             await activeTask;
             Check(!copied && !File.Exists(session.CopyFile) && !RestoreButton.IsEnabled &&
-                StatusText.Text.StartsWith("La prueba no se completó.", StringComparison.Ordinal) &&
-                StatusText.Text.Contains("está en uso", StringComparison.Ordinal), "Copy failure was hidden.");
+                StatusText.Text.StartsWith("Resultado parcial: 2 de 3", StringComparison.Ordinal) &&
+                ResultsList.Items.Cast<string>().Any(row => row.Contains("está en uso", StringComparison.Ordinal)) &&
+                !AnalyzeButton.IsEnabled && CopyButton.IsEnabled, "A partial batch or its retry was hidden.");
         }
         Click(CopyButton);
         await activeTask;
@@ -231,8 +242,7 @@ public partial class MainWindow : Window
         Click(RestoreButton);
         await activeTask;
         Check(restored && !RestoreButton.IsEnabled, StatusText.Text);
-        Check(File.ReadAllBytes(session.RestoredFile).AsSpan().SequenceEqual(File.ReadAllBytes(session.SourceFile)),
-            "Restored file differs from the source.");
+        session.CheckRestored();
 
         static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         static void Check(bool condition, string message)

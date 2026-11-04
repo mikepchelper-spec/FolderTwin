@@ -16,6 +16,12 @@ internal static class WindowsProbeNative
     internal static SafeFileHandle OpenPlainDirectory(SafeFileHandle parent, string name) =>
         OpenRelative(parent, name, 0x01 | 0x80, FileShare.ReadWrite, 1, directory: true);
 
+    internal static SafeFileHandle OpenOrCreatePlainDirectory(SafeFileHandle parent, string name)
+    {
+        DirectoryFence.CheckName(name);
+        return OpenRelative(parent, name, 0x01 | 0x80, FileShare.ReadWrite, 3, directory: true);
+    }
+
     internal static FileStream OpenPlainFile(SafeFileHandle parent, string path, FileAccess access, FileShare share,
         FileMode mode = FileMode.Open,
         bool rename = false)

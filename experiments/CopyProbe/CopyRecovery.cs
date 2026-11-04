@@ -70,7 +70,8 @@ internal static class CopyRecovery
         }
     }
 
-    public static RecoveryResult Recover(string root, string temporary, string destination, DestinationBinding? binding = null)
+    public static RecoveryResult Recover(string root, string temporary, string destination, DestinationBinding? binding = null,
+        byte[]? expectedHash = null)
     {
         CheckParents(temporary, destination);
         using var fence = new DirectoryFence(root, temporary, destination);
@@ -96,6 +97,8 @@ internal static class CopyRecovery
         }
         if (!WindowsProbeNative.DirectoryIdentity(directory).AsSpan().SequenceEqual(record[NameHashEnd..PayloadSize]))
             return RecoveryResult.WrongDirectory;
+        if (expectedHash is not null && !record[Magic.Length..DataHashEnd].SequenceEqual(expectedHash))
+            return RecoveryResult.HashMismatch;
 
         bool hasTemporary = WindowsProbeNative.PlainFileExists(directory, temporary);
         bool hasFinal = WindowsProbeNative.PlainFileExists(directory, destination);
