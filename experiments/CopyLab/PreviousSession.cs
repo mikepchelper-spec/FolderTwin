@@ -30,12 +30,12 @@ internal sealed class PreviousSession
         }
     }
 
-    internal BatchResult Resume(CancellationToken cancellationToken, IProgress<BatchProgress>? progress) =>
+    internal BatchResult Resume(CancellationToken cancellationToken, IProgress<BatchProgress>? progress, Action<BatchProgress> waitBetweenFiles) =>
         PendingBatch.Resume(Root, Destination, cancellationToken, validate: plan =>
         {
             ValidateSamples(plan);
             RequireSameDestination(plan.Target);
-        }, finishCurrentFileOnCancel: true, progress: progress);
+        }, finishCurrentFileOnCancel: true, progress: progress, waitBetweenFiles: waitBetweenFiles);
 
     internal BatchResult Restore(BatchFixture output, IProgress<BatchProgress>? progress)
     {

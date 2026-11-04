@@ -129,7 +129,7 @@ internal static class PendingBatch
 
     internal static BatchResult Resume(string fixtureRoot, string destination, CancellationToken cancellationToken = default,
         Action<string, CopyStep, string>? checkpoint = null, Action<BatchPlan>? validate = null, bool finishCurrentFileOnCancel = false,
-        IProgress<BatchProgress>? progress = null)
+        IProgress<BatchProgress>? progress = null, Action<BatchProgress>? waitBetweenFiles = null)
     {
         BatchResult? result = null;
         try
@@ -137,7 +137,7 @@ internal static class PendingBatch
             var plan = Read(fixtureRoot, destination);
             validate?.Invoke(plan);
             result = FolderBatch.Run(plan, cancellationToken, checkpoint, resume: true, finishCurrentFileOnCancel: finishCurrentFileOnCancel,
-                progress: progress);
+                progress: progress, waitBetweenFiles: waitBetweenFiles);
             if (result.Complete)
             {
                 if (cancellationToken.IsCancellationRequested)
@@ -153,12 +153,14 @@ internal static class PendingBatch
     }
 
     internal static BatchResult Start(BatchPlan plan, CancellationToken cancellationToken = default,
-        Action<string, CopyStep, string>? checkpoint = null, IProgress<BatchProgress>? progress = null)
+        Action<string, CopyStep, string>? checkpoint = null, IProgress<BatchProgress>? progress = null,
+        Action<BatchProgress>? waitBetweenFiles = null)
     {
         try
         {
             Save(plan);
-            return Resume(plan.FixtureRoot, plan.Destination, cancellationToken, checkpoint, finishCurrentFileOnCancel: true, progress: progress);
+            return Resume(plan.FixtureRoot, plan.Destination, cancellationToken, checkpoint, finishCurrentFileOnCancel: true,
+                progress: progress, waitBetweenFiles: waitBetweenFiles);
         }
         catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or JsonException or Win32Exception or UnauthorizedAccessException)
         {

@@ -56,6 +56,8 @@
                         Margin="8,0,0,8" IsEnabled="False" AutomationProperties.AutomationId="VerifyBackup" />
                 <Button x:Name="CancelCopyButton" Content="_Cancelar copia" Click="CancelCopyClick"
                         Margin="8,0,0,8" Visibility="Collapsed" AutomationProperties.AutomationId="CancelCopy" />
+                <Button x:Name="PauseCopyButton" Content="_Pausar copia" Click="PauseCopyClick"
+                        Margin="8,0,0,8" Visibility="Collapsed" AutomationProperties.AutomationId="PauseCopy" />
             </WrapPanel>
             <StackPanel x:Name="OperationProgress" Visibility="Collapsed" Margin="0,0,0,8">
                 <ProgressBar x:Name="FileProgress" Height="6" Margin="0,0,0,6"

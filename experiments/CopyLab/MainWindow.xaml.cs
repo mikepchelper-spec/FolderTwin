@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     private bool restored;
     private bool busy;
     private CancellationTokenSource? copyCancellation;
+    private ManualResetEventSlim? copyPause;
     private Action<string, CopyStep, string>? copyCheckpoint;
     private Task activeTask = Task.CompletedTask;
 
@@ -175,11 +176,30 @@ public partial class MainWindow : Window
         SetStatus("Cancelación solicitada. Espera a que termine el paso actual.");
     }
 
+    private void PauseCopyClick(object sender, RoutedEventArgs e)
+    {
+        if (!PauseCopyButton.IsEnabled || copyPause is not { } pause)
+            return;
+        if (pause.IsSet)
+        {
+            pause.Reset();
+            SetStatus("Pausa solicitada. Espera a que termine el paso actual.");
+        }
+        else
+        {
+            pause.Set();
+            SetStatus("Continuando la copia…");
+        }
+        RefreshActions();
+    }
+
     private async Task RunAsync(AttemptOperation operation)
     {
         bool restore = operation == AttemptOperation.Restore;
         using var cancellation = operation == AttemptOperation.Copy ? new CancellationTokenSource() : null;
+        using var pause = cancellation is null ? null : new ManualResetEventSlim(initialState: true);
         copyCancellation = cancellation;
+        copyPause = pause;
         CancellationToken token = cancellation?.Token ?? CancellationToken.None;
         busy = true;
         RefreshActions();
@@ -200,11 +220,7 @@ public partial class MainWindow : Window
         {
             if (!showProgress || token.IsCancellationRequested)
                 return;
-            FileProgress.IsIndeterminate = false;
-            FileProgress.Maximum = Math.Max(1, update.TotalFiles);
-            FileProgress.Value = update.ProcessedFiles;
-            ProgressText.Text = $"{update.ProcessedFiles:N0} de {update.TotalFiles:N0} procesados · {update.VerifiedFiles:N0} verificados\n" +
-                (update.CurrentPath is { } path ? $"En curso · {path}" : "Preparando el resultado final…");
+            ShowProgress(update, update.CurrentPath is { } path ? $"En curso · {path}" : "Preparando el resultado final…");
         });
         BatchResult? outcome = null;
         try
@@ -214,10 +230,11 @@ public partial class MainWindow : Window
                 AttemptOperation.Verify => BatchCatalog.Verify(previous?.Destination ?? session.Destination,
                     previous?.Binding ?? session.DestinationBinding, progress),
                 AttemptOperation.Restore => previous?.Restore(session, progress) ?? session.Restore(progress),
-                _ => previous?.Resume(token, progress) ?? session.Copy(token, copyCheckpoint, progress)
+                _ => previous?.Resume(token, progress, WaitWhilePaused) ?? session.Copy(token, copyCheckpoint, progress, WaitWhilePaused)
             });
             HideProgress();
             copyCancellation = null;
+            copyPause = null;
             RefreshActions();
             outcome = result;
             if (restore)
@@ -257,6 +274,7 @@ public partial class MainWindow : Window
         {
             HideProgress();
             copyCancellation = null;
+            copyPause = null;
             RefreshActions();
             if (outcome is not null)
                 await RefreshHistoryAsync(outcome, operation);
@@ -269,6 +287,29 @@ public partial class MainWindow : Window
             showProgress = false;
             OperationProgress.Visibility = Visibility.Collapsed;
         }
+
+        void WaitWhilePaused(BatchProgress update)
+        {
+            if (pause is null || pause.IsSet)
+                return;
+            _ = Dispatcher.BeginInvoke(() =>
+            {
+                if (copyPause == pause && !pause.IsSet && !token.IsCancellationRequested)
+                {
+                    ShowProgress(update, "En pausa entre archivos");
+                    SetStatus("Copia en pausa. Puedes continuarla o cancelarla.");
+                }
+            });
+            pause.Wait(token);
+        }
+    }
+
+    private void ShowProgress(BatchProgress update, string stage)
+    {
+        FileProgress.IsIndeterminate = false;
+        FileProgress.Maximum = Math.Max(1, update.TotalFiles);
+        FileProgress.Value = update.ProcessedFiles;
+        ProgressText.Text = $"{update.ProcessedFiles:N0} de {update.TotalFiles:N0} procesados · {update.VerifiedFiles:N0} verificados\n{stage}";
     }
 
     private async Task RefreshHistoryAsync(BatchResult? outcome = null, AttemptOperation operation = AttemptOperation.Copy)
@@ -341,6 +382,9 @@ public partial class MainWindow : Window
         VerifyButton.IsEnabled = !busy && copied;
         CancelCopyButton.Visibility = copyCancellation is null ? Visibility.Collapsed : Visibility.Visible;
         CancelCopyButton.IsEnabled = copyCancellation is { IsCancellationRequested: false };
+        PauseCopyButton.Visibility = CancelCopyButton.Visibility;
+        PauseCopyButton.IsEnabled = CancelCopyButton.IsEnabled;
+        PauseCopyButton.Content = copyPause is { IsSet: false } ? "C_ontinuar copia" : "_Pausar copia";
     }
 
     private void SetStatus(string message)
@@ -412,20 +456,28 @@ public partial class MainWindow : Window
         Check(analyzed && CopyButton.IsEnabled && PreviewText.Text.Contains("3 archivos", StringComparison.Ordinal),
             "The valid preview did not enable the copy.");
         string firstFile = session.Plan!.Files[0].RelativePath;
+        bool pauseRequested = false;
         copyCheckpoint = (_, step, _) =>
         {
-            if (step == CopyStep.Writing)
+            if (step == CopyStep.Writing && !pauseRequested)
                 Dispatcher.Invoke(() =>
                 {
-                    if (!CancelCopyButton.IsEnabled)
-                        return;
                     Check(OperationProgress.Visibility == Visibility.Visible && FileProgress.Maximum == 3 && FileProgress.Value == 0 &&
                         ProgressText.Text.Contains(firstFile, StringComparison.Ordinal),
                         "The active copy did not show its first file and total.");
-                    Click(CancelCopyButton);
+                    pauseRequested = true;
+                    Click(PauseCopyButton);
                 }, System.Windows.Threading.DispatcherPriority.Background);
         };
         Click(CopyButton);
+        await WaitForPauseAsync();
+        try
+        {
+            Check(FileProgress.Value == 1 && File.Exists(Path.Combine(session.Destination, firstFile)) &&
+                !File.Exists(session.CopyFile) && !activeTask.IsCompleted,
+                "Pausing did not finish the current file before stopping.");
+        }
+        finally { Click(CancelCopyButton); }
         await activeTask;
         copyCheckpoint = null;
         Check(StatusText.Text.StartsWith("Copia cancelada.", StringComparison.Ordinal) && CopyButton.IsEnabled &&
@@ -453,9 +505,17 @@ public partial class MainWindow : Window
                 {
                     sawRetryProgress = FileProgress.Value == 1 && ProgressText.Text.Contains("1 verificados", StringComparison.Ordinal) &&
                         ProgressText.Text.Contains(path, StringComparison.Ordinal);
+                    Click(PauseCopyButton);
                 }, System.Windows.Threading.DispatcherPriority.Background);
         };
         Click(CopyButton);
+        await WaitForPauseAsync();
+        try
+        {
+            Check(FileProgress.Value == 2 && !File.Exists(Path.Combine(session.Destination, BatchCatalog.CommitName)),
+                "The paused retry did not stop before confirming the batch.");
+        }
+        finally { Click(PauseCopyButton); }
         await activeTask;
         copyCheckpoint = null;
         Check(sawRetryProgress && copied && File.Exists(session.CopyFile) && RestoreButton.IsEnabled, StatusText.Text);
@@ -572,6 +632,23 @@ public partial class MainWindow : Window
             confirmedWindow.session.CheckRestored();
         }
         finally { confirmedWindow.Close(); }
+
+        async Task WaitForPauseAsync()
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            try
+            {
+                while (!StatusText.Text.StartsWith("Copia en pausa.", StringComparison.Ordinal) && !activeTask.IsCompleted)
+                    await Task.Delay(15, deadline.Token);
+                Check(!activeTask.IsCompleted, "The operation completed without pausing.");
+            }
+            catch
+            {
+                Click(CancelCopyButton);
+                await activeTask;
+                throw;
+            }
+        }
 
         static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         static void Check(bool condition, string message)

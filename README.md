@@ -38,6 +38,8 @@ Durante una copia, **Cancelar copia** solicita detener el lote en el próximo pu
 
 Durante la copia, el reintento, la restauración y la verificación, la ventana muestra el archivo en curso y los recuentos de archivos procesados y verificados. El resultado final aparece al terminar las comprobaciones.
 
+**Pausar copia** espera al próximo límite entre archivos. La ventana indica cuándo el lote queda en pausa y permite continuarlo o cancelarlo.
+
 La ventana muestra el nombre de la sesión y conserva su carpeta temporal si iniciaste la copia. En otra ejecución, pulsa **Abrir sesión anterior** y elige esa carpeta `FolderTwin-Batch-…`. El laboratorio ofrece reintentar un lote pendiente o restaurar uno confirmado. Al restaurar una sesión anterior, muestra la ruta de una carpeta de prueba nueva que se retira al cerrar. CI comprueba estos recorridos con `-- --smoke`.
 
 En un lote confirmado, pulsa **Verificar respaldo** para comprobar las carpetas y comparar el tamaño y SHA-256 de cada archivo con el catálogo. La ventana señala las rutas ausentes, alteradas o que no pudo leer. La comprobación es de solo lectura sobre el respaldo.

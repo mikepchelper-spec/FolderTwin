@@ -59,10 +59,11 @@ internal sealed class BatchFixture : IDisposable
             throw new InvalidDataException("Este laboratorio solo admite los archivos sintéticos generados para la sesión.");
     }
     internal BatchResult Copy(CancellationToken cancellationToken = default, Action<string, CopyStep, string>? checkpoint = null,
-        IProgress<BatchProgress>? progress = null)
+        IProgress<BatchProgress>? progress = null, Action<BatchProgress>? waitBetweenFiles = null)
     {
-        return Plan is null ? PendingBatch.Resume(Root, Destination, cancellationToken, checkpoint, finishCurrentFileOnCancel: true, progress: progress)
-            : PendingBatch.Start(Plan, cancellationToken, checkpoint, progress);
+        return Plan is null ? PendingBatch.Resume(Root, Destination, cancellationToken, checkpoint, finishCurrentFileOnCancel: true,
+                progress: progress, waitBetweenFiles: waitBetweenFiles)
+            : PendingBatch.Start(Plan, cancellationToken, checkpoint, progress, waitBetweenFiles);
     }
     internal BatchResult Restore(IProgress<BatchProgress>? progress = null)
     {

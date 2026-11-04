@@ -60,7 +60,7 @@ internal static class FolderBatch
 
     internal static BatchResult Run(BatchPlan plan, CancellationToken cancellationToken = default,
         Action<string, CopyStep, string>? checkpoint = null, bool resume = false, bool finishCurrentFileOnCancel = false,
-        IProgress<BatchProgress>? progress = null)
+        IProgress<BatchProgress>? progress = null, Action<BatchProgress>? waitBetweenFiles = null)
     {
         var results = new List<BatchEntryResult>();
         DirectoryFence? source = null;
@@ -88,6 +88,8 @@ internal static class FolderBatch
             foreach (var item in plan.Files)
             {
                 if (!cancellationToken.IsCancellationRequested)
+                    waitBetweenFiles?.Invoke(new(processedFiles, plan.Files.Length, verifiedFiles, CurrentPath: null));
+                if (!cancellationToken.IsCancellationRequested)
                     progress?.Report(new(processedFiles, plan.Files.Length, verifiedFiles, item.RelativePath));
                 Execute(item.RelativePath, false, () => WithDirectories(destination.Root,
                     Path.GetDirectoryName(item.RelativePath) ?? "", () => CopyOne(item)));
@@ -96,6 +98,8 @@ internal static class FolderBatch
                 if (results[^1].Succeeded)
                     verifiedFiles++;
             }
+            cancellationToken.ThrowIfCancellationRequested();
+            waitBetweenFiles?.Invoke(new(processedFiles, plan.Files.Length, verifiedFiles, CurrentPath: null));
             cancellationToken.ThrowIfCancellationRequested();
             progress?.Report(new(processedFiles, plan.Files.Length, verifiedFiles, CurrentPath: null));
             if (sourceReady)
