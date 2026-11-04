@@ -18,7 +18,7 @@ C# + .NET 10 LTS + WPF con tema Fluent, APIs de archivos de Windows y Programado
 
 Primero comprobar copia y restauración en carpetas desechables. Después versionado con objetos por contenido SHA-256 y programación. El espejo y la limpieza se incorporan cuando sus protecciones hayan pasado pruebas de interrupción. La interfaz sencilla no debe ocultar fallos ni archivos omitidos; los archivos solo disponibles en la nube no se descargan automáticamente.
 
-El experimento inicial ejecuta `dotnet run --project experiments/CopyProbe` con .NET 10 SDK. Genera un archivo sintético en una carpeta temporal propia, copia, solicita flush, verifica SHA-256 y restaura. No acepta rutas del usuario y no implementa aún las protecciones ni pruebas de fallo necesarias para respaldos reales.
+Con el SDK de .NET 10, ejecuta `dotnet run --project experiments/CopyProbe` en Windows. El experimento genera sus propios datos temporales y comprueba copia, flush, verificación SHA-256 y restauración. Incluye fallos inyectados, archivos ocupados, corrupción y terminación del proceso antes y después de publicar la copia. GitHub Actions ejecuta las mismas comprobaciones. El alcance actual se limita a datos sintéticos en un volumen.
 
 La revisión de opiniones externas incorpora diagnóstico de archivos en uso, recuperación por carpetas/fecha, bandeja y cuarentena previa al borrado. Las optimizaciones de E/S y consumo se deciden mediante pruebas. El plan distingue medidas de protección de garantías todavía no demostradas.
 
