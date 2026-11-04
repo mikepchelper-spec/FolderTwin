@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.Win32.SafeHandles;
 
 internal static class WindowsProbeNative
@@ -145,6 +146,48 @@ internal static class WindowsProbeNative
         if (!GetIdentity(directory, fileIdInfo, identity, identity.Length))
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "Reading directory identity failed.");
         return identity;
+    }
+
+    internal readonly record struct DirectoryEntry(string Name, FileAttributes Attributes, long Length);
+
+    internal static IEnumerable<DirectoryEntry> ReadDirectory(SafeFileHandle directory)
+    {
+        // FILE_FULL_DIR_INFO has a 68-byte header followed by a UTF-16 name.
+        const int headerSize = 68;
+        byte[] buffer = new byte[64 * 1024];
+        bool restart = true;
+        while (true)
+        {
+            RequirePlain(directory, directory: true);
+            Array.Clear(buffer);
+            if (!GetIdentity(directory, restart ? 15 : 14, buffer, buffer.Length))
+            {
+                int error = Marshal.GetLastPInvokeError();
+                if (error == 18) // ERROR_NO_MORE_FILES
+                    yield break;
+                throw new IOException("Reading directory entries failed.", new Win32Exception(error));
+            }
+            restart = false;
+            int offset = 0;
+            while (true)
+            {
+                if (offset > buffer.Length - headerSize)
+                    throw new InvalidDataException("Invalid directory entry header.");
+                uint next = BitConverter.ToUInt32(buffer, offset);
+                uint nameLength = BitConverter.ToUInt32(buffer, offset + 60);
+                if (nameLength == 0 || nameLength % 2 != 0 || nameLength > buffer.Length - offset - headerSize ||
+                    (next != 0 && (next % 8 != 0 || next < headerSize + nameLength || next > buffer.Length - offset - headerSize)))
+                    throw new InvalidDataException("Invalid directory entry length.");
+                string name = Encoding.Unicode.GetString(buffer, offset + headerSize, checked((int)nameLength));
+                long length = BitConverter.ToInt64(buffer, offset + 40);
+                if (length < 0)
+                    throw new InvalidDataException("Invalid directory entry size.");
+                yield return new DirectoryEntry(name, (FileAttributes)BitConverter.ToUInt32(buffer, offset + 56), length);
+                if (next == 0)
+                    break;
+                offset += checked((int)next);
+            }
+        }
     }
 
     internal static unsafe string VolumePath(SafeFileHandle directory)

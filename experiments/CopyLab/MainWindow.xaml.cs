@@ -13,6 +13,7 @@ public partial class MainWindow : Window
     private readonly Queue<string?>? testSelections;
     private bool sourceSelected;
     private bool destinationSelected;
+    private bool analyzed;
     private bool copied;
     private bool restored;
     private bool busy;
@@ -38,10 +39,12 @@ public partial class MainWindow : Window
         if (candidate is null)
             return;
         selected = string.Equals(Path.TrimEndingDirectorySeparator(candidate), expected, StringComparison.OrdinalIgnoreCase);
+        analyzed = false;
+        PreviewText.Text = "Analiza las carpetas para revisar qué se copiará.";
         string folder = Path.GetFileName(expected);
         label.Text = selected ? $"{folder} · carpeta de prueba" : $"Elige la carpeta {folder} del laboratorio.";
         SetStatus(selected
-            ? sourceSelected && destinationSelected ? "Todo listo para copiar el archivo de prueba." : "Selecciona la otra carpeta."
+            ? sourceSelected && destinationSelected ? "Todo listo para analizar las carpetas de prueba." : "Selecciona la otra carpeta."
             : $"Para esta prueba, elige la carpeta {folder}.");
         RefreshActions();
     }
@@ -59,6 +62,41 @@ public partial class MainWindow : Window
             DereferenceLinks = false
         };
         return dialog.ShowDialog(this) == true ? dialog.FolderName : null;
+    }
+
+    private void AnalyzeClick(object sender, RoutedEventArgs e)
+    {
+        if (AnalyzeButton.IsEnabled)
+            activeTask = AnalyzeAsync();
+    }
+
+    private async Task AnalyzeAsync()
+    {
+        busy = true;
+        analyzed = false;
+        PreviewText.Text = "Analizando las carpetas…";
+        SetStatus("Analizando sin modificar los archivos…");
+        RefreshActions();
+        try
+        {
+            InventoryResult result = await Task.Run(session.Analyze);
+            analyzed = result.Complete;
+            PreviewText.Text = analyzed
+                ? $"Archivo nuevo · muestra.txt · {result.Bytes:N0} bytes\nSe copiará a Destino y se restaurará en una carpeta separada."
+                : $"Análisis incompleto · {result.Issues.Length:N0} incidencia(s). Revisa el origen antes de copiar.";
+            SetStatus(analyzed ? "Revisión completada. Puedes copiar el archivo de prueba." : "El análisis necesita revisión.");
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException
+            or Win32Exception or ArgumentException)
+        {
+            PreviewText.Text = "No hay una vista previa válida para copiar.";
+            SetStatus("El análisis no se completó. " + error.Message);
+        }
+        finally
+        {
+            busy = false;
+            RefreshActions();
+        }
     }
 
     private void CopyClick(object sender, RoutedEventArgs e)
@@ -116,7 +154,8 @@ public partial class MainWindow : Window
     private void RefreshActions()
     {
         SourceButton.IsEnabled = DestinationButton.IsEnabled = !busy && !copied;
-        CopyButton.IsEnabled = !busy && !copied && sourceSelected && destinationSelected;
+        AnalyzeButton.IsEnabled = !busy && !copied && sourceSelected && destinationSelected;
+        CopyButton.IsEnabled = AnalyzeButton.IsEnabled && analyzed;
         RestoreButton.IsEnabled = !busy && copied && !restored;
     }
 
@@ -160,7 +199,24 @@ public partial class MainWindow : Window
         Click(SourceButton);
         Check(sourceSelected && !CopyButton.IsEnabled, "Copy requires a destination.");
         Click(DestinationButton);
-        Check(CopyButton.IsEnabled && !RestoreButton.IsEnabled, "Wrong actions after selecting both folders.");
+        Check(AnalyzeButton.IsEnabled && !CopyButton.IsEnabled && !RestoreButton.IsEnabled,
+            "Copy became available before analysis.");
+        File.WriteAllText(session.CopyFile, "synthetic conflict");
+        try
+        {
+            Click(AnalyzeButton);
+            await activeTask;
+            Check(!analyzed && !CopyButton.IsEnabled && File.ReadAllText(session.CopyFile) == "synthetic conflict" &&
+                StatusText.Text.StartsWith("El análisis no se completó.", StringComparison.Ordinal), "Analysis accepted or changed a conflicting destination.");
+        }
+        finally
+        {
+            File.Delete(session.CopyFile);
+        }
+        Click(AnalyzeButton);
+        await activeTask;
+        Check(analyzed && CopyButton.IsEnabled && PreviewText.Text.Contains("muestra.txt", StringComparison.Ordinal),
+            "The valid preview did not enable the copy.");
         using (var writer = new FileStream(session.SourceFile, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
         {
             Click(CopyButton);

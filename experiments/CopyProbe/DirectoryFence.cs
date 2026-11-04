@@ -72,7 +72,7 @@ internal sealed class DirectoryFence : IDisposable
             Guid.TryParseExact(path.AsSpan(prefix.Length, path.Length - prefix.Length - 1), "B", out _);
     }
 
-    private static void CheckName(string name)
+    internal static void CheckName(string name)
     {
         if (name.Length == 0 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
             name.EndsWith('.') || name.EndsWith(' '))

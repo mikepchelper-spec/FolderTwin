@@ -24,7 +24,9 @@ Añade `-- --compare` para comparar el flujo de .NET, CopyFile2 y Robocopy sobre
 
 Usa `-- --uncached` para comparar la verificación con y sin la caché de Windows, o `-- --paths` para probar la selección de una raíz local, la sustitución de carpetas, la reapertura de un destino registrado y la recuperación con nombres Unicode en rutas largas. [Resultados del laboratorio](PLAN.md#fallos-de-es-rutas-y-verificación-sin-caché).
 
-Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Elige las carpetas **Origen** y **Destino** que se muestran en el selector. Después usa **Copiar y verificar** y **Restaurar y verificar**. La ventana trabaja con un archivo generado para la sesión y retira sus archivos temporales al cerrar normalmente. CI ejecuta el recorrido con `-- --smoke`.
+Usa `-- --inventory` para comprobar el inventario de metadatos de carpetas sintéticas. Distingue un origen vacío de uno inaccesible y marca como incompleto el análisis con omisiones, enlaces, cancelación o límites alcanzados. El inventario está acotado a 10.000 entradas y 64 niveles por defecto. [Alcance del inventario](PLAN.md#inventario-y-revisión-previa).
+
+Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Elige las carpetas **Origen** y **Destino** que se muestran en el selector y pulsa **Analizar carpetas**. Revisa el nombre y tamaño previstos. Después usa **Copiar y verificar** y **Restaurar y verificar**. La ventana trabaja exclusivamente con `muestra.txt`, generado para la sesión, y retira sus archivos temporales al cerrar normalmente. CI ejecuta el recorrido con `-- --smoke`.
 
 Si un archivo está en uso, el laboratorio intenta mostrar las aplicaciones que detecta Windows mediante Restart Manager. Si no puede identificarlas, conserva el aviso y permite reintentar. El diagnóstico no cierra aplicaciones.
 

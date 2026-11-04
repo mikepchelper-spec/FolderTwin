@@ -39,6 +39,24 @@ internal sealed class LabSession : IDisposable
             restoration = DestinationBinding.Register(directory.Root);
     }
 
+    public InventoryResult Analyze()
+    {
+        using var source = new DirectoryFence(Source);
+        if (!WindowsProbeNative.DirectoryIdentity(source.Root).AsSpan().SequenceEqual(sourceIdentity))
+            throw new InvalidDataException("La carpeta de origen cambió.");
+        using var backup = new DirectoryFence(Destination);
+        using var marker = destination.OpenVerifiedMarker(backup.Root);
+        foreach (string name in new[] { SampleName, PendingName, CopyRecovery.ReceiptPath(PendingName),
+            CopyRecovery.ReceiptDraftPath(PendingName) })
+            if (WindowsProbeNative.PlainFileExists(backup.Root, name))
+                throw new InvalidDataException("El destino contiene una copia o datos pendientes que necesitan revisión.");
+        InventoryResult result = FolderInventory.Scan(Source);
+        if (result.Complete && (result.Entries.Length != 1 || result.Entries[0].RelativePath != SampleName ||
+            result.Entries[0].IsDirectory || result.Entries[0].Length != Sample.Length))
+            throw new InvalidDataException("Este laboratorio solo admite el archivo muestra.txt generado para la sesión.");
+        return result;
+    }
+
     public void Copy()
     {
         using var source = new DirectoryFence(Source);

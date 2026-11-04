@@ -4,7 +4,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="FolderTwin · Laboratorio de copia"
-        Width="720" Height="590" MinWidth="400" MinHeight="370"
+        Width="720" Height="660" MinWidth="400" MinHeight="370"
         WindowStartupLocation="CenterScreen" Language="es-CO">
     <Window.Resources>
         <Style x:Key="SectionHeading" TargetType="TextBlock">
@@ -36,7 +36,13 @@
                     Click="ChooseDestination" AutomationProperties.AutomationId="ChooseDestination" />
             <Separator Margin="0,18,0,14" />
 
-            <TextBlock Text="3. Copia y restauración" Style="{StaticResource SectionHeading}" />
+            <TextBlock Text="3. Revisar, copiar y restaurar" Style="{StaticResource SectionHeading}" />
+            <Button x:Name="AnalyzeButton" Content="_Analizar carpetas" Click="AnalyzeClick"
+                    HorizontalAlignment="Left" Margin="0,10,0,0" IsEnabled="False"
+                    AutomationProperties.AutomationId="Analyze" />
+            <TextBlock x:Name="PreviewText" Text="Analiza las carpetas para revisar qué se copiará."
+                       Style="{StaticResource Detail}" Margin="0,8,0,0"
+                       AutomationProperties.AutomationId="LabPreview" />
             <WrapPanel Margin="0,10,0,0">
                 <Button x:Name="CopyButton" Content="_Copiar y verificar" Click="CopyClick"
                         Margin="0,0,8,8" IsEnabled="False" AutomationProperties.AutomationId="Copy" />

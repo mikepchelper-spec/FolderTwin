@@ -130,6 +130,10 @@ Para el modo de bajo impacto, comparar primero concurrencia limitada y buffers a
 
 ## 7. Entregas y criterios de salida
 
+Estado global: la base experimental ya copia, verifica y restaura un archivo por operación, con recuperación por registro y ensayos de fallos. La ventana WPF empieza a incorporar revisión previa. La alfa de respaldo de carpetas completas sigue pendiente. También quedan por construir el versionado, el catálogo reconstruible, la automatización, la retención y el espejo protegido. La etapa 1 permanece abierta con las pruebas de hardware aplazadas; eso permite avanzar en funciones de software sin declarar validada la durabilidad frente a apagones.
+
+El siguiente paso de producto, después del inventario, es ejecutar y restaurar un lote sintético de archivos con sus incidencias por ruta. La vista previa deberá revalidarse al ejecutar y una copia parcial deberá seguir visible como parcial. Antes de admitir carpetas personales, cerrar la matriz de metadatos, exclusiones y detección de contenido no soportado, y superar los criterios de la alfa.
+
 | Etapa | Entrega | Para pasar a la siguiente |
 |---|---|---|
 | 0 — Especificación | Modos, matriz de metadatos y estados de publicación/recuperación | Definir fixture, confinamiento de rutas y protocolo de diario. Especificar JSONL y duplicación antes de etapa 3; todavía no declarar la arquitectura validada. |
@@ -201,6 +205,18 @@ El recorrido `--paths` también comprueba nombres con espacios, acentos, caracte
 El recorrido automatizado de CI ejecuta los manejadores de la ventana con selecciones simuladas. Comprueba cancelación, carpeta incorrecta, habilitación de acciones, un fallo visible con el origen ocupado y restauración byte por byte después de reintentar. El recorrido manual local comprobó el selector real y ambos botones. Los archivos de la sesión son temporales y se retiran al cerrar normalmente.
 
 El laboratorio ya consulta Restart Manager cuando recibe una infracción de compartición. Consulta el archivo que se intentaba leer en un hilo de trabajo y muestra los nombres que devuelve Windows como información orientativa. Usa hasta tres llamadas a `RmGetList`, con un límite de 256 entradas, y llama a `RmEndSession` en `finally`. No incorpora llamadas de cierre o reinicio de aplicaciones. Un error de diagnóstico o una lista vacía conserva el aviso genérico y permite reintentar sin relajar la política de lectura. El arnés identifica su propio escritor sintético y prueba el fallback con un recurso de diagnóstico no soportado. La consulta todavía se limita a un archivo por operación del laboratorio; el diagnóstico agrupado de una tarea completa queda para la alfa. [RmGetList](https://learn.microsoft.com/en-us/windows/win32/api/restartmanager/nf-restartmanager-rmgetlist), [RM_PROCESS_INFO](https://learn.microsoft.com/en-us/windows/win32/api/restartmanager/ns-restartmanager-rm_process_info) y [RmEndSession](https://learn.microsoft.com/en-us/windows/win32/api/restartmanager/nf-restartmanager-rmendsession).
+
+### Inventario y revisión previa
+
+El recorrido `--inventory` enumera nombres y tamaños del flujo de datos principal desde handles de directorios. Usa `GetFileInformationByHandleEx` con `FileFullDirectoryRestartInfo`/`FileFullDirectoryInfo` y abre cada subdirectorio relativo al handle del padre, conservando sus antecesores durante el recorrido. No abre el contenido de los archivos. Incluye ocultos y carpetas vacías. [FILE_FULL_DIR_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_full_dir_info) y [GetFileInformationByHandleEx](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getfileinformationbyhandleex).
+
+El resultado separa las entradas observadas y las incidencias. Un origen ausente o una subcarpeta que no puede abrirse producen un análisis incompleto. Los reparse points se reportan sin recorrerlos. Los atributos offline, recall y EFS se omiten con incidencia, al igual que los nombres fuera del alcance. La política de esos atributos se prueba con valores sintéticos; sigue pendiente validar proveedores de nube reales, las carreras de hidratación y la selección de una raíz alojada en ellos. [Atributos de archivos de Windows](https://learn.microsoft.com/en-us/windows/win32/fileio/file-attribute-constants).
+
+El prototipo conserva una lista acotada en memoria, con un máximo predeterminado de 10.000 entradas observadas y 64 niveles. Alcanzar esos límites o cancelar deja el resultado incompleto. Una enumeración completa significa que ese recorrido terminó sin incidencias detectadas. No equivale a una instantánea de la carpeta ni prueba que se pueda leer el contenido de todos los archivos. La copia debe volver a abrirlos y verificarlos. Todavía no compara respaldos anteriores, preserva metadatos ni autoriza retiradas.
+
+El ensayo recorre 702 archivos en varias páginas del buffer, verifica nombres Unicode, un archivo oculto y un archivo con apertura exclusiva, distingue vacío de ausente y prueba una subcarpeta ocupada, un fallo de enumeración inyectado, límites, cancelación, junctions hacia otra carpeta y un ciclo. Rechaza también la enumeración de un directorio convertido en junction después de abrirlo. Reporta un nombre real con punto final sin normalizarlo. Todo se crea en una carpeta temporal sintética y se retira al terminar.
+
+La ventana requiere **Analizar carpetas** antes de copiar y muestra el nombre y tamaño de `muestra.txt`. Un análisis incompleto o un archivo/dato pendiente en el destino bloquea la copia del laboratorio. La prueba WPF comprueba un conflicto preexistente sin alterarlo y después completa análisis, copia y restauración. El recorrido manual local también comprobó el selector real y la vista previa. La copia visual continúa limitada al archivo generado para la sesión.
 
 ### Laboratorio de volumen desechable
 

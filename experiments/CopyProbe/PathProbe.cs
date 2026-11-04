@@ -261,7 +261,7 @@ internal static class PathProbe
         throw new InvalidOperationException("A pinned directory was renamed.");
     }
 
-    private static void CreateJunction(string path, string target)
+    internal static void CreateJunction(string path, string target)
     {
         var start = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"))
         {
@@ -284,7 +284,7 @@ internal static class PathProbe
             throw new IOException($"Creating the test junction failed ({process.ExitCode}).");
     }
 
-    private static void CopyJunctionData(string junction, string emptyDirectory)
+    internal static void CopyJunctionData(string junction, string emptyDirectory)
     {
         const uint openExisting = 3;
         const uint readAccess = 0x80000000;
