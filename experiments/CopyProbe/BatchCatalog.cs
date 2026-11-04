@@ -114,8 +114,6 @@ internal static class BatchCatalog
         WindowsProbeNative.RequireSupportedData(root.Root, Path.GetFileName(backup));
         using var operation = WindowsProbeNative.OpenPlainFile(root.Root, FolderBatch.LockName, FileAccess.Read, FileShare.None);
         var catalog = ReadLocked(root);
-        BatchFixture.ValidateSamples(catalog.Files, catalog.Directories);
-
         var entries = new List<BatchEntryResult>();
         foreach (string relative in catalog.Directories)
             Check(relative, isDirectory: true, () =>

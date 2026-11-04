@@ -28,6 +28,8 @@ Usa `-- --inventory` para comprobar el inventario de metadatos de carpetas sint�
 
 Usa `-- --batch` para copiar y restaurar un lote sintético con subcarpetas, un archivo vacío y una carpeta vacía. Comprueba resultados parciales, reintentos, cambios después del análisis y conflictos en destino. [Alcance y límites del lote](PLAN.md#lotes-sintéticos-y-resultados-parciales).
 
+Usa `-- --workspace` para probar trabajos con rutas y nombres de archivo libres en espacios temporales registrados por FolderTwin. Comprueba el espacio disponible, los rechazos antes de escribir, la reapertura de un lote parcial y la restauración sin el origen. Esta prueba genera y elimina sus propios datos sintéticos.
+
 Usa `-- --catalog` para probar los catálogos JSONL duplicados, su confirmación y la restauración desde otro proceso con el origen ausente. El lector rechaza catálogos truncados, rutas inseguras y réplicas contradictorias. Una réplica íntegra de un lote confirmado permite restaurar con un aviso sobre la copia dañada. [Formato experimental](experiments/CopyProbe/CATALOG.md).
 
 Usa `-- --resume` para terminar trabajadores de prueba y reabrir sus lotes pendientes desde otros procesos. Reconoce lo ya verificado, recupera temporales con registro válido y deja pendientes los archivos que aún necesitan el origen. Los datos sin verificar quedan para revisión. [Descriptor de ejecución](experiments/CopyProbe/PENDING.md).

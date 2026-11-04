@@ -34,17 +34,26 @@ internal static class FolderBatch
     internal const string ControlPrefix = ".foldertwin-";
     internal const string LockName = ControlPrefix + "batch.lock";
 
-    internal static BatchPlan Prepare(string fixtureRoot, string source, string destination, DestinationBinding binding)
+    internal static BatchPlan Prepare(string fixtureRoot, string source, string destination, DestinationBinding binding,
+        bool unregisteredDestination = false)
     {
         ValidateRoots(fixtureRoot, source, destination);
         using var sourceFence = new DirectoryFence(source);
         using var targetFence = new DirectoryFence(destination);
-        using var marker = binding.OpenVerifiedMarker(targetFence.Root);
+        byte[] sourceIdentity = WindowsProbeNative.DirectoryIdentity(sourceFence.Root);
+        if (sourceIdentity.AsSpan().SequenceEqual(binding.Identity))
+            throw new InvalidDataException("El origen y el destino son la misma carpeta.");
+        if (unregisteredDestination)
+            binding.RequireDirectoryIdentity(targetFence.Root);
+        using var marker = unregisteredDestination ? null : binding.OpenVerifiedMarker(targetFence.Root);
         var inventory = FolderInventory.Scan(source);
-        if (!inventory.Complete || inventory.Entries.Any(entry => IsControl(entry.RelativePath)))
-            throw new InvalidDataException("El origen tiene omisiones o nombres reservados. Revisa el análisis.");
+        if (!inventory.Complete)
+            throw new InvalidDataException(DescribeIncompleteSource(inventory.Issues));
+        if (inventory.Entries.FirstOrDefault(entry => IsControl(entry.RelativePath)) is { } reserved)
+            throw new InvalidDataException($"El origen contiene un nombre reservado. Revisa «{reserved.RelativePath}».");
         var destinationInventory = FolderInventory.Scan(destination);
-        if (!destinationInventory.Complete || destinationInventory.Entries.Any(entry => entry.RelativePath != DestinationBinding.MarkerName))
+        if (!destinationInventory.Complete || destinationInventory.Entries.Any(entry =>
+            unregisteredDestination || entry.RelativePath != DestinationBinding.MarkerName))
             throw new InvalidDataException("El destino tiene archivos o datos pendientes que necesitan revisión.");
         string[] directories = inventory.Entries.Where(entry => entry.IsDirectory).Select(entry => entry.RelativePath)
             .OrderBy(path => path, StringComparer.Ordinal).ToArray();
@@ -65,7 +74,7 @@ internal static class FolderBatch
             metadata.RequireMatch(file.SafeFileHandle);
             files.Add(new(entry.RelativePath, entry.Length, hash, metadata));
         }
-        return new(fixtureRoot, source, destination, WindowsProbeNative.DirectoryIdentity(sourceFence.Root), binding,
+        return new(fixtureRoot, source, destination, sourceIdentity, binding,
             directories, files.ToArray());
     }
 
@@ -296,7 +305,7 @@ internal static class FolderBatch
         int limit = plan.SourceBinding is null ? 10_000 : plan.Files.Length * 5 + plan.Directories.Length + 16;
         var current = FolderInventory.Scan(plan.Source, maximumEntries: limit);
         if (!current.Complete)
-            throw new InvalidDataException("El origen no pudo enumerarse por completo. Repite el análisis.");
+            throw new InvalidDataException(DescribeIncompleteSource(current.Issues));
         var entries = current.Entries.Where(entry => plan.SourceBinding is null || !IsControl(entry.RelativePath)).ToArray();
         if (entries.Length != plan.Files.Length + plan.Directories.Length ||
             !entries.Where(entry => entry.IsDirectory).Select(entry => entry.RelativePath).Order(StringComparer.Ordinal)
@@ -305,6 +314,29 @@ internal static class FolderBatch
                 .SequenceEqual(plan.Files.Select(file => (file.RelativePath, file.Length)).OrderBy(entry => entry.RelativePath, StringComparer.Ordinal)))
             throw new InvalidDataException("El inventario del origen cambió. Repite el análisis.");
         CheckDirectoryData(plan.Source, plan.Directories);
+    }
+
+    private static string DescribeIncompleteSource(InventoryIssue[] issues)
+    {
+        const int maximumShown = 6;
+        var details = issues.Take(maximumShown).Select(issue =>
+        {
+            string path = issue.RelativePath.Length == 0 ? "raíz del origen" : issue.RelativePath;
+            string reason = issue.Kind switch
+            {
+                InventoryIssueKind.Unavailable => "datos no disponibles localmente",
+                InventoryIssueKind.ReparsePoint => "enlace o punto de reanálisis",
+                InventoryIssueKind.Encrypted => "cifrado EFS",
+                InventoryIssueKind.UnsupportedName => "nombre fuera del alcance",
+                InventoryIssueKind.EntryLimit => "límite de entradas alcanzado",
+                InventoryIssueKind.DepthLimit => "límite de profundidad alcanzado",
+                InventoryIssueKind.Cancelled => "análisis cancelado",
+                _ => "no se pudo leer"
+            };
+            return $"{path} · {reason}";
+        });
+        return "El origen no se pudo analizar por completo.\n" + string.Join("\n", details) +
+            (issues.Length > maximumShown ? $"\nQuedan {issues.Length - maximumShown:N0} incidencias por mostrar." : "");
     }
 
     private static void CheckDirectoryData(string root, string[] directories)

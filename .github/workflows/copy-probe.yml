@@ -33,6 +33,8 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --inventory
       - name: Verify synthetic batches, partial results, and retry
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --batch
+      - name: Verify configurable disposable workspaces
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --workspace
       - name: Verify confirmed catalogs and independent restoration
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --catalog
       - name: Verify durable pending intent and worker termination recovery

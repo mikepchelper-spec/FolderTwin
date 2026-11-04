@@ -20,18 +20,27 @@ internal sealed class DestinationBinding
 
     public static DestinationBinding Register(SafeFileHandle directory)
     {
-        var binding = new DestinationBinding
+        var binding = Capture(directory);
+        binding.WriteNewMarker(directory);
+        return binding;
+    }
+
+    internal static DestinationBinding Capture(SafeFileHandle directory) =>
+        new()
         {
             Version = 1,
             Marker = Guid.NewGuid(),
             Identity = WindowsProbeNative.DirectoryIdentity(directory),
             LastVolumePath = WindowsProbeNative.VolumePath(directory)
         };
+
+    internal void WriteNewMarker(SafeFileHandle directory)
+    {
+        RequireDirectoryIdentity(directory);
         using var marker = WindowsProbeNative.OpenPlainFile(directory, MarkerName, FileAccess.Write, FileShare.None,
             FileMode.CreateNew);
-        marker.Write(binding.Marker.ToByteArray());
+        marker.Write(Marker.ToByteArray());
         marker.Flush(flushToDisk: true);
-        return binding;
     }
 
     public void SaveNew(string configurationPath)
@@ -56,8 +65,7 @@ internal sealed class DestinationBinding
 
     public FileStream OpenVerifiedMarker(SafeFileHandle directory)
     {
-        if (!WindowsProbeNative.DirectoryIdentity(directory).AsSpan().SequenceEqual(Identity))
-            throw new InvalidDataException("The destination directory or volume differs from the saved configuration.");
+        RequireDirectoryIdentity(directory);
 
         FileStream marker;
         try
@@ -81,5 +89,11 @@ internal sealed class DestinationBinding
             marker.Dispose();
             throw;
         }
+    }
+
+    internal void RequireDirectoryIdentity(SafeFileHandle directory)
+    {
+        if (!WindowsProbeNative.DirectoryIdentity(directory).AsSpan().SequenceEqual(Identity))
+            throw new InvalidDataException("La identidad de la carpeta o el volumen de destino cambió.");
     }
 }
