@@ -21,6 +21,10 @@ if (args is ["--inventory"])
     return InventoryProbe.Run();
 if (args is ["--batch"])
     return BatchProbe.Run();
+if (args is ["--catalog"])
+    return CatalogProbe.Run();
+if (args is ["--restore-catalog-child", var catalogFixture])
+    return CatalogProbe.RestoreChild(catalogFixture);
 if (args is ["--volume-lab", "fill"])
     return VolumeProbe.Run("fill");
 if (args is ["--volume-lab", "absent"])

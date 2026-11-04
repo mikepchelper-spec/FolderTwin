@@ -8,8 +8,6 @@ internal sealed record BatchPlan(string FixtureRoot, string Source, string Desti
     DestinationBinding Target, string[] Directories, BatchFile[] Files, DestinationBinding? SourceBinding = null)
 {
     public long Bytes => Files.Sum(file => file.Length);
-    public BatchPlan RestoreTo(string destination, DestinationBinding binding) =>
-        new(FixtureRoot, Destination, destination, Target.Identity, binding, Directories, Files, Target);
 }
 
 internal enum BatchStatus { Copied, Recovered, AlreadyVerified, DirectoryReady, Failed, Cancelled }
@@ -17,16 +15,17 @@ internal sealed record BatchEntryResult(string RelativePath, bool IsDirectory, B
 {
     public bool Succeeded => Status is BatchStatus.Copied or BatchStatus.Recovered or BatchStatus.AlreadyVerified or BatchStatus.DirectoryReady;
 }
-internal sealed record BatchResult(BatchEntryResult[] Entries, string? Problem = null)
+internal sealed record BatchResult(BatchEntryResult[] Entries, string? Problem = null, string? Note = null)
 {
     public bool Complete => Problem is null && Entries.All(entry => entry.Succeeded);
     public int VerifiedFiles => Entries.Count(entry => !entry.IsDirectory && entry.Succeeded);
 }
 
-// Synthetic NTFS batches only. The plan remains in memory, with recoverable
-// per-file publications and no transaction that commits the whole tree.
+// Synthetic NTFS batches only. Pending execution plans remain in memory.
+// BatchCatalog separately confirms completed data for independent restoration.
 internal static class FolderBatch
 {
+    private static readonly Encoding PathEncoding = new UTF8Encoding(false, true);
     internal const string ControlPrefix = ".foldertwin-";
     internal const string LockName = ControlPrefix + "batch.lock";
 
@@ -64,13 +63,15 @@ internal static class FolderBatch
         try
         {
             ValidateRoots(plan.FixtureRoot, plan.Source, plan.Destination);
-            ValidateEntries(plan);
+            ValidateEntries(plan.Files, plan.Directories);
             var expectedFiles = plan.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
             using var source = new DirectoryFence(plan.Source);
             using var destination = new DirectoryFence(plan.Destination);
             if (!WindowsProbeNative.DirectoryIdentity(source.Root).AsSpan().SequenceEqual(plan.SourceIdentity))
                 throw new InvalidDataException("La carpeta de origen cambió de identidad.");
             using var sourceMarker = plan.SourceBinding?.OpenVerifiedMarker(source.Root);
+            using var sourceOperation = plan.SourceBinding is null ? null : WindowsProbeNative.OpenPlainFile(source.Root,
+                LockName, FileAccess.Read, FileShare.None);
             using var targetMarker = plan.Target.OpenVerifiedMarker(destination.Root);
             cancellationToken.ThrowIfCancellationRequested();
             RequireSameInventory(plan);
@@ -172,7 +173,7 @@ internal static class FolderBatch
 
     internal static string TemporaryPath(string destination, string relative) => Path.Combine(
         destination, Path.GetDirectoryName(relative) ?? "",
-        ControlPrefix + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(relative))) + ".tmp");
+        ControlPrefix + Convert.ToHexString(SHA256.HashData(PathEncoding.GetBytes(relative))) + ".tmp");
 
     private static T WithDirectories<T>(SafeFileHandle root, string relative, Func<T> action)
     {
@@ -197,7 +198,9 @@ internal static class FolderBatch
 
     private static void RequireSameInventory(BatchPlan plan)
     {
-        var current = FolderInventory.Scan(plan.Source);
+        // A stored file can retain its data, temporary, lock, receipt, and draft.
+        int limit = plan.SourceBinding is null ? 10_000 : plan.Files.Length * 5 + plan.Directories.Length + 16;
+        var current = FolderInventory.Scan(plan.Source, maximumEntries: limit);
         if (!current.Complete)
             throw new InvalidDataException("El origen no pudo enumerarse por completo. Repite el análisis.");
         var entries = current.Entries.Where(entry => plan.SourceBinding is null || !IsControl(entry.RelativePath)).ToArray();
@@ -220,13 +223,15 @@ internal static class FolderBatch
             !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal));
     }
 
-    private static void ValidateEntries(BatchPlan plan)
+    internal static void ValidateEntries(BatchFile[] files, string[] directories)
     {
-        if (plan.Files.Length + plan.Directories.Length > 10_000)
+        if (files.Length + directories.Length > 10_000)
             throw new ArgumentException("El lote supera el límite del laboratorio.");
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (string relative in plan.Files.Select(file => file.RelativePath).Concat(plan.Directories))
+        var directoryNames = directories.ToHashSet(StringComparer.Ordinal);
+        foreach (string relative in files.Select(file => file.RelativePath).Concat(directories))
         {
+            _ = PathEncoding.GetByteCount(relative);
             if (Path.IsPathRooted(relative) || !names.Add(relative) || IsControl(relative))
                 throw new ArgumentException("Ruta de lote no soportada.");
             foreach (string component in relative.Split(Path.DirectorySeparatorChar))
@@ -235,9 +240,17 @@ internal static class FolderBatch
                 if (component is "." or "..")
                     throw new ArgumentException("Ruta de lote fuera de alcance.");
             }
+            string? parent = Path.GetDirectoryName(relative);
+            if (!string.IsNullOrEmpty(parent) && !directoryNames.Contains(parent))
+                throw new ArgumentException("Falta una carpeta padre en el lote.");
+            int components = relative.Count(character => character == Path.DirectorySeparatorChar) + 1;
+            if (components > (directoryNames.Contains(relative) ? 64 : 65))
+                throw new ArgumentException("La ruta supera el límite de profundidad.");
         }
-        if (plan.Files.Any(file => file.Hash.Length != SHA256.HashSizeInBytes || file.Length < 0))
+        if (files.Any(file => file.Hash is not { Length: SHA256.HashSizeInBytes } || file.Length < 0))
             throw new ArgumentException("Hash o tamaño de lote no válido.");
+        try { _ = files.Sum(file => file.Length); }
+        catch (OverflowException error) { throw new ArgumentException("El tamaño total del lote no es válido.", error); }
     }
 
     private static bool IsControl(string relative) => relative.Split(Path.DirectorySeparatorChar)

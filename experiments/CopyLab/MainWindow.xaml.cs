@@ -116,6 +116,7 @@ public partial class MainWindow : Window
     {
         busy = true;
         RefreshActions();
+        ResultsList.ItemsSource = null;
         SetStatus(restore ? "Restaurando y verificando…" : "Copiando y verificando…");
         if (!restore)
             copyStarted = true;
@@ -136,8 +137,9 @@ public partial class MainWindow : Window
             string status = result.Complete
                 ? restore ? $"Restauración verificada: {result.VerifiedFiles:N0} archivos y sus carpetas."
                     : $"Lote copiado y verificado: {result.VerifiedFiles:N0} archivos. Ya puedes restaurarlo."
-                : $"Resultado parcial: {result.VerifiedFiles:N0} de {session.Plan!.Files.Length:N0} archivos verificados. Revisa las incidencias y reintenta.";
-            SetStatus(status + (result.Problem is null ? "" : " " + result.Problem) + detail);
+                : $"Resultado parcial: {result.VerifiedFiles:N0} de {BatchFixture.SampleNames.Length:N0} archivos verificados. Revisa las incidencias y reintenta.";
+            SetStatus(status + (result.Problem is null ? "" : " " + result.Problem) +
+                (result.Note is null ? "" : " " + result.Note) + detail);
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException
             or Win32Exception or ArgumentException)
@@ -239,9 +241,21 @@ public partial class MainWindow : Window
         Click(CopyButton);
         await activeTask;
         Check(copied && File.Exists(session.CopyFile) && RestoreButton.IsEnabled, StatusText.Text);
+        session.ForgetPlan();
+        string primaryCatalog = Path.Combine(session.Destination, BatchCatalog.PrimaryName);
+        string backupCatalog = Path.Combine(session.Destination, BatchCatalog.BackupName);
+        byte[] intactCatalog = File.ReadAllBytes(backupCatalog);
+        File.WriteAllText(primaryCatalog, "truncated\n");
+        File.WriteAllText(backupCatalog, "truncated\n");
         Click(RestoreButton);
         await activeTask;
-        Check(restored && !RestoreButton.IsEnabled, StatusText.Text);
+        Check(!restored && !File.Exists(session.RestoredFile) && RestoreButton.IsEnabled &&
+            StatusText.Text.StartsWith("La prueba no se completó.", StringComparison.Ordinal),
+            "Invalid catalogs enabled restoration or hid the error.");
+        File.WriteAllBytes(backupCatalog, intactCatalog);
+        Click(RestoreButton);
+        await activeTask;
+        Check(restored && !RestoreButton.IsEnabled && StatusText.Text.Contains("réplica íntegra", StringComparison.Ordinal), StatusText.Text);
         session.CheckRestored();
 
         static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

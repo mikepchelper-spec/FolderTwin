@@ -52,15 +52,35 @@ internal sealed class BatchFixture : IDisposable
             throw new InvalidDataException("Este laboratorio solo admite los archivos sintéticos generados para la sesión.");
         return Plan = plan;
     }
-    internal BatchResult Copy() => FolderBatch.Run(Plan ?? throw new InvalidOperationException("Analiza las carpetas primero."));
-    internal BatchResult Restore() => FolderBatch.Run((Plan ?? throw new InvalidOperationException("Analiza las carpetas primero."))
-        .RestoreTo(Restored, RestoreBinding));
+    internal BatchResult Copy()
+    {
+        var plan = Plan ?? throw new InvalidOperationException("Analiza las carpetas primero.");
+        var result = FolderBatch.Run(plan);
+        if (!result.Complete)
+            return result;
+        try
+        {
+            BatchCatalog.Publish(plan);
+            return result;
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or System.ComponentModel.Win32Exception or UnauthorizedAccessException)
+        {
+            return result with { Problem = "Los archivos se verificaron, pero el catálogo no se confirmó. " + error.Message };
+        }
+    }
+    internal BatchResult Restore()
+    {
+        var catalog = BatchCatalog.Read(Destination);
+        var result = FolderBatch.Run(catalog.RestoreTo(Root, Destination, Restored, RestoreBinding));
+        return catalog.Degraded ? result with { Note = "Se usó una réplica íntegra. La otra copia del catálogo necesita revisión." } : result;
+    }
+    internal void ForgetPlan() => Plan = null;
 
     internal void CheckRestored()
     {
         foreach (string relative in SampleNames)
             if (!SHA256.HashData(File.ReadAllBytes(Path.Combine(Restored, relative))).AsSpan()
-                .SequenceEqual(Plan!.Files.Single(file => file.RelativePath == relative).Hash))
+                .SequenceEqual(expectedHashes[relative]))
                 throw new InvalidDataException("El archivo restaurado no coincide con el contenido analizado.");
         foreach (string directory in DirectoryNames)
             if (!Directory.Exists(Path.Combine(Restored, directory)))
@@ -99,7 +119,14 @@ internal sealed class BatchFixture : IDisposable
                     }
                 }
                 if (binding is not null)
+                {
                     File.Delete(Path.Combine(root, FolderBatch.LockName));
+                    foreach (string name in new[] { BatchCatalog.PrimaryName, BatchCatalog.BackupName, BatchCatalog.CommitName })
+                    {
+                        File.Delete(Path.Combine(root, name));
+                        File.Delete(Path.Combine(root, name + ".tmp"));
+                    }
+                }
             }
             if (binding is not null)
                 File.Delete(Path.Combine(root, global::DestinationBinding.MarkerName));

@@ -33,3 +33,5 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --inventory
       - name: Verify synthetic batches, partial results, and retry
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --batch
+      - name: Verify confirmed catalogs and independent restoration
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --catalog

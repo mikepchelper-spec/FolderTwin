@@ -74,7 +74,7 @@ internal sealed class DirectoryFence : IDisposable
 
     internal static void CheckName(string name)
     {
-        if (name.Length == 0 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+        if (name.Length is 0 or > 255 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
             name.EndsWith('.') || name.EndsWith(' '))
             throw new ArgumentException("Unsupported name in the synthetic operation path.");
     }
