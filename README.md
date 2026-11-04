@@ -24,6 +24,8 @@ Añade `-- --compare` para comparar el flujo de .NET, CopyFile2 y Robocopy sobre
 
 Usa `-- --uncached` para comparar la verificación con y sin la caché de Windows, o `-- --paths` para probar la selección de una raíz local, la sustitución de carpetas y la reapertura de un destino registrado. [Resultados del laboratorio](PLAN.md#fallos-de-es-rutas-y-verificación-sin-caché).
 
+Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Elige las carpetas **Origen** y **Destino** que se muestran en el selector. Después usa **Copiar y verificar** y **Restaurar y verificar**. La ventana trabaja con un archivo generado para la sesión y retira sus archivos temporales al cerrar normalmente. CI ejecuta el recorrido con `-- --smoke`.
+
 La revisión de opiniones externas incorpora diagnóstico de archivos en uso, recuperación por carpetas/fecha, bandeja y cuarentena previa al borrado. Las optimizaciones de E/S y consumo se deciden mediante pruebas. El plan distingue medidas de protección de garantías todavía no demostradas.
 
 Este trabajo no sustituye el respaldo existente: no usar prototipos con datos personales.

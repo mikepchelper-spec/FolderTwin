@@ -192,4 +192,10 @@ El arnés abre primero la raíz de la unidad o del volumen identificado por GUID
 
 En NTFS se pudo convertir en junction un directorio sintético vacío mientras su handle seguía abierto. El flujo vuelve a comprobar el tipo de directorio antes de abrir un hijo y antes de publicar. El ensayo convirtió el directorio en junction después de abrirlo y comprobó que una creación relativa se detuviera sin escribir en la carpeta apuntada. Las operaciones siguen usando el handle del padre. Esta prueba cubre esa secuencia concreta y no certifica todas las carreras posibles de filtros o dispositivos. [FSCTL_SET_REPARSE_POINT](https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/fsctl-set-reparse-point).
 
-La etapa 1 sigue abierta. Las raíces y la configuración siguen siendo sintéticas. Queda validar la selección desde la interfaz y preparar un laboratorio para reasignación física de letras, disco lleno real y fallos físicos. Los resultados ante terminación del proceso corresponden a Windows en ejecución.
+### Flujo visual del laboratorio
+
+`experiments/CopyLab` abre una ventana WPF con el tema Fluent del sistema. Usa el selector de carpetas de Windows y habilita la copia solo si se seleccionan las carpetas sintéticas Origen y Destino de la sesión. Los botones llaman al mismo flujo de copia recuperable del arnés. La restauración escribe en una tercera carpeta sintética y compara el contenido con el original. La ventana mantiene los controles deshabilitados durante cada operación y muestra el resultado.
+
+El recorrido automatizado de CI ejecuta los manejadores de la ventana con selecciones simuladas. Comprueba cancelación, carpeta incorrecta, habilitación de acciones, un fallo visible con el origen ocupado y restauración byte por byte después de reintentar. El recorrido manual local comprobó el selector real y ambos botones. Los archivos de la sesión son temporales y se retiran al cerrar normalmente.
+
+La etapa 1 sigue abierta. La interfaz está limitada a los datos que genera el arnés. Queda preparar un laboratorio para reasignación física de letras, disco lleno real y fallos físicos. Los resultados ante terminación del proceso corresponden a Windows en ejecución.

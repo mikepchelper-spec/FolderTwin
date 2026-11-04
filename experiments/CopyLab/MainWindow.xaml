@@ -1,0 +1,51 @@
+<!-- Hallmark · macroestructura: hoja de trabajo · tono: técnico sereno · color: sistema
+     Pre-emit critique: P4 H4 E4 S5 R5 V4 -->
+<Window x:Class="CopyLab.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="FolderTwin · Laboratorio de copia"
+        Width="720" Height="590" MinWidth="400" MinHeight="370"
+        WindowStartupLocation="CenterScreen" Language="es-CO">
+    <Window.Resources>
+        <Style x:Key="SectionHeading" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style x:Key="Detail" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,4,0,12" />
+        </Style>
+    </Window.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="28,24" MaxWidth="680">
+            <TextBlock Text="FolderTwin" FontSize="13" FontWeight="SemiBold" />
+            <TextBlock Text="Laboratorio de copia" FontSize="30" FontWeight="SemiBold" Margin="0,5,0,0" />
+            <TextBlock Text="Copia un archivo sintético, restáuralo en otra carpeta y comprueba que el contenido coincide."
+                       Style="{StaticResource Detail}" />
+            <Separator Margin="0,4,0,16" />
+
+            <TextBlock Text="1. Origen" Style="{StaticResource SectionHeading}" />
+            <TextBlock x:Name="SourceText" Text="Elige la carpeta Origen del laboratorio." Style="{StaticResource Detail}" />
+            <Button x:Name="SourceButton" Content="Elegir _origen" HorizontalAlignment="Left"
+                    Click="ChooseSource" AutomationProperties.AutomationId="ChooseSource" />
+
+            <TextBlock Text="2. Destino" Style="{StaticResource SectionHeading}" Margin="0,18,0,0" />
+            <TextBlock x:Name="DestinationText" Text="Elige la carpeta Destino del laboratorio." Style="{StaticResource Detail}" />
+            <Button x:Name="DestinationButton" Content="Elegir _destino" HorizontalAlignment="Left"
+                    Click="ChooseDestination" AutomationProperties.AutomationId="ChooseDestination" />
+            <Separator Margin="0,18,0,14" />
+
+            <TextBlock Text="3. Copia y restauración" Style="{StaticResource SectionHeading}" />
+            <WrapPanel Margin="0,10,0,0">
+                <Button x:Name="CopyButton" Content="_Copiar y verificar" Click="CopyClick"
+                        Margin="0,0,8,8" IsEnabled="False" AutomationProperties.AutomationId="Copy" />
+                <Button x:Name="RestoreButton" Content="_Restaurar y verificar" Click="RestoreClick"
+                        Margin="0,0,0,8" IsEnabled="False" AutomationProperties.AutomationId="Restore" />
+            </WrapPanel>
+            <TextBlock x:Name="StatusText" Text="Selecciona las dos carpetas para empezar."
+                       FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,4,0,4"
+                       AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="LabStatus" />
+        </StackPanel>
+    </ScrollViewer>
+</Window>

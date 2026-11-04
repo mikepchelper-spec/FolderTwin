@@ -27,3 +27,5 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --uncached
       - name: Verify directory rename and junction behavior
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --paths
+      - name: Verify the WPF copy and restore flow
+        run: dotnet run --project experiments/CopyLab --configuration Release -- --smoke
