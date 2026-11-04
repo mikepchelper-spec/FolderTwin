@@ -7,6 +7,8 @@ if (args is ["--interrupt", "before"])
     return RunInterruptedCopy(CopyStep.Verified);
 if (args is ["--interrupt", "after"])
     return RunInterruptedCopy(CopyStep.Published);
+if (args is ["--compare"])
+    return TransportProbe.Run();
 if (args.Length != 0)
 {
     Console.Error.WriteLine("Unknown scenario. This experiment does not accept paths.");

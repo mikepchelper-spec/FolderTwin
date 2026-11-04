@@ -43,7 +43,7 @@ Diseño: claro/oscuro del sistema, teclado y lector de pantalla, foco visible, e
 | Interfaz | WPF, C#, .NET 10 LTS, Fluent incorporado | Integración Windows y apariencia actual sin un navegador embebido. .NET puede distribuirse junto a la app; no suponer que viene instalado. |
 | Ejecución | Ejecutable sin ventana y biblioteca compartida con UI | Cerrar la interfaz no cancela una tarea en curso. Un solo motor, sin microservicios. |
 | Programación | Programador de tareas de Windows | Horarios, registro de ejecución y recuperación de horarios perdidos. Usuario actual inicialmente; documentar que sin sesión iniciada no corre en esta modalidad. |
-| Transferencia | Evaluar CopyFile2 frente a copia por flujo propio hacia temporal en destino | Hay que demostrar que el transportador elegido mantiene la política de apertura y coherencia; integridad, historial y recuperación son responsabilidad de la app. |
+| Transferencia | Flujo de .NET con temporal para el prototipo | El ensayo verificó la denegación ante un escritor abierto. CopyFile2 y Robocopy quedan como referencias experimentales. |
 | Comparación | SHA-256 de .NET, hashes de contenido y revisión completa programable | Fechas/tamaño son una optimización que puede pasar por alto cambios; no son prueba de igualdad. BLAKE3 se evalúa solo si las mediciones justifican la dependencia. |
 | Índice | SQLite en almacenamiento fijo local del usuario; WAL + synchronous=FULL inicialmente | Catálogo reconstruible desde manifiestos; su transacción no cubre archivos externos. Un escritor, transacciones por lotes y lectores de UI. |
 | Formatos | Objetos ordinarios y manifiestos JSON Lines (.jsonl) con versión de esquema | Procesamiento secuencial, validación estricta y recuperación independiente. No implementar compresión ni cifrado propios. |
@@ -154,4 +154,16 @@ La estimación anterior de 40–100 horas no debe tratarse como presupuesto de t
 
 Avance de etapa 1. `experiments/CopyProbe` verifica el flujo de .NET con archivos sintéticos, incluido un origen con escritor abierto y la preservación de copias existentes. Las pruebas de corrupción y terminación real del proceso cubren la publicación con nombre nuevo y la restauración con un hash esperado. El ensayo conserva un temporal pendiente y bloquea su sobrescritura. La recuperación automatizada de temporales queda por implementar. GitHub Actions ejecuta estas comprobaciones en Windows.
 
-El siguiente incremento compara el flujo de .NET, CopyFile2 y Robocopy sobre el mismo conjunto sintético. Quedan pendientes disco lleno y fallo de flush del sistema, carreras de rutas, lectura sin caché y durabilidad ante pérdida de energía. La terminación del proceso mide el estado observable de los archivos con Windows en ejecución.
+### Resultado de la comparación de transferencia
+
+El ensayo `--compare` usa 26 archivos sintéticos, 8.487.205 bytes, nombres Unicode, un archivo vacío y tamaños no alineados. Ejecuta tres rondas con orden rotado, escribe en un área temporal, solicita flush, verifica SHA-256 y publica con nombre nuevo. Comprueba fuera del cronómetro el inventario y los hashes de origen y destino. Robocopy se ejecuta una vez por lote con selección explícita de nombres y sin reintentos.
+
+| Transporte | Mediana local | Resultado con un escritor abierto que permite compartir lectura |
+|---|---:|---|
+| Flujo de .NET | 204,1 ms | Rechazó la apertura con error de uso compartido |
+| CopyFile2 | 212,4 ms | Copió |
+| Robocopy | 244,3 ms | Copió |
+
+Se mantiene el flujo de .NET para el prototipo porque abre el origen con lectura compartida y deniega escritura mientras lee. Las variantes nativas se probaron sin un handle adicional que proteja el origen. Comparan el resultado contra un hash esperado conocido, mientras .NET también calcula el hash durante la copia. Las cifras son orientativas para este equipo, muestra y estado de caché. GitHub Actions repite las comprobaciones de contenido, sin umbrales de velocidad.
+
+El siguiente incremento es definir y probar la recuperación de temporales con información persistida. Quedan pendientes disco lleno y fallo de flush del sistema, carreras de rutas, lectura sin caché y durabilidad ante pérdida de energía. La terminación del proceso mide el estado observable de los archivos con Windows en ejecución.
