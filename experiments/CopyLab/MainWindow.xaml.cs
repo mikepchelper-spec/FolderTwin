@@ -93,6 +93,14 @@ public partial class MainWindow : Window
                 SetStatus("Copia verificada. Ya puedes probar la restauración.");
             }
         }
+        catch (Exception error) when (FileUseDiagnostics.IsSharingViolation(error))
+        {
+            var users = await Task.Run(() => FileUseDiagnostics.TryGetUsers(restore ? session.CopyFile : session.SourceFile));
+            string[] applications = users.Select(user => user.Application.Trim())
+                .Where(name => name.Length != 0).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToArray();
+            string detail = applications.Length == 0 ? "" : " Aplicaciones detectadas por Windows: " + string.Join(", ", applications) + ".";
+            SetStatus("La prueba no se completó. Un archivo está en uso. Cierra el archivo y vuelve a intentarlo." + detail);
+        }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException
             or Win32Exception or ArgumentException)
         {
@@ -158,7 +166,8 @@ public partial class MainWindow : Window
             Click(CopyButton);
             await activeTask;
             Check(!copied && !File.Exists(session.CopyFile) && !RestoreButton.IsEnabled &&
-                StatusText.Text.StartsWith("La prueba no se completó.", StringComparison.Ordinal), "Copy failure was hidden.");
+                StatusText.Text.StartsWith("La prueba no se completó.", StringComparison.Ordinal) &&
+                StatusText.Text.Contains("está en uso", StringComparison.Ordinal), "Copy failure was hidden.");
         }
         Click(CopyButton);
         await activeTask;

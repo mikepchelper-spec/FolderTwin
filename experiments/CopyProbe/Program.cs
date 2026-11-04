@@ -97,9 +97,20 @@ if (OperatingSystem.IsWindows())
 {
     fixture.Seed("locked source"u8);
     using (var writer = new FileStream(fixture.Source, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
+    {
         Expect<IOException>(() => VerifiedCopy.Run(fixture.Source, fixture.Backup, fixture.Temporary));
+        Check(FileUseDiagnostics.GetUsers(fixture.Source).Any(user => user.ProcessId == Environment.ProcessId),
+            "Restart Manager did not identify the synthetic writer.");
+        Check(writer.CanWrite, "Diagnosis closed the writer.");
+    }
     Check(!File.Exists(fixture.Backup) && !File.Exists(fixture.Temporary), "Locked source started a copy");
     Pass("Windows rejects a source with an open writer");
+    Check(FileUseDiagnostics.TryGetUsers(fixture.Root).Length == 0,
+        "An unsupported diagnostic resource should leave the generic fallback.");
+    Check(FileUseDiagnostics.IsSharingViolation(new IOException("native failure", new System.ComponentModel.Win32Exception(32))) &&
+        FileUseDiagnostics.IsSharingViolation(new IOException("sharing violation", unchecked((int)0x80070020))) &&
+        !FileUseDiagnostics.IsSharingViolation(new IOException("unrelated failure")), "Sharing violation classification failed");
+    Pass("Restart Manager identifies the synthetic writer and tolerates an unsupported diagnostic resource");
 }
 
 foreach (string boundary in new[] { "before-receipt", "receipt-draft", "before", "after" })
