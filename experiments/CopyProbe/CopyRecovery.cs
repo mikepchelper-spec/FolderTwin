@@ -70,11 +70,12 @@ internal static class CopyRecovery
         }
     }
 
-    public static RecoveryResult Recover(string root, string temporary, string destination)
+    public static RecoveryResult Recover(string root, string temporary, string destination, DestinationBinding? binding = null)
     {
         CheckParents(temporary, destination);
         using var fence = new DirectoryFence(root, temporary, destination);
         var directory = fence.Parent(destination);
+        using var marker = binding?.OpenVerifiedMarker(directory);
         string receiptPath = ReceiptPath(temporary);
         if (!WindowsProbeNative.PlainFileExists(directory, LockPath(temporary)))
             return WindowsProbeNative.PlainFileExists(directory, receiptPath) ? RecoveryResult.InvalidReceipt : RecoveryResult.NoReceipt;

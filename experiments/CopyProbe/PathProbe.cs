@@ -50,6 +50,7 @@ internal static class PathProbe
             Directory.Delete(child);
             Directory.Move(movedChild, child);
             CheckCopyAndRecovery(fixture, root, child, movedChild, outside, sentinel);
+            BindingProbe.Run();
             return 0;
         }
         finally

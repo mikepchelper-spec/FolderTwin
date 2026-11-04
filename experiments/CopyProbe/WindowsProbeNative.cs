@@ -141,6 +141,31 @@ internal static class WindowsProbeNative
         return identity;
     }
 
+    internal static unsafe string VolumePath(SafeFileHandle directory)
+    {
+        const uint volumeNameGuid = 1;
+        Span<char> path = stackalloc char[512];
+        fixed (char* buffer = path)
+        {
+            uint size = GetFinalPathNameByHandle(directory, buffer, (uint)path.Length, volumeNameGuid);
+            if (size == 0)
+                throw new Win32Exception(Marshal.GetLastPInvokeError(), "Reading the volume path failed.");
+            if (size < path.Length)
+                return new string(path[..(int)size]);
+
+            var longerPath = new char[checked((int)size)];
+            fixed (char* longerBuffer = longerPath)
+            {
+                size = GetFinalPathNameByHandle(directory, longerBuffer, (uint)longerPath.Length, volumeNameGuid);
+                if (size == 0)
+                    throw new Win32Exception(Marshal.GetLastPInvokeError(), "Reading the volume path failed.");
+                if (size >= longerPath.Length)
+                    throw new IOException("The volume path changed while reading it.");
+                return new string(longerPath, 0, (int)size);
+            }
+        }
+    }
+
     internal static void RenameNew(SafeFileHandle file, SafeFileHandle directory, string destinationName)
     {
         const int fileRenameInformation = 10;
@@ -182,6 +207,9 @@ internal static class WindowsProbeNative
     [DllImport("kernel32.dll", EntryPoint = "GetFileInformationByHandleEx", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetIdentity(SafeFileHandle file, int infoClass, [Out] byte[] data, int size);
+
+    [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", SetLastError = true)]
+    private static extern unsafe uint GetFinalPathNameByHandle(SafeFileHandle file, char* path, uint size, uint flags);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct IoStatusBlock

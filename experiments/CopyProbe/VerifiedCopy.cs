@@ -8,11 +8,13 @@ internal static class VerifiedCopy
     public static void Run(
         string source, string destination, string temporary,
         Action<CopyStep, string>? checkpoint = null, byte[]? expectedHash = null, string? recoveryRoot = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, DestinationBinding? binding = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var fence = recoveryRoot is null ? null : new DirectoryFence(recoveryRoot, source, temporary, destination);
         var directory = fence?.Parent(destination);
+        using var marker = binding?.OpenVerifiedMarker(
+            directory ?? throw new ArgumentException("A configured copy requires a trusted fixture root."));
         using var operation = directory is null ? null : CopyRecovery.Begin(directory, temporary, destination);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using (var input = fence is null
