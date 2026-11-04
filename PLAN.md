@@ -134,6 +134,8 @@ Estado global: la base experimental ya copia, verifica y restaura lotes sintéti
 
 La restauración de lotes completos se reconstruye desde el catálogo y la reanudación de pendientes desde el descriptor y los registros por archivo. La ventana abre sesiones anteriores, verifica manualmente los lotes confirmados y conserva un historial de los intentos. Antes de admitir carpetas personales, cerrar la matriz de metadatos, exclusiones y detección de contenido no soportado, y superar los criterios de la alfa.
 
+Avance de la etapa 2. La ventana admite dos orígenes generados con recuentos distintos. El ensayo WPF elige el origen ampliado, deja un resultado de tres archivos de cuatro por un bloqueo, vuelve a abrirlo, completa la copia y verifica y restaura el cuarto archivo. El descriptor conserva el origen elegido y el historial registra la ruta adicional. Siguiente hito de la etapa 2: separar la sesión de trabajo de los conjuntos de prueba fijos y elegir las dos raíces dentro de un espacio desechable registrado, con comprobación de capacidad y exclusiones visibles.
+
 | Etapa | Entrega | Para pasar a la siguiente |
 |---|---|---|
 | 0 — Especificación | Modos, matriz de metadatos y estados de publicación/recuperación | Definir fixture, confinamiento de rutas y protocolo de diario. Especificar JSONL y duplicación antes de etapa 3; todavía no declarar la arquitectura validada. |
@@ -228,7 +230,7 @@ El prototipo conserva una lista acotada en memoria, con un máximo predeterminad
 
 El ensayo recorre 702 archivos en varias páginas del buffer, verifica nombres Unicode, un archivo oculto y un archivo con apertura exclusiva, distingue vacío de ausente y prueba una subcarpeta ocupada, un fallo de enumeración inyectado, límites, cancelación, junctions hacia otra carpeta y un ciclo. Rechaza también la enumeración de un directorio convertido en junction después de abrirlo. Reporta un nombre real con punto final sin normalizarlo. Un nombre con UTF-16 no válido deja el directorio incompleto, evitando sustituir caracteres al decodificarlo. Todo se crea en una carpeta temporal sintética y se retira al terminar.
 
-La ventana requiere **Analizar carpetas** antes de copiar y muestra los nombres del lote y su tamaño total. Un análisis incompleto o un archivo/dato pendiente en el destino impide preparar un lote nuevo. Tras comenzar la ejecución, conserva el plan para los reintentos y bloquea cambios de selección. La copia visual continúa limitada al conjunto sintético generado para la sesión.
+La ventana requiere **Analizar carpetas** antes de copiar y muestra los nombres del lote y su tamaño total. Un análisis incompleto o un archivo/dato pendiente en el destino impide preparar un lote nuevo. Tras comenzar la ejecución, conserva el plan para los reintentos y bloquea cambios de selección. La copia visual admite únicamente los dos orígenes sintéticos generados para la sesión.
 
 ### Lotes sintéticos y resultados parciales
 

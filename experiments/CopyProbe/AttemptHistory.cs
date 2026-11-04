@@ -90,10 +90,10 @@ internal static class AttemptHistory
         try
         {
             var record = JsonSerializer.Deserialize<AttemptRecord>(line, Json);
-            return record is { Issues: not null } && record.VerifiedFiles >= 0 && record.VerifiedFiles <= BatchFixture.SampleNames.Length &&
+            return record is { Issues: not null } && record.VerifiedFiles >= 0 && record.VerifiedFiles <= BatchFixture.MaximumSampleFiles &&
                 !(record.Restore && record.Verify) &&
-                record.Issues.Length <= BatchFixture.SampleNames.Length + BatchFixture.DirectoryNames.Length &&
-                (!record.Complete || record.VerifiedFiles == BatchFixture.SampleNames.Length &&
+                record.Issues.Length <= BatchFixture.MaximumSampleFiles + BatchFixture.DirectoryNames.Length &&
+                (!record.Complete || record.VerifiedFiles >= BatchFixture.SampleNames.Length &&
                     !record.HasProblem && !record.Cancelled && record.Issues.Length == 0) &&
                 record.Issues.All(issue => issue is not null && KnownPath(issue.Path) && Enum.IsDefined(issue.Kind))
                 ? record : null;
@@ -101,6 +101,5 @@ internal static class AttemptHistory
         catch (JsonException) { return null; }
     }
 
-    private static bool KnownPath(string path) => BatchFixture.SampleNames.Contains(path, StringComparer.Ordinal) ||
-        BatchFixture.DirectoryNames.Contains(path, StringComparer.Ordinal);
+    private static bool KnownPath(string path) => BatchFixture.IsSamplePath(path);
 }

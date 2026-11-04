@@ -13,6 +13,8 @@ public partial class MainWindow : Window
     private readonly BatchFixture session;
     private readonly Queue<string?>? testSelections;
     private PreviousSession? previous;
+    private string? selectedSource;
+    private int analyzedFileCount;
     private bool sourceSelected;
     private bool destinationSelected;
     private bool analyzed;
@@ -28,31 +30,36 @@ public partial class MainWindow : Window
     internal MainWindow(bool smoke)
     {
         InitializeComponent();
-        session = new BatchFixture();
+        session = new BatchFixture(includeAlternate: true);
         SessionText.Text = $"Sesión nueva · {Path.GetFileName(session.Root)}\nSe conserva en la carpeta temporal de Windows cuando inicias una copia.";
         if (smoke)
             testSelections = new Queue<string?>([null, session.Destination, session.Source, session.Destination]);
     }
 
     private void ChooseSource(object sender, RoutedEventArgs e) =>
-        SelectFolder("Elegir origen", session.Source, SourceText, ref sourceSelected);
+        SelectFolder("Elegir origen", session.Source, SourceText, ref sourceSelected, alternate: session.AlternateSource);
 
     private void ChooseDestination(object sender, RoutedEventArgs e) =>
         SelectFolder("Elegir destino", session.Destination, DestinationText, ref destinationSelected);
 
-    private void SelectFolder(string title, string expected, TextBlock label, ref bool selected)
+    private void SelectFolder(string title, string expected, TextBlock label, ref bool selected, string? alternate = null)
     {
         string? candidate = PickFolder(title);
         if (candidate is null)
             return;
-        selected = string.Equals(Path.TrimEndingDirectorySeparator(candidate), expected, StringComparison.OrdinalIgnoreCase);
+        candidate = Path.TrimEndingDirectorySeparator(candidate);
+        string? chosen = string.Equals(candidate, expected, StringComparison.OrdinalIgnoreCase) ? expected :
+            string.Equals(candidate, alternate, StringComparison.OrdinalIgnoreCase) ? alternate : null;
+        selected = chosen is not null;
+        if (alternate is not null)
+            selectedSource = chosen;
         analyzed = false;
         PreviewText.Text = "Analiza las carpetas para revisar qué se copiará.";
-        string folder = Path.GetFileName(expected);
-        label.Text = selected ? $"{folder} · carpeta de prueba" : $"Elige la carpeta {folder} del laboratorio.";
+        string choices = alternate is null ? Path.GetFileName(expected) : $"{Path.GetFileName(expected)} u {Path.GetFileName(alternate)}";
+        label.Text = selected ? $"{Path.GetFileName(chosen)} · carpeta de prueba" : $"Elige {choices} en el laboratorio.";
         SetStatus(selected
             ? sourceSelected && destinationSelected ? "Todo listo para analizar las carpetas de prueba." : "Selecciona la otra carpeta."
-            : $"Para esta prueba, elige la carpeta {folder}.");
+            : $"Para esta prueba, elige {choices}.");
         RefreshActions();
     }
 
@@ -92,7 +99,7 @@ public partial class MainWindow : Window
             previous = candidate;
             copied = confirmed;
             analyzed = true;
-            SourceText.Text = "Origen de la sesión anterior";
+            SourceText.Text = $"{Path.GetFileName(candidate.Source)} · origen de la sesión anterior";
             DestinationText.Text = "Destino de la sesión anterior";
             SessionText.Text = $"Sesión abierta · {Path.GetFileName(candidate.Root)}";
             PreviewText.Text = confirmed
@@ -129,7 +136,9 @@ public partial class MainWindow : Window
         RefreshActions();
         try
         {
-            BatchPlan plan = await Task.Run(session.Analyze);
+            string source = selectedSource ?? throw new InvalidDataException("Elige el origen antes de analizar.");
+            BatchPlan plan = await Task.Run(() => session.Analyze(source));
+            analyzedFileCount = plan.Files.Length;
             analyzed = true;
             PreviewText.Text = $"{plan.Files.Length:N0} archivos · {plan.Bytes:N0} bytes de contenido · {plan.Directories.Length:N0} carpetas\n" +
                 "Se conservan las fechas de creación y modificación y el atributo Oculto de los archivos. Los permisos se heredan de la carpeta de destino.\n" +
@@ -245,14 +254,15 @@ public partial class MainWindow : Window
                 copied = result.Complete;
             ResultsList.ItemsSource = result.Entries.Select(entry => $"{entry.RelativePath} · {Describe(entry, operation)}").ToArray();
             string[] inUse = result.Entries.Where(entry => entry.InUse).Take(16)
-                .Select(entry => Path.Combine(operation != AttemptOperation.Copy ? previous?.Destination ?? session.Destination : previous?.Source ?? session.Source,
+                .Select(entry => Path.Combine(operation != AttemptOperation.Copy ? previous?.Destination ?? session.Destination : previous?.Source ?? selectedSource ?? session.Source,
                     entry.RelativePath)).ToArray();
             var users = await Task.Run(() => FileUseDiagnostics.TryGetUsers(inUse));
             string[] applications = users.Select(user => user.Application.Trim())
                 .Where(name => name.Length != 0).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToArray();
             string detail = applications.Length == 0 ? "" : " Aplicaciones detectadas por Windows: " + string.Join(", ", applications) + ".";
+            int totalFiles = previous?.FileCount ?? analyzedFileCount;
             string status = result.Cancelled
-                ? $"Copia cancelada. Se conserva lo ya verificado ({result.VerifiedFiles:N0} de {BatchFixture.SampleNames.Length:N0}). Puedes reintentar el lote."
+                ? $"Copia cancelada. Se conserva lo ya verificado ({result.VerifiedFiles:N0} de {totalFiles:N0}). Puedes reintentar el lote."
                 : result.Complete
                 ? operation switch
                 {
@@ -260,7 +270,7 @@ public partial class MainWindow : Window
                     AttemptOperation.Restore => $"Restauración verificada: {result.VerifiedFiles:N0} archivos y sus carpetas.",
                     _ => $"Lote copiado y verificado: {result.VerifiedFiles:N0} archivos. Ya puedes restaurarlo."
                 }
-                : $"Resultado parcial: {result.VerifiedFiles:N0} de {BatchFixture.SampleNames.Length:N0} archivos verificados. Revisa las incidencias y reintenta.";
+                : $"Resultado parcial: {result.VerifiedFiles:N0} de {totalFiles:N0} archivos verificados. Revisa las incidencias y reintenta.";
             SetStatus(status + (result.Problem is null ? "" : " " + result.Problem) +
                 (result.Note is null ? "" : " " + result.Note) + detail);
             if (restore && result.Complete)
@@ -642,6 +652,56 @@ public partial class MainWindow : Window
             confirmedWindow.session.CheckRestored();
         }
         finally { confirmedWindow.Close(); }
+
+        var alternateWindow = new MainWindow(smoke: true);
+        try
+        {
+            alternateWindow.testSelections!.Clear();
+            alternateWindow.testSelections.Enqueue(alternateWindow.session.AlternateSource);
+            alternateWindow.testSelections.Enqueue(alternateWindow.session.Destination);
+            Click(alternateWindow.SourceButton);
+            Click(alternateWindow.DestinationButton);
+            Click(alternateWindow.AnalyzeButton);
+            await alternateWindow.activeTask;
+            Check(alternateWindow.CopyButton.IsEnabled &&
+                alternateWindow.PreviewText.Text.Contains("4 archivos", StringComparison.Ordinal),
+                "The alternate source was not reflected in the preview.");
+            string extra = Path.Combine(alternateWindow.session.AlternateSource, "resumen ñ.txt");
+            using (var writer = new FileStream(extra, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
+            {
+                Click(alternateWindow.CopyButton);
+                await alternateWindow.activeTask;
+                Check(alternateWindow.StatusText.Text.StartsWith("Resultado parcial: 3 de 4", StringComparison.Ordinal),
+                    "The alternate session did not report the actual partial file count.");
+            }
+
+            var retryWindow = new MainWindow(smoke: true);
+            try
+            {
+                retryWindow.testSelections!.Clear();
+                retryWindow.testSelections.Enqueue(alternateWindow.session.Root);
+                Click(retryWindow.OpenPreviousButton);
+                await retryWindow.activeTask;
+                Check(retryWindow.previous?.Source == alternateWindow.session.AlternateSource && retryWindow.CopyButton.IsEnabled,
+                    "The alternate pending session reopened with the wrong source.");
+                Click(retryWindow.CopyButton);
+                await retryWindow.activeTask;
+                Check(retryWindow.copied && retryWindow.VerifyButton.IsEnabled &&
+                    retryWindow.HistoryList.Items.Cast<string>().Any(row => row.Contains("resumen ñ.txt · Archivo en uso", StringComparison.Ordinal)),
+                    "Retry or the alternate history failed.");
+                Click(retryWindow.VerifyButton);
+                await retryWindow.activeTask;
+                Check(retryWindow.StatusText.Text.Contains("Coinciden los 4 archivos", StringComparison.Ordinal),
+                    "The alternate confirmed catalog failed verification.");
+                Click(retryWindow.RestoreButton);
+                await retryWindow.activeTask;
+                Check(retryWindow.restored && File.ReadAllBytes(extra).AsSpan().SequenceEqual(
+                    File.ReadAllBytes(Path.Combine(retryWindow.session.Restored, Path.GetFileName(extra)))),
+                    "The alternate file did not restore.");
+            }
+            finally { retryWindow.Close(); }
+        }
+        finally { alternateWindow.Close(); }
 
         async Task WaitForPauseAsync()
         {

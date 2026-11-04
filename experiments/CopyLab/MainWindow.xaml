@@ -21,7 +21,7 @@
         <StackPanel Margin="28,24" MaxWidth="680">
             <TextBlock Text="FolderTwin" FontSize="13" FontWeight="SemiBold" />
             <TextBlock Text="Laboratorio de copia" FontSize="30" FontWeight="SemiBold" Margin="0,5,0,0" />
-            <TextBlock Text="Analiza un lote de tres archivos sintéticos, cópialo y comprueba la restauración en otra carpeta."
+            <TextBlock Text="Elige uno de los dos lotes sintéticos, cópialo y comprueba la restauración en otra carpeta."
                        Style="{StaticResource Detail}" />
             <Button x:Name="OpenPreviousButton" Content="Abrir sesión _anterior" Click="OpenPreviousClick"
                     HorizontalAlignment="Left" Margin="0,0,0,8"
@@ -30,7 +30,7 @@
             <Separator Margin="0,4,0,16" />
 
             <TextBlock Text="1. Origen" Style="{StaticResource SectionHeading}" />
-            <TextBlock x:Name="SourceText" Text="Elige la carpeta Origen del laboratorio." Style="{StaticResource Detail}" />
+            <TextBlock x:Name="SourceText" Text="Elige Origen u Origen ampliado en el laboratorio." Style="{StaticResource Detail}" />
             <Button x:Name="SourceButton" Content="Elegir _origen" HorizontalAlignment="Left"
                     Click="ChooseSource" AutomationProperties.AutomationId="ChooseSource" />
 

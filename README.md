@@ -32,7 +32,7 @@ Usa `-- --catalog` para probar los catálogos JSONL duplicados, su confirmación
 
 Usa `-- --resume` para terminar trabajadores de prueba y reabrir sus lotes pendientes desde otros procesos. Reconoce lo ya verificado, recupera temporales con registro válido y deja pendientes los archivos que aún necesitan el origen. Los datos sin verificar quedan para revisión. [Descriptor de ejecución](experiments/CopyProbe/PENDING.md).
 
-Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Elige **Origen** y **Destino**, pulsa **Analizar carpetas** y revisa los tres archivos previstos. Después usa **Copiar y verificar** y **Restaurar y verificar**. La ventana muestra los resultados por ruta y ofrece **Reintentar copia** si el lote queda parcial. Declara la copia completa después de confirmar el catálogo.
+Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Selecciona la carpeta **Origen** (tres archivos) u **Origen ampliado** (cuatro archivos) y luego **Destino**. Pulsa **Analizar carpetas** y revisa el lote elegido. Después usa **Copiar y verificar** y **Restaurar y verificar**. La ventana muestra los resultados por ruta y ofrece **Reintentar copia** si el lote queda parcial. Declara la copia completa después de confirmar el catálogo.
 
 Durante una copia, **Cancelar copia** solicita detener el lote en el próximo punto seguro. Si un archivo está en curso, el motor termina ese paso y conserva lo ya verificado para el reintento. Si la confirmación del catálogo ya empezó, el lote puede terminar.
 

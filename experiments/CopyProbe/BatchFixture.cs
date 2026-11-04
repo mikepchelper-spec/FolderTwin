@@ -4,9 +4,14 @@ using System.Security.Cryptography;
 internal sealed class BatchFixture : IDisposable
 {
     internal const string Prefix = "FolderTwin-Batch-";
+    internal const string DefaultSourceName = "Origen";
+    internal const string AlternateSourceName = "Origen ampliado";
+    private const string ExtraFileName = "resumen ñ.txt";
     internal static readonly string[] SampleNames = ["muestra.txt", Path.Combine("Documentos á漢字", "notas.bin"), "vacío.bin"];
+    internal static int MaximumSampleFiles => SampleNames.Length + 1;
     internal static readonly string[] DirectoryNames = ["Documentos á漢字", "Carpeta vacía"];
     private readonly byte[] sourceIdentity;
+    private readonly byte[]? alternateIdentity;
     private static byte[][] Samples()
     {
         byte[] content = new byte[65_537];
@@ -16,10 +21,13 @@ internal sealed class BatchFixture : IDisposable
 
     private static readonly BatchFile[] ExpectedFiles = Samples().Select((content, index) =>
         new BatchFile(SampleNames[index], content.LongLength, SHA256.HashData(content))).ToArray();
+    private static ReadOnlySpan<byte> ExtraContent => "FolderTwin · archivo adicional del laboratorio.\n"u8;
+    private static readonly BatchFile ExtraFile = new(ExtraFileName, ExtraContent.Length, SHA256.HashData(ExtraContent));
     internal DestinationBinding DestinationBinding { get; }
     internal DestinationBinding RestoreBinding { get; }
     internal string Root { get; } = Directory.CreateTempSubdirectory(Prefix).FullName;
-    internal string Source => Path.Combine(Root, "Origen");
+    internal string Source => Path.Combine(Root, DefaultSourceName);
+    internal string AlternateSource => Path.Combine(Root, AlternateSourceName);
     internal string Destination => Path.Combine(Root, "Destino");
     internal string Restored => Path.Combine(Root, "Restaurado");
     internal string SourceFile => Path.Combine(Source, SampleNames[0]);
@@ -27,37 +35,60 @@ internal sealed class BatchFixture : IDisposable
     internal string RestoredFile => Path.Combine(Restored, SampleNames[0]);
     internal BatchPlan? Plan { get; private set; }
 
-    internal BatchFixture()
+    internal BatchFixture(bool includeAlternate = false)
     {
         foreach (string directory in new[] { Source, Destination, Restored })
             Directory.CreateDirectory(directory);
-        foreach (string directory in DirectoryNames)
-            Directory.CreateDirectory(Path.Combine(Source, directory));
-        using (var source = new DirectoryFence(Source))
-            sourceIdentity = WindowsProbeNative.DirectoryIdentity(source.Root);
-        byte[][] samples = Samples();
-        for (int index = 0; index < samples.Length; index++)
-            File.WriteAllBytes(Path.Combine(Source, SampleNames[index]), samples[index]);
+        sourceIdentity = CreateSource(Source);
+        if (includeAlternate)
+        {
+            alternateIdentity = CreateSource(AlternateSource);
+            File.WriteAllBytes(Path.Combine(AlternateSource, ExtraFileName), ExtraContent);
+        }
         using (var target = new DirectoryFence(Destination))
             DestinationBinding = global::DestinationBinding.Register(target.Root);
         using (var target = new DirectoryFence(Restored))
             RestoreBinding = global::DestinationBinding.Register(target.Root);
     }
 
-    internal BatchPlan Analyze()
+    private static byte[] CreateSource(string path)
     {
-        var plan = FolderBatch.Prepare(Root, Source, Destination, DestinationBinding);
-        ValidateSamples(plan.Files, plan.Directories);
+        Directory.CreateDirectory(path);
+        foreach (string directory in DirectoryNames)
+            Directory.CreateDirectory(Path.Combine(path, directory));
+        byte[][] samples = Samples();
+        for (int index = 0; index < samples.Length; index++)
+            File.WriteAllBytes(Path.Combine(path, SampleNames[index]), samples[index]);
+        using var source = new DirectoryFence(path);
+        return WindowsProbeNative.DirectoryIdentity(source.Root);
+    }
+
+    internal BatchPlan Analyze() => Analyze(Source);
+
+    internal BatchPlan Analyze(string source)
+    {
+        byte[] identity = source == Source ? sourceIdentity : source == AlternateSource && alternateIdentity is { } alternate
+            ? alternate : throw new InvalidDataException("Elige un origen creado en esta sesión de laboratorio.");
+        using var pinned = new DirectoryFence(source);
+        if (!WindowsProbeNative.DirectoryIdentity(pinned.Root).AsSpan().SequenceEqual(identity))
+            throw new InvalidDataException("La carpeta de origen cambió desde que se creó la sesión.");
+        var plan = FolderBatch.Prepare(Root, source, Destination, DestinationBinding);
+        ValidateSamples(plan.Files, plan.Directories, includeExtra: source == AlternateSource);
         return Plan = plan;
     }
 
-    internal static void ValidateSamples(BatchFile[] files, string[] directories)
+    internal static void ValidateSamples(BatchFile[] files, string[] directories, bool? includeExtra = null)
     {
-        if (files.Length != ExpectedFiles.Length || !ExpectedFiles.All(expected => files.Any(file =>
-            file.RelativePath == expected.RelativePath && file.Length == expected.Length && file.Hash.AsSpan().SequenceEqual(expected.Hash))) ||
+        bool extra = includeExtra ?? files.Length == ExpectedFiles.Length + 1;
+        if (files.Length != ExpectedFiles.Length + (extra ? 1 : 0) || !ExpectedFiles.All(Matches) || extra && !Matches(ExtraFile) ||
             !directories.Order(StringComparer.Ordinal).SequenceEqual(DirectoryNames.Order(StringComparer.Ordinal)))
             throw new InvalidDataException("Este laboratorio solo admite los archivos sintéticos generados para la sesión.");
+
+        bool Matches(BatchFile expected) => files.Any(file => file.RelativePath == expected.RelativePath &&
+            file.Length == expected.Length && file.Hash.AsSpan().SequenceEqual(expected.Hash));
     }
+    internal static bool IsSamplePath(string path) => SampleNames.Contains(path, StringComparer.Ordinal) ||
+        DirectoryNames.Contains(path, StringComparer.Ordinal) || path == ExtraFileName;
     internal BatchResult Copy(CancellationToken cancellationToken = default, Action<string, CopyStep, string>? checkpoint = null,
         IProgress<BatchProgress>? progress = null, Action<BatchProgress>? waitBetweenFiles = null)
     {
@@ -90,12 +121,14 @@ internal sealed class BatchFixture : IDisposable
         using (DestinationBinding.OpenVerifiedMarker(root.Parent(markerPath)))
             File.Delete(Path.Combine(Root, AttemptHistory.Name));
         Clear(Source, sourceIdentity, null);
-        Clear(Destination, DestinationBinding.Identity, DestinationBinding);
-        Clear(Restored, RestoreBinding.Identity, RestoreBinding);
+        if (alternateIdentity is not null)
+            Clear(AlternateSource, alternateIdentity, null, includeExtra: true);
+        Clear(Destination, DestinationBinding.Identity, DestinationBinding, includeExtra: alternateIdentity is not null);
+        Clear(Restored, RestoreBinding.Identity, RestoreBinding, includeExtra: alternateIdentity is not null);
         Directory.Delete(Root);
     }
 
-    private void Clear(string root, byte[] identity, DestinationBinding? binding)
+    private void Clear(string root, byte[] identity, DestinationBinding? binding, bool includeExtra = false)
     {
         using (var fence = new DirectoryFence(root))
         {
@@ -103,7 +136,7 @@ internal sealed class BatchFixture : IDisposable
                 throw new InvalidDataException("Una carpeta temporal cambió y requiere revisión.");
             using (binding?.OpenVerifiedMarker(fence.Root))
             {
-                foreach (string relative in SampleNames)
+                foreach (string relative in includeExtra ? SampleNames.Append(ExtraFileName) : SampleNames)
                 {
                     string path = Path.Combine(root, relative);
                     if (!Directory.Exists(Path.GetDirectoryName(path)))

@@ -6,9 +6,10 @@ internal sealed class PreviousSession
 {
     internal DestinationBinding Binding { get; }
     internal string Root { get; }
-    internal string Source => Path.Combine(Root, "Origen");
+    internal string Source { get; }
     internal string Destination => Path.Combine(Root, "Destino");
     internal bool Confirmed { get; }
+    internal int FileCount { get; }
 
     internal PreviousSession(string root)
     {
@@ -21,12 +22,17 @@ internal sealed class PreviousSession
             var catalog = BatchCatalog.Read(Destination);
             BatchFixture.ValidateSamples(catalog.Files, catalog.Directories);
             Binding = catalog.Binding;
+            FileCount = catalog.Files.Length;
+            Source = Path.Combine(Root, FileCount == BatchFixture.MaximumSampleFiles
+                ? BatchFixture.AlternateSourceName : BatchFixture.DefaultSourceName);
         }
         else
         {
             var plan = PendingBatch.Read(Root, Destination);
             ValidateSamples(plan);
             Binding = plan.Target;
+            FileCount = plan.Files.Length;
+            Source = plan.Source;
         }
     }
 
@@ -34,6 +40,8 @@ internal sealed class PreviousSession
         PendingBatch.Resume(Root, Destination, cancellationToken, validate: plan =>
         {
             ValidateSamples(plan);
+            if (plan.Source != Source)
+                throw new InvalidDataException("El origen de la sesión cambió desde que se abrió.");
             RequireSameDestination(plan.Target);
         }, finishCurrentFileOnCancel: true, progress: progress, waitBetweenFiles: waitBetweenFiles);
 
@@ -58,8 +66,10 @@ internal sealed class PreviousSession
 
     private void ValidateSamples(BatchPlan plan)
     {
-        if (plan.Source != Source)
+        string standard = Path.Combine(Root, BatchFixture.DefaultSourceName);
+        string alternate = Path.Combine(Root, BatchFixture.AlternateSourceName);
+        if (plan.Source != standard && plan.Source != alternate)
             throw new InvalidDataException("El descriptor no apunta al origen de esta sesión de laboratorio.");
-        BatchFixture.ValidateSamples(plan.Files, plan.Directories);
+        BatchFixture.ValidateSamples(plan.Files, plan.Directories, includeExtra: plan.Source == alternate);
     }
 }
