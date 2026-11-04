@@ -23,6 +23,8 @@ if (args is ["--batch"])
     return BatchProbe.Run();
 if (args is ["--workspace"])
     return WorkspaceProbe.Run();
+if (args is ["--versions"])
+    return VersionProbe.Run();
 if (args is ["--catalog"])
     return CatalogProbe.Run();
 if (args is ["--resume"])

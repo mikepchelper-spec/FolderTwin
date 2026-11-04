@@ -157,7 +157,7 @@ internal sealed class LabWorkspace
             : result;
     }
 
-    private DirectoryFence OpenRegisteredRoot()
+    internal DirectoryFence OpenRegisteredRoot()
     {
         var fence = new DirectoryFence(Root);
         try
@@ -183,7 +183,7 @@ internal sealed class LabWorkspace
             throw new InvalidDataException("El registro del espacio desechable no corresponde a esta carpeta.");
     }
 
-    private void CheckRoots(string source, string destination)
+    internal void CheckRoots(string source, string destination)
     {
         CheckChild(source);
         CheckChild(destination);
@@ -205,20 +205,20 @@ internal sealed class LabWorkspace
             throw new InvalidDataException("El respaldo cambió de identidad.");
     }
 
-    private static void RequireEmpty(SafeFileHandle directory)
+    internal static void RequireEmpty(SafeFileHandle directory)
     {
         WindowsProbeNative.RequireSupportedData(directory, "destino");
         if (WindowsProbeNative.ReadDirectory(directory).Any(entry => entry.Name is not ("." or "..")))
             throw new InvalidDataException("Elige una carpeta de destino vacía.");
     }
 
-    private static void RequireSpace(long bytes, ulong available)
+    internal static void RequireSpace(long bytes, ulong available)
     {
         if ((ulong)bytes + ReserveBytes > available)
             throw new IOException("El espacio disponible no alcanza para el contenido y la reserva del laboratorio.");
     }
 
-    private static ulong AvailableSpace(SafeFileHandle directory)
+    internal static ulong AvailableSpace(SafeFileHandle directory)
     {
         if (!GetDiskFreeSpaceEx(WindowsProbeNative.VolumePath(directory), out ulong available, out _, out _))
             throw new IOException("No se pudo consultar el espacio disponible en el destino.", new Win32Exception(Marshal.GetLastPInvokeError()));

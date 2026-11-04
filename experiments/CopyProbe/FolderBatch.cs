@@ -46,15 +46,21 @@ internal static class FolderBatch
         if (unregisteredDestination)
             binding.RequireDirectoryIdentity(targetFence.Root);
         using var marker = unregisteredDestination ? null : binding.OpenVerifiedMarker(targetFence.Root);
+        var destinationInventory = FolderInventory.Scan(destination);
+        if (!destinationInventory.Complete || destinationInventory.Entries.Any(entry =>
+            unregisteredDestination || entry.RelativePath != DestinationBinding.MarkerName))
+            throw new InvalidDataException("El destino tiene archivos o datos pendientes que necesitan revisión.");
+        return AnalyzeSource(fixtureRoot, source, destination, binding, sourceIdentity);
+    }
+
+    internal static BatchPlan AnalyzeSource(string fixtureRoot, string source, string destination,
+        DestinationBinding binding, byte[] sourceIdentity)
+    {
         var inventory = FolderInventory.Scan(source);
         if (!inventory.Complete)
             throw new InvalidDataException(DescribeIncompleteSource(inventory.Issues));
         if (inventory.Entries.FirstOrDefault(entry => IsControl(entry.RelativePath)) is { } reserved)
             throw new InvalidDataException($"El origen contiene un nombre reservado. Revisa «{reserved.RelativePath}».");
-        var destinationInventory = FolderInventory.Scan(destination);
-        if (!destinationInventory.Complete || destinationInventory.Entries.Any(entry =>
-            unregisteredDestination || entry.RelativePath != DestinationBinding.MarkerName))
-            throw new InvalidDataException("El destino tiene archivos o datos pendientes que necesitan revisión.");
         string[] directories = inventory.Entries.Where(entry => entry.IsDirectory).Select(entry => entry.RelativePath)
             .OrderBy(path => path, StringComparer.Ordinal).ToArray();
         CheckDirectoryData(source, directories);
@@ -278,7 +284,7 @@ internal static class FolderBatch
         destination, Path.GetDirectoryName(relative) ?? "",
         ControlPrefix + Convert.ToHexString(SHA256.HashData(PathEncoding.GetBytes(relative))) + ".tmp");
 
-    private static T WithDirectories<T>(SafeFileHandle root, string relative, Func<T> action)
+    internal static T WithDirectories<T>(SafeFileHandle root, string relative, Func<T> action)
     {
         var opened = new List<SafeFileHandle>();
         try
@@ -299,7 +305,7 @@ internal static class FolderBatch
         }
     }
 
-    private static void RequireSameInventory(BatchPlan plan)
+    internal static void RequireSameInventory(BatchPlan plan)
     {
         // A stored file can retain its data, temporary, lock, receipt, and draft.
         int limit = plan.SourceBinding is null ? 10_000 : plan.Files.Length * 5 + plan.Directories.Length + 16;

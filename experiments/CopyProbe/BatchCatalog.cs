@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Win32.SafeHandles;
 
 internal enum CatalogStep { PrimaryFlushed, PrimaryPublished, BackupFlushed, BackupPublished, CommitFlushed, Committed }
 internal sealed record CatalogSnapshot(DestinationBinding Binding, string[] Directories, BatchFile[] Files, byte[] DocumentHash, bool Degraded = false)
@@ -10,6 +11,8 @@ internal sealed record CatalogSnapshot(DestinationBinding Binding, string[] Dire
     internal BatchPlan RestoreTo(string fixture, string backup, string destination, DestinationBinding target) =>
         new(fixture, backup, destination, Binding.Identity, target, Directories, Files, Binding);
 }
+internal readonly record struct CatalogFile(SafeFileHandle Parent, string Name);
+internal readonly record struct CatalogFiles(CatalogFile Primary, CatalogFile Backup, CatalogFile Commit);
 
 // One initial batch per synthetic destination. See CATALOG.md before changing the format.
 internal static class BatchCatalog
@@ -43,58 +46,65 @@ internal static class BatchCatalog
     internal static void Publish(BatchPlan plan, Action<CatalogStep>? checkpoint = null)
     {
         FolderBatch.ValidateEntries(plan.Files, plan.Directories);
-        byte[] expected = WriteMetadata(Stream.Null, plan); // Check size/format limits before creating files.
         using var root = new DirectoryFence(plan.Destination);
         using var marker = plan.Target.OpenVerifiedMarker(root.Root);
         using var operation = WindowsProbeNative.OpenPlainFile(root.Root, FolderBatch.LockName, FileAccess.ReadWrite, FileShare.None);
-        VerifyData(plan);
-        PublishReplica(PrimaryName, CatalogStep.PrimaryFlushed, CatalogStep.PrimaryPublished);
-        PublishReplica(BackupName, CatalogStep.BackupFlushed, CatalogStep.BackupPublished);
-        VerifyData(plan);
+        PublishLocked(plan, InitialFiles(root.Root), "initial", () => VerifyData(plan), checkpoint);
+    }
+
+    internal static void PublishLocked(BatchPlan plan, CatalogFiles files, string generation, Action verifyData,
+        Action<CatalogStep>? checkpoint)
+    {
+        byte[] expected = WriteMetadata(Stream.Null, plan, generation);
+        verifyData();
+        PublishReplica(files.Primary, CatalogStep.PrimaryFlushed, CatalogStep.PrimaryPublished);
+        PublishReplica(files.Backup, CatalogStep.BackupFlushed, CatalogStep.BackupPublished);
+        verifyData();
         byte[] confirmation = Confirmation(plan.Target, expected);
-        if (!WindowsProbeNative.PlainFileExists(root.Root, CommitName))
+        var commit = files.Commit;
+        if (!WindowsProbeNative.PlainFileExists(commit.Parent, commit.Name))
         {
-            string draft = CommitName + ".tmp";
-            if (!WindowsProbeNative.PlainFileExists(root.Root, draft))
+            string draft = commit.Name + ".tmp";
+            if (!WindowsProbeNative.PlainFileExists(commit.Parent, draft))
             {
-                using var output = WindowsProbeNative.OpenPlainFile(root.Root, draft, FileAccess.Write, FileShare.None, FileMode.CreateNew);
+                using var output = WindowsProbeNative.OpenPlainFile(commit.Parent, draft, FileAccess.Write, FileShare.None, FileMode.CreateNew);
                 output.Write(confirmation);
                 output.Flush(flushToDisk: true);
             }
-            using var verified = WindowsProbeNative.OpenPlainFile(root.Root, draft, FileAccess.Read, FileShare.Read, rename: true);
+            using var verified = WindowsProbeNative.OpenPlainFile(commit.Parent, draft, FileAccess.Read, FileShare.Read, rename: true);
             if (!ReadConfirmation(verified).AsSpan().SequenceEqual(confirmation))
                 throw new InvalidDataException("La confirmación pendiente no corresponde al catálogo.");
             checkpoint?.Invoke(CatalogStep.CommitFlushed);
-            WindowsProbeNative.RenameNew(verified.SafeFileHandle, root.Root, CommitName);
+            WindowsProbeNative.RenameNew(verified.SafeFileHandle, commit.Parent, commit.Name);
         }
-        using (var committed = WindowsProbeNative.OpenPlainFile(root.Root, CommitName, FileAccess.Read, FileShare.Read))
+        using (var committed = WindowsProbeNative.OpenPlainFile(commit.Parent, commit.Name, FileAccess.Read, FileShare.Read))
             if (!ReadConfirmation(committed).AsSpan().SequenceEqual(confirmation))
                 throw new InvalidDataException("Ya existe una confirmación diferente.");
         checkpoint?.Invoke(CatalogStep.Committed);
 
-        void PublishReplica(string name, CatalogStep flushed, CatalogStep published)
+        void PublishReplica(CatalogFile replica, CatalogStep flushed, CatalogStep published)
         {
-            if (WindowsProbeNative.PlainFileExists(root.Root, name))
+            if (WindowsProbeNative.PlainFileExists(replica.Parent, replica.Name))
             {
-                using var existing = WindowsProbeNative.OpenPlainFile(root.Root, name, FileAccess.Read, FileShare.Read);
-                if (!Parse(existing).DocumentHash.AsSpan().SequenceEqual(expected))
+                using var existing = WindowsProbeNative.OpenPlainFile(replica.Parent, replica.Name, FileAccess.Read, FileShare.Read);
+                if (!Parse(existing, generation).DocumentHash.AsSpan().SequenceEqual(expected))
                     throw new InvalidDataException("Ya existe un catálogo diferente.");
             }
             else
             {
-                string draft = name + ".tmp";
-                if (!WindowsProbeNative.PlainFileExists(root.Root, draft))
+                string draft = replica.Name + ".tmp";
+                if (!WindowsProbeNative.PlainFileExists(replica.Parent, draft))
                 {
-                    using var output = WindowsProbeNative.OpenPlainFile(root.Root, draft, FileAccess.Write, FileShare.None, FileMode.CreateNew);
-                    if (!WriteMetadata(output, plan).AsSpan().SequenceEqual(expected))
+                    using var output = WindowsProbeNative.OpenPlainFile(replica.Parent, draft, FileAccess.Write, FileShare.None, FileMode.CreateNew);
+                    if (!WriteMetadata(output, plan, generation).AsSpan().SequenceEqual(expected))
                         throw new InvalidDataException("El catálogo cambió durante la escritura.");
                     output.Flush(flushToDisk: true);
                 }
-                using var verified = WindowsProbeNative.OpenPlainFile(root.Root, draft, FileAccess.Read, FileShare.Read, rename: true);
-                if (!Parse(verified).DocumentHash.AsSpan().SequenceEqual(expected))
+                using var verified = WindowsProbeNative.OpenPlainFile(replica.Parent, draft, FileAccess.Read, FileShare.Read, rename: true);
+                if (!Parse(verified, generation).DocumentHash.AsSpan().SequenceEqual(expected))
                     throw new InvalidDataException("El catálogo pendiente no corresponde al lote.");
                 checkpoint?.Invoke(flushed);
-                WindowsProbeNative.RenameNew(verified.SafeFileHandle, root.Root, name);
+                WindowsProbeNative.RenameNew(verified.SafeFileHandle, replica.Parent, replica.Name);
             }
             checkpoint?.Invoke(published);
         }
@@ -104,7 +114,7 @@ internal static class BatchCatalog
     {
         using var root = new DirectoryFence(backup);
         using var operation = WindowsProbeNative.OpenPlainFile(root.Root, FolderBatch.LockName, FileAccess.Read, FileShare.None);
-        return ReadLocked(root);
+        return ReadLocked(root.Root, InitialFiles(root.Root), "initial");
     }
 
     internal static BatchResult Verify(string backup, DestinationBinding expected, IProgress<BatchProgress>? progress = null)
@@ -113,7 +123,7 @@ internal static class BatchCatalog
         using var marker = expected.OpenVerifiedMarker(root.Root);
         WindowsProbeNative.RequireSupportedData(root.Root, Path.GetFileName(backup));
         using var operation = WindowsProbeNative.OpenPlainFile(root.Root, FolderBatch.LockName, FileAccess.Read, FileShare.None);
-        var catalog = ReadLocked(root);
+        var catalog = ReadLocked(root.Root, InitialFiles(root.Root), "initial");
         var entries = new List<BatchEntryResult>();
         foreach (string relative in catalog.Directories)
             Check(relative, isDirectory: true, () =>
@@ -155,19 +165,22 @@ internal static class BatchCatalog
         }
     }
 
-    private static CatalogSnapshot ReadLocked(DirectoryFence root)
+    private static CatalogFiles InitialFiles(SafeFileHandle root) =>
+        new(new(root, PrimaryName), new(root, BackupName), new(root, CommitName));
+
+    internal static CatalogSnapshot ReadLocked(SafeFileHandle root, CatalogFiles files, string generation)
     {
         byte[] commit;
-        using (var file = WindowsProbeNative.OpenPlainFile(root.Root, CommitName, FileAccess.Read, FileShare.Read))
+        using (var file = WindowsProbeNative.OpenPlainFile(files.Commit.Parent, files.Commit.Name, FileAccess.Read, FileShare.Read))
             commit = ReadConfirmation(file);
         var binding = new DestinationBinding
         {
             Version = 1, Marker = new Guid(commit.AsSpan(64, 16)), Identity = commit.AsSpan(40, 24).ToArray(),
-            LastVolumePath = WindowsProbeNative.VolumePath(root.Root)
+            LastVolumePath = WindowsProbeNative.VolumePath(root)
         };
-        using var marker = binding.OpenVerifiedMarker(root.Root);
-        var primary = TryRead(PrimaryName);
-        var secondary = TryRead(BackupName);
+        using var marker = binding.OpenVerifiedMarker(root);
+        var primary = TryRead(files.Primary);
+        var secondary = TryRead(files.Backup);
         if (primary is not null && secondary is not null && !primary.DocumentHash.AsSpan().SequenceEqual(secondary.DocumentHash))
             throw new InvalidDataException("Ambas copias del catálogo son válidas pero diferentes.");
         var selected = primary ?? secondary ?? throw new InvalidDataException("Ninguna copia del catálogo es válida.");
@@ -176,12 +189,12 @@ internal static class BatchCatalog
             throw new InvalidDataException("El catálogo no corresponde a la confirmación o al destino.");
         return selected with { Binding = binding, Degraded = primary is null || secondary is null };
 
-        CatalogSnapshot? TryRead(string name)
+        CatalogSnapshot? TryRead(CatalogFile candidate)
         {
             try
             {
-                using var file = WindowsProbeNative.OpenPlainFile(root.Root, name, FileAccess.Read, FileShare.Read);
-                return Parse(file);
+                using var file = WindowsProbeNative.OpenPlainFile(candidate.Parent, candidate.Name, FileAccess.Read, FileShare.Read);
+                return Parse(file, generation);
             }
             catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or JsonException or Win32Exception or UnauthorizedAccessException)
             {
@@ -190,13 +203,13 @@ internal static class BatchCatalog
         }
     }
 
-    internal static byte[] WriteMetadata(Stream output, BatchPlan plan)
+    internal static byte[] WriteMetadata(Stream output, BatchPlan plan, string generation = "initial")
     {
         using var body = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using var document = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         int total = 0;
         int version = plan.Files.FirstOrDefault()?.CatalogVersion ?? 1;
-        Line(new Header("header", version, plan.Target.Marker, "initial", plan.Target.Identity));
+        Line(new Header("header", version, plan.Target.Marker, generation, plan.Target.Identity));
         foreach (string directory in plan.Directories.Order(StringComparer.Ordinal))
             Line(new DirectoryRecord("directory", directory));
         foreach (var file in plan.Files.OrderBy(file => file.RelativePath, StringComparer.Ordinal))
@@ -230,7 +243,7 @@ internal static class BatchCatalog
     }
 
     // Streaming framing with bounded records; only the validated entries are retained.
-    internal static CatalogSnapshot Parse(Stream input)
+    internal static CatalogSnapshot Parse(Stream input, string generation = "initial")
     {
         if (input.Length is < 1 or > MaximumBytes)
             throw new InvalidDataException("Tamaño de catálogo no válido.");
@@ -239,7 +252,7 @@ internal static class BatchCatalog
         byte[] buffer = new byte[MaximumLineBytes - 1];
         byte[] headerLine = Line() ?? throw new InvalidDataException("Falta la cabecera.");
         var header = Decode<Header>(headerLine);
-        if (header.Kind != "header" || header.Version is not (1 or 2 or 3) || header.GenerationId != "initial" || header.JobId == Guid.Empty ||
+        if (header.Kind != "header" || header.Version is not (1 or 2 or 3) || header.GenerationId != generation || header.JobId == Guid.Empty ||
             header.Identity is not { Length: 24 })
             throw new InvalidDataException("Cabecera no soportada.");
         HashBody(headerLine);
@@ -370,7 +383,7 @@ internal static class BatchCatalog
             VerifyFile(plan.Destination, item);
     }
 
-    private static void VerifyFile(string backup, BatchFile item)
+    internal static void VerifyFile(string backup, BatchFile item)
     {
         string path = Path.Combine(backup, item.RelativePath);
         using var parent = new DirectoryFence(backup, path);
