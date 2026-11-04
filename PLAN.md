@@ -140,6 +140,8 @@ El motor configurable separa la sesión del lote fijo. El ensayo `--workspace` c
 
 WPF ya ofrece crear o abrir el espacio, elegir las carpetas, revisar capacidad, reabrir trabajos por destino y elegir una carpeta vacía de restauración. El ensayo de interfaz selecciona un origen con archivos ajenos a la demostración, verifica que el análisis sea de solo lectura, deja un parcial con un archivo ocupado, cierra la ventana, reabre y completa el trabajo, lo verifica y restaura tras apartar el origen. También abre un segundo destino y comprueba que su historial esté separado. El flujo configurable sigue confinado al volumen del espacio temporal. La validación de uso con carpetas personales y proveedores de nube reales requiere el entorno del piloto.
 
+La distribución de alfa usa el SDK fijado en `global.json` y un paquete portable Windows x64 con el runtime incluido. El workflow extrae dos árboles limpios del commit, compara el manifiesto SHA-256 de cada archivo de ambas compilaciones y ejecuta el recorrido WPF desde el ejecutable portable. El artefacto se publica en GitHub Actions con la guía de uso, el código fuente del commit y las licencias. El siguiente paso es el almacenamiento de varias generaciones de la etapa 3. [Publicación autónoma en .NET](https://learn.microsoft.com/en-us/dotnet/core/deploying/index).
+
 | Etapa | Entrega | Para pasar a la siguiente |
 |---|---|---|
 | 0 — Especificación | Modos, matriz de metadatos y estados de publicación/recuperación | Definir fixture, confinamiento de rutas y protocolo de diario. Especificar JSONL y duplicación antes de etapa 3; todavía no declarar la arquitectura validada. |

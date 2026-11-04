@@ -2,7 +2,7 @@
 
 *Copias locales. Versiones recuperables.*
 
-App sencilla de respaldo para Windows: elegir origen, destino y cómo conservar los archivos. Sin cuenta, suscripción, servidor ni conexión obligatoria. Estado actual: **prueba técnica inicial; aún no hay aplicación de respaldo utilizable**.
+App sencilla de respaldo para Windows. La alfa permite elegir carpetas, copiar, verificar y restaurar datos sintéticos en un espacio temporal. El uso con datos personales queda para el piloto.
 
 ## Leer primero
 
@@ -11,6 +11,18 @@ Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 - [Plan de trabajo](PLAN.md): experiencia, arquitectura, prioridades, pruebas y límites.
 - [Investigación](INVESTIGACION.md): necesidades observadas, documentación técnica y fuentes.
 - [Nombres](NOMBRES.md): elección, alternativas anteriores y estado de la comprobación de disponibilidad.
+
+## Alfa portable de Windows
+
+Abre un resultado de [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml) para `main` y descarga el artefacto `FolderTwin-alpha-win-x64-…`. Extrae todo el contenido y abre `CopyLab.exe`. El paquete incluye .NET, el código fuente del commit y la [guía de la alfa](ALFA.md) para trabajar con datos sintéticos.
+
+Para producir el paquete desde el código, instala el SDK indicado en [global.json](global.json) y ejecuta en PowerShell 7 para Windows:
+
+```powershell
+.\scripts\Publish-Alpha.ps1 -OutputDirectory "$env:TEMP\FolderTwin-alpha-win-x64"
+```
+
+Elige un nombre nuevo para cada compilación. El script guarda los archivos intermedios en una carpeta hermana con sufijo `.build`. La automatización compara los SHA-256 de todos los archivos tras dos compilaciones desde árboles limpios y ejecuta el recorrido WPF desde el paquete. La comparación cubre el contenido distribuido. GitHub genera el ZIP al entregar el artefacto.
 
 ## Decisión propuesta
 

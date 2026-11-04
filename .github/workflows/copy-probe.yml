@@ -18,7 +18,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
       - name: Verify synthetic copy and restore
         run: dotnet run --project experiments/CopyProbe --configuration Release
       - name: Compare Windows transports
@@ -27,8 +27,6 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --uncached
       - name: Verify directory rename and junction behavior
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --paths
-      - name: Verify the WPF copy and restore flow
-        run: dotnet run --project experiments/CopyLab --configuration Release -- --smoke
       - name: Verify bounded metadata inventory and partial results
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --inventory
       - name: Verify synthetic batches, partial results, and retry
@@ -39,3 +37,48 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --catalog
       - name: Verify durable pending intent and worker termination recovery
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --resume
+      - name: Build the portable app twice and verify the WPF flow from the package
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'FolderTwin-source.tar'
+          $sourceA = Join-Path $env:RUNNER_TEMP 'FolderTwin-source-A'
+          $sourceB = Join-Path $env:RUNNER_TEMP 'FolderTwin-source-B'
+          $outputA = Join-Path $env:RUNNER_TEMP 'FolderTwin-alpha-win-x64'
+          $outputB = Join-Path $env:RUNNER_TEMP 'FolderTwin-reproduction'
+          git archive --format=tar "--output=$archive" HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Could not archive the tested commit.' }
+          foreach ($source in @($sourceA, $sourceB)) {
+            New-Item -ItemType Directory -Path $source | Out-Null
+            tar -xf $archive -C $source
+            if ($LASTEXITCODE -ne 0) { throw 'Could not extract a clean source tree.' }
+          }
+          & (Join-Path $sourceA 'scripts/Publish-Alpha.ps1') -OutputDirectory $outputA -SourceArchive $archive
+          & (Join-Path $sourceB 'scripts/Publish-Alpha.ps1') -OutputDirectory $outputB -SourceArchive $archive
+          $first = Get-FileHash -LiteralPath (Join-Path $outputA 'SHA256SUMS.txt')
+          $second = Get-FileHash -LiteralPath (Join-Path $outputB 'SHA256SUMS.txt')
+          if ($first.Hash -ne $second.Hash) {
+            Compare-Object (Get-Content $first.Path) (Get-Content $second.Path)
+            throw 'Independent builds produced different file hashes.'
+          }
+          Write-Host "Matching portable distributions. SHA256SUMS.txt SHA-256 $($first.Hash)"
+          $runtime = Get-Content -LiteralPath (Join-Path $outputA 'CopyLab.runtimeconfig.json') -Raw | ConvertFrom-Json
+          $frameworks = $runtime.runtimeOptions.includedFrameworks.name
+          if ($frameworks -notcontains 'Microsoft.NETCore.App' -or $frameworks -notcontains 'Microsoft.WindowsDesktop.App' -or
+              -not (Test-Path -LiteralPath (Join-Path $outputA 'coreclr.dll')) -or
+              -not (Test-Path -LiteralPath (Join-Path $outputA 'PresentationFramework.dll'))) {
+            throw 'The portable package is missing its bundled runtime.'
+          }
+          $errorLog = Join-Path $env:RUNNER_TEMP 'FolderTwin-portable-smoke.err'
+          $process = Start-Process -FilePath (Join-Path $outputA 'CopyLab.exe') -WorkingDirectory $outputA -ArgumentList '--smoke' -WindowStyle Hidden -RedirectStandardError $errorLog -PassThru -Wait
+          if ($process.ExitCode -ne 0) {
+            Get-Content -LiteralPath $errorLog
+            throw "The packaged WPF smoke test exited with $($process.ExitCode)."
+          }
+      - name: Upload the verified alpha
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: FolderTwin-alpha-win-x64-${{ github.sha }}
+          path: ${{ runner.temp }}/FolderTwin-alpha-win-x64
+          if-no-files-found: error
+          retention-days: 14

@@ -16,7 +16,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
       - name: Build the probe
         run: dotnet build experiments/CopyProbe --configuration Release --output "$env:RUNNER_TEMP\FolderTwin-Probe-Build"
       - name: Exercise disk full, reassignment, and reconnection
