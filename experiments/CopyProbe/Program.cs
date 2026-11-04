@@ -29,6 +29,9 @@ if (args is ["--version-scale", var fileCount, var objectCount] &&
     int.TryParse(fileCount, out int files) && int.TryParse(objectCount, out int objects) &&
     files is >= 1 and <= 329_000 && objects >= 1 && objects <= files)
     return VersionScaleProbe.Run(files, objects);
+if (args is ["--object-layout", var layoutCount] && int.TryParse(layoutCount, out int layoutObjects) &&
+    layoutObjects is >= 1 and <= 1_000_000)
+    return ObjectLayoutProbe.Run(layoutObjects);
 if (args is ["--catalog"])
     return CatalogProbe.Run();
 if (args is ["--resume"])

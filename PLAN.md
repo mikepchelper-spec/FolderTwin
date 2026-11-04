@@ -161,8 +161,13 @@ Cada fase registra tiempo, bytes de lectura y escritura que Windows atribuye al 
 | 1.024 / 1.024 | 0,009 s | 10,518 s | 0,045 s | 0,178 s | 0,081 s | 53,7 MiB | 4 / 10 |
 | 8.192 / 8.192 | 0,030 s | 102,834 s | 0,349 s | 2,469 s | 0,157 s | 67,7 MiB | 32 / 46 |
 | 10.240 / 32 | 0,058 s | 11,221 s | 0,418 s | 0,248 s | 0,234 s | 66,2 MiB | 1 / 2 |
+| 329.000 / 4.096 | 1,121 s | 227,211 s | 3,385 s | 3,895 s | 3,275 s | 398,2 MiB | 16 / 27 |
 
-Mediciones de referencia en Windows 11 (compilación 26100) y .NET 10.0.14, con el espacio temporal en NTFS local. Los bytes de lectura y escritura atribuidos a cada respaldo fueron 996.912 / 843.710, 7.962.708 / 6.741.849 y 9.463.448 / 7.039.116, respectivamente. Las dos últimas ejecuciones coincidieron parcialmente con la preparación de otro conjunto sintético. Las cifras muestran el orden de magnitud de ese equipo. Faltan el resultado a escala de 329.000 archivos y la comparación de las dos distribuciones con 329.000 y un millón de objetos.
+Mediciones de referencia en Windows 11 (compilación 26100) y .NET 10.0.14, con el espacio temporal en NTFS local. Los bytes de lectura y escritura atribuidos a cada respaldo fueron 996.912 / 843.710, 7.962.708 / 6.741.849, 9.463.448 / 7.039.116 y 304.114.308 / 226.521.101, respectivamente. Las ejecuciones coincidieron parcialmente con otros ensayos sintéticos. El manifiesto grande ocupa 75.321.219 bytes y sus 329.000 rutas comparten 4.096 objetos. La restauración cronometrada comprueba una ruta de muestra. Las pruebas funcionales de menor tamaño restauran puntos completos.
+
+El laboratorio de versiones admite ahora 350.000 entradas entre archivos y carpetas y 128 MiB por documento, con los mismos límites de registro y profundidad. El catálogo inicial conserva sus límites de 10.000 entradas y 8 MiB. Se aplican los límites de generación al analizar, validar, escribir y leer tanto manifiestos como planes pendientes. La aceptación de Windows con 10.240 archivos y 32 objetos pasó en [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41923374030).
+
+El workflow manual **Synthetic object layout** evalúa `objects/ab/<digest>` frente a `objects/ab/cd/<digest>`. Crea contenidos distintos de ocho bytes con nombres SHA-256, mide la creación, 4.096 lecturas de muestra y la enumeración completa de las carpetas ocupadas. Comprueba sus recuentos y retira cada distribución antes de crear la siguiente. Este ensayo de distribución usa escrituras ordinarias y comparte el volumen del runner. El protocolo de confirmación del motor se mide con `--version-scale`. La comparación grande y la navegación SQLite a escala siguen pendientes de resultado.
 
 | Etapa | Entrega | Para pasar a la siguiente |
 |---|---|---|

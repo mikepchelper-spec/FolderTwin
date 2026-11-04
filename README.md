@@ -46,6 +46,8 @@ Usa `-- --versions` para probar dos generaciones con objetos SHA-256 compartidos
 
 Usa `-- --version-scale 10240 32` para medir 10.240 archivos sintéticos con 32 contenidos distintos. El ensayo registra tiempo, E/S y memoria, verifica todos los objetos y restaura una ruta de muestra tras apartar el origen. [Método y resultados](PLAN.md#mediciones-del-versionado).
 
+El workflow manual **Synthetic object layout** compara una y dos carpetas de prefijo con 329.000 y un millón de objetos sintéticos. También importa 329.000 rutas en SQLite y comprueba la navegación y los cambios desde catálogos generados para el ensayo. Cada trabajo usa un runner Windows desechable.
+
 Usa `-- --catalog` para probar los catálogos JSONL duplicados, su confirmación y la restauración desde otro proceso con el origen ausente. El lector rechaza catálogos truncados, rutas inseguras y réplicas contradictorias. Una réplica íntegra de un lote confirmado permite restaurar con un aviso sobre la copia dañada. [Formato experimental](experiments/CopyProbe/CATALOG.md).
 
 Usa `-- --resume` para terminar trabajadores de prueba y reabrir sus lotes pendientes desde otros procesos. Reconoce lo ya verificado, recupera temporales con registro válido y deja pendientes los archivos que aún necesitan el origen. Los datos sin verificar quedan para revisión. [Descriptor de ejecución](experiments/CopyProbe/PENDING.md).

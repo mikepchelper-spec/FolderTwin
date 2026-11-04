@@ -8,7 +8,8 @@ public partial class App : Application
     {
         base.OnStartup(e);
         bool smoke = e.Args is ["--smoke"];
-        if (e.Args.Length != 0 && !smoke)
+        bool indexScale = e.Args is ["--index-scale"];
+        if (e.Args.Length != 0 && !smoke && !indexScale)
         {
             Shutdown(2);
             return;
@@ -16,6 +17,12 @@ public partial class App : Application
 
         try
         {
+            if (indexScale)
+            {
+                await Task.Run(IndexScaleProbe.Run);
+                Shutdown(0);
+                return;
+            }
             var window = new MainWindow(smoke);
             MainWindow = window;
             if (smoke)
@@ -38,7 +45,7 @@ public partial class App : Application
         }
         catch (Exception error)
         {
-            if (smoke)
+            if (smoke || indexScale)
                 Console.Error.WriteLine(error);
             else
                 MessageBox.Show(error.Message, "FolderTwin · Laboratorio", MessageBoxButton.OK, MessageBoxImage.Error);

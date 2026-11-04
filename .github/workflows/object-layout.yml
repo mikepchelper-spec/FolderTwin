@@ -1,0 +1,49 @@
+name: Synthetic object layout
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  index:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - name: Import and browse 329000 indexed paths
+        shell: pwsh
+        run: |
+          $build = Join-Path $env:RUNNER_TEMP 'FolderTwin-Index-Build'
+          dotnet build experiments/CopyLab -c Release --output $build
+          if ($LASTEXITCODE -ne 0) { throw 'The index scale probe did not build.' }
+          $log = Join-Path $env:RUNNER_TEMP 'FolderTwin-Index.err'
+          $process = Start-Process -FilePath (Join-Path $build 'CopyLab.exe') -ArgumentList '--index-scale' -WindowStyle Hidden -RedirectStandardError $log -PassThru -Wait
+          Get-Content -LiteralPath $log
+          if ($process.ExitCode -ne 0) { throw 'The index scale probe failed.' }
+  layout:
+    runs-on: windows-2025
+    timeout-minutes: 50
+    strategy:
+      matrix:
+        count: [329000, 1000000]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - name: Compare both layouts in disposable synthetic directories
+        shell: pwsh
+        env:
+          OBJECT_COUNT: ${{ matrix.count }}
+        run: |
+          dotnet run --project experiments/CopyProbe -c Release -- --object-layout $env:OBJECT_COUNT
+          if ($LASTEXITCODE -ne 0) { throw 'The object layout comparison failed.' }
