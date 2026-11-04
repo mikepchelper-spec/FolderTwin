@@ -36,6 +36,9 @@ if (args is ["--recover-version", var recoveryWorkspace, var recoveryStore, var 
     return VersionRecovery.Run(recoveryWorkspace, recoveryStore, recoveryGeneration, recoveryOutput);
 if (args is ["--run-version-job", var jobWorkspace, var jobId] && Guid.TryParseExact(jobId, "N", out var parsedJobId))
     return VersionJob.RunCommand(jobWorkspace, parsedJobId);
+if (args is ["--interrupt-version-job", var interruptedWorkspace, var interruptedId] &&
+    Guid.TryParseExact(interruptedId, "N", out var interruptedJob))
+    return JobProbe.InterruptChild(interruptedWorkspace, interruptedJob);
 if (args is ["--jobs"])
     return JobProbe.Run();
 if (args is ["--catalog"])

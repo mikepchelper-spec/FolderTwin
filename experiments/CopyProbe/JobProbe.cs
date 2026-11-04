@@ -67,6 +67,7 @@ internal static class JobProbe
             Check(history.Unreadable == 1 && history.Results.Length >= 5 && File.ReadAllText(result) == "truncado",
                 "A damaged diagnostic record hid other results or was overwritten.");
             Console.WriteLine("PASS per-job locking, unavailable roots, substituted identities and damaged history are reported without changing the backup.");
+            CheckTerminatedWorker(workspace, source);
             return 0;
         }
         finally
@@ -76,7 +77,70 @@ internal static class JobProbe
         }
     }
 
+    internal static int InterruptChild(string root, Guid id)
+    {
+        _ = VersionJob.Run(LabWorkspace.Open(root), id, (step, _) =>
+        {
+            if (step == CopyStep.Verified)
+            {
+                Console.WriteLine("job checkpoint");
+                Console.Out.Flush();
+                Thread.Sleep(Timeout.Infinite);
+            }
+        });
+        return 2;
+    }
+
+    private static void CheckTerminatedWorker(LabWorkspace workspace, string source)
+    {
+        string destination = Directory.CreateDirectory(Path.Combine(workspace.Root, "trabajador terminado")).FullName;
+        var store = VersionStore.Initialize(workspace, destination);
+        Guid id = VersionJob.Create(workspace, source, destination);
+        using (var child = StartChild(workspace.Root, id, interrupt: true))
+        {
+            try
+            {
+                var checkpoint = child.StandardOutput.ReadLineAsync();
+                if (!checkpoint.Wait(30_000) || checkpoint.Result != "job checkpoint")
+                    throw new InvalidOperationException("The worker did not reach its verified object checkpoint.");
+            }
+            finally
+            {
+                if (!child.HasExited)
+                    child.Kill();
+                child.WaitForExit();
+            }
+        }
+        string generation = store.ListPending().Single().Id;
+        Check(store.ListPoints().Length == 0 && VersionJob.History(workspace, id).Results.Length == 0,
+            "A terminated worker reported a confirmed point or a finished attempt.");
+        string moved = Path.Combine(workspace.Root, "origen del trabajador terminado");
+        Directory.Move(source, moved);
+        try { RunChild(workspace.Root, id, expectedExit: 0); }
+        finally { Directory.Move(moved, source); }
+        Check(store.ListPoints().Single().Id == generation &&
+            VersionJob.History(workspace, id).Results.Single().Generation == generation && !store.Verify(generation),
+            "The new worker failed to recover the point after real process termination.");
+        bool rejected = false;
+        try { store.ResumePoint(generation, expectedSourceIdentity: new byte[24]); }
+        catch (InvalidDataException) { rejected = true; }
+        Check(rejected, "A confirmed point bypassed the job's required source identity.");
+        Console.WriteLine("PASS a new worker recovers the same point after real process termination with the source absent.");
+    }
+
     private static void RunChild(string root, Guid id, int expectedExit)
+    {
+        using var child = StartChild(root, id, interrupt: false);
+        if (!child.WaitForExit(30_000))
+        {
+            child.Kill();
+            child.WaitForExit();
+            throw new TimeoutException("The job worker did not finish.");
+        }
+        Check(child.ExitCode == expectedExit, "The job worker failed. " + child.StandardError.ReadToEnd());
+    }
+
+    private static Process StartChild(string root, Guid id, bool interrupt)
     {
         string executable = Environment.ProcessPath ?? throw new InvalidOperationException("Executable path unavailable.");
         var start = new ProcessStartInfo(executable)
@@ -86,16 +150,9 @@ internal static class JobProbe
         };
         if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
             start.ArgumentList.Add(Assembly.GetExecutingAssembly().Location);
-        foreach (string argument in new[] { "--run-version-job", root, id.ToString("N") })
+        foreach (string argument in new[] { interrupt ? "--interrupt-version-job" : "--run-version-job", root, id.ToString("N") })
             start.ArgumentList.Add(argument);
-        using var child = Process.Start(start) ?? throw new InvalidOperationException("Could not start job worker.");
-        if (!child.WaitForExit(30_000))
-        {
-            child.Kill();
-            child.WaitForExit();
-            throw new TimeoutException("The job worker did not finish.");
-        }
-        Check(child.ExitCode == expectedExit, "The job worker failed. " + child.StandardError.ReadToEnd());
+        return Process.Start(start) ?? throw new InvalidOperationException("Could not start job worker.");
     }
 
     private static void Check(bool condition, string message)
