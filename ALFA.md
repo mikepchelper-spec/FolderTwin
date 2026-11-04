@@ -10,4 +10,6 @@ Extrae todo el artefacto de Windows x64 en una carpeta nueva y abre `CopyLab.exe
 
 Conserva la carpeta temporal si hay un problema y anota el mensaje, la operación y el commit de la compilación. Usa solo archivos de prueba y carpetas desechables. Las sesiones quedan en el espacio temporal al cerrar.
 
+Para probar **Versiones**, crea en el mismo espacio otra subcarpeta vacía y selecciónala en **Crear almacén**. Elige el origen y crea un primer punto. Cambia un archivo sintético y elimina otro. Crea un segundo punto, selecciónalo y activa el filtro de cambios. Selecciona el archivo eliminado y restáuralo en una subcarpeta nueva y vacía. Comprueba que contiene los bytes que guardó la fecha anterior.
+
 `SHA256SUMS.txt` contiene el SHA-256 y la ruta relativa de cada archivo distribuido. El artefacto de GitHub incluye el código fuente del commit en `FolderTwin-source.tar` y las licencias de la distribución. El catálogo de la aplicación es independiente y verifica el contenido de los trabajos.

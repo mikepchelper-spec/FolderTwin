@@ -13,6 +13,12 @@ public partial class MainWindow
     private WorkspaceJob? workspaceJob;
     private string? workspaceDestination;
 
+    private void VersionsClick(object sender, RoutedEventArgs e)
+    {
+        if (VersionsButton.IsEnabled && workspace is { } current)
+            new VersionWindow(current) { Owner = this }.ShowDialog();
+    }
+
     private void CreateWorkspaceClick(object sender, RoutedEventArgs e)
     {
         if (CreateWorkspaceButton.IsEnabled)

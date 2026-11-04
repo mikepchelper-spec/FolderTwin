@@ -445,6 +445,8 @@ public partial class MainWindow : Window
         OpenPreviousButton.IsEnabled = editable && workspace is null;
         OpenWorkspaceJobButton.Visibility = BrowseWorkspaceButton.Visibility =
             workspace is null ? Visibility.Collapsed : Visibility.Visible;
+        VersionsButton.Visibility = OpenWorkspaceJobButton.Visibility;
+        VersionsButton.IsEnabled = !busy && workspace is not null;
         OpenWorkspaceJobButton.IsEnabled = !busy && workspace is not null;
         BrowseWorkspaceButton.IsEnabled = !busy;
         SourceButton.IsEnabled = DestinationButton.IsEnabled = editable;
@@ -765,6 +767,7 @@ public partial class MainWindow : Window
         finally { alternateWindow.Close(); }
 
         await RunWorkspaceSmokeAsync();
+        await VersionWindow.RunSmokeAsync();
 
         async Task WaitForPauseAsync()
         {

@@ -42,7 +42,7 @@ Usa `-- --batch` para copiar y restaurar un lote sintético con subcarpetas, un 
 
 Usa `-- --workspace` para probar trabajos con rutas y nombres de archivo libres en espacios temporales registrados por FolderTwin. Comprueba el espacio disponible, los rechazos antes de escribir, la reapertura de un lote parcial y la restauración sin el origen. Esta prueba genera y elimina sus propios datos sintéticos.
 
-Usa `-- --versions` para probar dos generaciones con objetos SHA-256 compartidos. El ensayo crea sus propios datos, reabre generaciones pendientes, recupera un temporal verificado con el origen ausente, restaura ambas fechas y detecta la corrupción de un objeto común. El modo de versiones todavía se ejecuta en el arnés. [Formato de generaciones](experiments/CopyProbe/VERSIONES.md).
+Usa `-- --versions` para probar dos generaciones con objetos SHA-256 compartidos. El ensayo crea sus propios datos, reabre generaciones pendientes, recupera un temporal verificado con el origen ausente, restaura ambas fechas y detecta la corrupción de un objeto común. [Formato de generaciones](experiments/CopyProbe/VERSIONES.md).
 
 Usa `-- --catalog` para probar los catálogos JSONL duplicados, su confirmación y la restauración desde otro proceso con el origen ausente. El lector rechaza catálogos truncados, rutas inseguras y réplicas contradictorias. Una réplica íntegra de un lote confirmado permite restaurar con un aviso sobre la copia dañada. [Formato experimental](experiments/CopyProbe/CATALOG.md).
 
@@ -51,6 +51,8 @@ Usa `-- --resume` para terminar trabajadores de prueba y reabrir sus lotes pendi
 Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Pulsa **Nuevo espacio temporal** y luego **Ver carpeta temporal**. En el Explorador, crea subcarpetas directas para el origen, el destino y la restauración. Coloca únicamente archivos sintéticos en el origen y deja vacías las otras carpetas. También están disponibles las carpetas de demostración **Origen**, **Origen ampliado** y **Destino** al iniciar la ventana.
 
 Elige el origen y el destino y pulsa **Analizar carpetas**. La vista previa muestra el recuento, el tamaño de contenido y, para los trabajos configurables, el espacio disponible y la reserva. Elige **Copiar y verificar**. Si el lote queda parcial, revisa las incidencias y usa **Reintentar copia**. Tras la confirmación, puedes usar **Verificar respaldo** o **Restaurar y verificar**. El trabajo configurable permite elegir una subcarpeta vacía distinta para cada restauración.
+
+En un espacio temporal, abre **Versiones** para usar una carpeta dedicada como almacén. Elige un origen sintético y crea un punto. Selecciona una fecha para recorrer sus carpetas, verificar los objetos o restaurar el punto o un archivo. El filtro de cambios compara la fecha seleccionada con la anterior. Si seleccionas un archivo eliminado, se recupera desde el punto anterior. Los puntos pendientes ofrecen **Reintentar punto**.
 
 Durante una copia, **Cancelar copia** solicita detener el lote en el próximo punto seguro. Si un archivo está en curso, el motor termina ese paso y conserva lo ya verificado para el reintento. Si la confirmación del catálogo ya empezó, el lote puede terminar.
 

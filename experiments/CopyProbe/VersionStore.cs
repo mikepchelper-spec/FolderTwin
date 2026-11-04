@@ -1,8 +1,10 @@
+using System.ComponentModel;
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.Win32.SafeHandles;
 
-internal sealed record VersionPoint(string Id, DateTimeOffset CreatedUtc, int FileCount, bool Degraded);
+internal sealed record VersionPoint(string Id, DateTimeOffset CreatedUtc, int FileCount, bool Degraded, string? Problem = null);
 internal sealed record PendingVersion(string Id, string Source, int FileCount);
 
 internal sealed class VersionStore
@@ -218,21 +220,40 @@ internal sealed class VersionStore
             .Select(id =>
             {
                 DateTimeOffset date = GenerationTime(id);
-                var catalog = ReadPoint(store.Root, id);
-                return new VersionPoint(id, date, catalog.Files.Length, catalog.Degraded);
+                try
+                {
+                    var catalog = ReadPoint(store.Root, id);
+                    return new VersionPoint(id, date, catalog.Files.Length, catalog.Degraded);
+                }
+                catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or
+                    ArgumentException or JsonException or Win32Exception)
+                {
+                    return new VersionPoint(id, date, 0, false, error.Message);
+                }
             }).ToArray();
     }
 
-    internal void Verify(string generation)
+    internal (CatalogSnapshot Current, CatalogSnapshot? Previous) ReadCatalogs(string generation, string? previous)
     {
         using var scope = workspace.OpenRegisteredRoot();
         using var store = new DirectoryFence(Destination);
         using var marker = binding.OpenVerifiedMarker(store.Root);
         using var operation = OpenLock(store.Root, FileAccess.Read);
-        VerifyObjects(store.Root, ReadPoint(store.Root, generation).Files);
+        return (ReadPoint(store.Root, generation), previous is null ? null : ReadPoint(store.Root, previous));
     }
 
-    internal CatalogSnapshot Restore(string generation, string output)
+    internal bool Verify(string generation)
+    {
+        using var scope = workspace.OpenRegisteredRoot();
+        using var store = new DirectoryFence(Destination);
+        using var marker = binding.OpenVerifiedMarker(store.Root);
+        using var operation = OpenLock(store.Root, FileAccess.Read);
+        var catalog = ReadPoint(store.Root, generation);
+        VerifyObjects(store.Root, catalog.Files);
+        return catalog.Degraded;
+    }
+
+    internal CatalogSnapshot Restore(string generation, string output, string? relativeFile = null)
     {
         using var scope = workspace.OpenRegisteredRoot();
         workspace.CheckRoots(Destination, output);
@@ -242,18 +263,23 @@ internal sealed class VersionStore
         using var target = new DirectoryFence(output);
         LabWorkspace.RequireEmpty(target.Root);
         var catalog = ReadPoint(store.Root, generation);
-        VerifyObjects(store.Root, catalog.Files);
-        LabWorkspace.RequireSpace(catalog.Files.Sum(file => file.Length), LabWorkspace.AvailableSpace(target.Root));
+        BatchFile[] files = relativeFile is null ? catalog.Files :
+            [catalog.Files.SingleOrDefault(file => file.RelativePath == relativeFile)
+                ?? throw new InvalidDataException("El archivo no pertenece a la generación seleccionada.")];
+        var directories = relativeFile is null ? catalog.Directories : catalog.Directories.Where(directory =>
+            relativeFile.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal));
+        VerifyObjects(store.Root, files);
+        LabWorkspace.RequireSpace(files.Sum(file => file.Length), LabWorkspace.AvailableSpace(target.Root));
         DestinationBinding.Register(target.Root);
-        foreach (string relative in catalog.Directories)
+        foreach (string relative in directories)
             FolderBatch.WithDirectories(target.Root, relative, () => true);
-        foreach (var file in catalog.Files)
+        foreach (var file in files)
         {
             string final = Path.Combine(output, file.RelativePath);
             VerifiedCopy.Run(ObjectPath(Digest(file)), final, FolderBatch.TemporaryPath(output, file.RelativePath),
                 expectedHash: file.Hash, recoveryRoot: workspace.Root, metadata: file.Metadata);
         }
-        foreach (var file in catalog.Files)
+        foreach (var file in files)
             BatchCatalog.VerifyFile(output, file);
         return catalog;
     }
@@ -292,7 +318,7 @@ internal sealed class VersionStore
         return action(new(new(primary, name), new(replica, name), new(commits, generation + ".commit")));
     }
 
-    private static DateTimeOffset GenerationTime(string id)
+    internal static DateTimeOffset GenerationTime(string id)
     {
         const int timeLength = 23;
         if (id.Length != timeLength + 1 + 32 || id[timeLength] != '-' ||
