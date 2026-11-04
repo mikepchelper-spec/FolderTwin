@@ -18,7 +18,7 @@ C# + .NET 10 LTS + WPF con tema Fluent, APIs de archivos de Windows y Programado
 
 Primero comprobar copia y restauración en carpetas desechables. Después versionado con objetos por contenido SHA-256 y programación. El espejo y la limpieza se incorporan cuando sus protecciones hayan pasado pruebas de interrupción. La interfaz sencilla no debe ocultar fallos ni archivos omitidos; los archivos solo disponibles en la nube no se descargan automáticamente.
 
-Con el SDK de .NET 10, ejecuta `dotnet run --project experiments/CopyProbe` en Windows. El experimento genera sus propios datos temporales y comprueba copia, flush, verificación SHA-256 y restauración. Incluye fallos inyectados, archivos ocupados, corrupción y terminación del proceso antes y después de publicar la copia. GitHub Actions ejecuta las mismas comprobaciones. El alcance actual se limita a datos sintéticos en un volumen.
+Con el SDK de .NET 10, ejecuta `dotnet run --project experiments/CopyProbe` en Windows. El experimento genera sus propios datos temporales y comprueba copia, flush, verificación SHA-256 y restauración. Incluye fallos inyectados, archivos ocupados, corrupción y recuperación de una copia interrumpida a partir de su registro en disco. GitHub Actions ejecuta las mismas comprobaciones. El alcance actual se limita a datos sintéticos en un volumen.
 
 Añade `-- --compare` para comparar el flujo de .NET, CopyFile2 y Robocopy sobre el mismo conjunto sintético. Consulta el [resultado y sus límites](PLAN.md#resultado-de-la-comparación-de-transferencia).
 

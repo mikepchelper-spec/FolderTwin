@@ -3,6 +3,8 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 
+if (args is ["--interrupt", "before-receipt"])
+    return RunInterruptedCopy(CopyStep.Flushed);
 if (args is ["--interrupt", "before"])
     return RunInterruptedCopy(CopyStep.Verified);
 if (args is ["--interrupt", "after"])
@@ -86,11 +88,63 @@ if (OperatingSystem.IsWindows())
     Pass("Windows rejects a source with an open writer");
 }
 
-foreach (string boundary in new[] { "before", "after" })
+foreach (string boundary in new[] { "before-receipt", "before", "after" })
 {
     CheckInterruptedCopy(boundary);
-    Pass($"Process terminated {boundary} publication");
+    Pass($"Disk recovery after process termination at {boundary}");
 }
+
+foreach (RecoveryResult expected in new[]
+{
+    RecoveryResult.InvalidReceipt, RecoveryResult.HashMismatch, RecoveryResult.Conflict, RecoveryResult.MissingData
+})
+{
+    PreparePending(fixture);
+    switch (expected)
+    {
+        case RecoveryResult.InvalidReceipt:
+            using (var receipt = File.OpenWrite(CopyRecovery.ReceiptPath(fixture.Temporary)))
+                receipt.SetLength(12);
+            break;
+        case RecoveryResult.HashMismatch:
+            File.WriteAllBytes(fixture.Temporary, "corrupted copy"u8);
+            break;
+        case RecoveryResult.Conflict:
+            File.WriteAllBytes(fixture.Backup, "previous backup"u8);
+            break;
+        case RecoveryResult.MissingData:
+            File.Delete(fixture.Temporary);
+            break;
+    }
+    CheckRecoveryLeavesFiles(fixture, expected);
+    Pass($"Recovery preserves files on {expected}");
+}
+
+PreparePending(fixture);
+using (var receipt = File.Open(CopyRecovery.ReceiptPath(fixture.Temporary), FileMode.Open, FileAccess.ReadWrite))
+{
+    receipt.Position = 8;
+    int original = receipt.ReadByte();
+    receipt.Position = 8;
+    receipt.WriteByte((byte)(original ^ 0xff));
+}
+CheckRecoveryLeavesFiles(fixture, RecoveryResult.InvalidReceipt);
+Pass("Recovery rejects an altered receipt of the correct length");
+
+PreparePending(fixture);
+Check(CopyRecovery.Recover(fixture.Temporary, fixture.Restored) == RecoveryResult.InvalidReceipt,
+    "Receipt was accepted for a different destination");
+Check(File.Exists(fixture.Temporary) && !File.Exists(fixture.Restored), "Wrong destination was published");
+Pass("Recovery binds the receipt to its original destination name");
+
+PreparePending(fixture);
+using (var operation = new FileStream(CopyRecovery.LockPath(fixture.Temporary), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+    Expect<IOException>(() => CopyRecovery.Recover(fixture.Temporary, fixture.Backup));
+Expect<IOException>(() => VerifiedCopy.Run(fixture.Source, fixture.Backup, fixture.Temporary, recoverable: true));
+Check(CopyRecovery.Recover(fixture.Temporary, fixture.Backup) == RecoveryResult.Published, "Retry did not publish");
+File.WriteAllBytes(fixture.Backup, "corrupted copy"u8);
+CheckRecoveryLeavesFiles(fixture, RecoveryResult.HashMismatch);
+Pass("Recovery excludes concurrent access, retries, and rejects an altered final file");
 
 Console.WriteLine($"{passed} synthetic checks passed.");
 return 0;
@@ -129,17 +183,24 @@ static void CheckInterruptedCopy(string boundary)
 
         byte[] hash = SHA256.HashData("interrupted copy"u8);
         CheckFile(interrupted.Source, hash);
-        if (boundary == "before")
+        if (boundary != "after")
         {
             Check(!File.Exists(interrupted.Backup), "Unpublished copy appeared under its final name");
             CheckFile(interrupted.Temporary, hash);
         }
-        else
+        if (boundary == "before-receipt")
         {
-            Check(!File.Exists(interrupted.Temporary), "Published copy still has a temporary name");
-            VerifiedCopy.Run(interrupted.Backup, interrupted.Restored, interrupted.RestoreTemporary, expectedHash: hash);
-            CheckFile(interrupted.Restored, hash);
+            CheckRecoveryLeavesFiles(interrupted, RecoveryResult.NoReceipt);
+            return;
         }
+
+        RecoveryResult expected = boundary == "after" ? RecoveryResult.AlreadyPublished : RecoveryResult.Published;
+        Check(CopyRecovery.Recover(interrupted.Temporary, interrupted.Backup) == expected, "Unexpected recovery outcome");
+        Check(!File.Exists(interrupted.Temporary), "Published copy still has a temporary name");
+        Check(CopyRecovery.Recover(interrupted.Temporary, interrupted.Backup) == RecoveryResult.AlreadyPublished,
+            "Repeating recovery did not recognize the published file");
+        VerifiedCopy.Run(interrupted.Backup, interrupted.Restored, interrupted.RestoreTemporary, expectedHash: hash);
+        CheckFile(interrupted.Restored, hash);
     }
     finally
     {
@@ -165,8 +226,32 @@ static int RunInterruptedCopy(CopyStep checkpoint)
             Console.WriteLine(fixture.Root);
             Console.ReadLine();
         }
-    });
+    }, recoverable: true);
     return 0;
+}
+
+static void PreparePending(Fixture fixture)
+{
+    fixture.Seed("interrupted copy"u8);
+    Expect<InjectedFailure>(() => VerifiedCopy.Run(fixture.Source, fixture.Backup, fixture.Temporary, (step, _) =>
+    {
+        if (step == CopyStep.Verified)
+            throw new InjectedFailure();
+    }, recoverable: true));
+}
+
+static void CheckRecoveryLeavesFiles(Fixture fixture, RecoveryResult expected)
+{
+    string[] paths = [fixture.Source, fixture.Temporary, fixture.Backup, CopyRecovery.ReceiptPath(fixture.Temporary)];
+    byte[]?[] before = paths.Select(path => File.Exists(path) ? File.ReadAllBytes(path) : null).ToArray();
+    Check(CopyRecovery.Recover(fixture.Temporary, fixture.Backup) == expected, $"Expected recovery result {expected}");
+    for (int i = 0; i < paths.Length; i++)
+    {
+        if (before[i] is byte[] bytes)
+            Check(File.ReadAllBytes(paths[i]).AsSpan().SequenceEqual(bytes), "Recovery changed an existing file");
+        else
+            Check(!File.Exists(paths[i]), "Recovery created an unexpected file");
+    }
 }
 
 static void CheckFile(string path, byte[] expectedHash)
@@ -229,7 +314,11 @@ sealed class Fixture : IDisposable
 
     private void ClearFiles()
     {
-        foreach (string path in new[] { Source, Temporary, Backup, RestoreTemporary, Restored })
+        foreach (string path in new[]
+        {
+            Source, Temporary, Backup, RestoreTemporary, Restored,
+            CopyRecovery.ReceiptPath(Temporary), CopyRecovery.LockPath(Temporary)
+        })
             File.Delete(path);
     }
 

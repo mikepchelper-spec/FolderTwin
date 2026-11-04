@@ -7,8 +7,9 @@ internal static class VerifiedCopy
     // The caller supplies paths inside a fresh synthetic fixture on one volume.
     public static void Run(
         string source, string destination, string temporary,
-        Action<CopyStep, string>? checkpoint = null, byte[]? expectedHash = null)
+        Action<CopyStep, string>? checkpoint = null, byte[]? expectedHash = null, bool recoverable = false)
     {
+        using var operation = recoverable ? CopyRecovery.Begin(temporary, destination) : null;
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read))
         using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
@@ -31,6 +32,8 @@ internal static class VerifiedCopy
             if (!SHA256.HashData(input).AsSpan().SequenceEqual(sourceHash) ||
                 (expectedHash is not null && !sourceHash.AsSpan().SequenceEqual(expectedHash)))
                 throw new InvalidDataException("The copy does not match the expected SHA-256.");
+            if (recoverable)
+                CopyRecovery.RecordVerified(temporary, destination, sourceHash);
         }
         checkpoint?.Invoke(CopyStep.Verified, temporary);
         File.Move(temporary, destination);

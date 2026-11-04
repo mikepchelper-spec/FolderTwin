@@ -152,7 +152,7 @@ La operación local no necesita servicios pagados, VPS, API de IA ni suscripció
 
 La estimación anterior de 40–100 horas no debe tratarse como presupuesto de todas estas garantías. Primero una prueba técnica acotada; medir esfuerzo y decidir si una app propia aporta suficiente valor frente a configurar una existente. Hasta completar los criterios, conservar el respaldo actual y no ejecutar dos motores sobre el mismo destino.
 
-Avance de etapa 1. `experiments/CopyProbe` verifica el flujo de .NET con archivos sintéticos, incluido un origen con escritor abierto y la preservación de copias existentes. Las pruebas de corrupción y terminación real del proceso cubren la publicación con nombre nuevo y la restauración con un hash esperado. El ensayo conserva un temporal pendiente y bloquea su sobrescritura. La recuperación automatizada de temporales queda por implementar. GitHub Actions ejecuta estas comprobaciones en Windows.
+Avance de etapa 1. `experiments/CopyProbe` verifica el flujo de .NET con archivos sintéticos, incluido un origen con escritor abierto y la preservación de copias existentes. Las pruebas cubren la publicación con nombre nuevo, la recuperación de temporales tras terminar el proceso y la restauración con un hash esperado. GitHub Actions ejecuta estas comprobaciones en Windows.
 
 ### Resultado de la comparación de transferencia
 
@@ -166,4 +166,10 @@ El ensayo `--compare` usa 26 archivos sintéticos, 8.487.205 bytes, nombres Unic
 
 Se mantiene el flujo de .NET para el prototipo porque abre el origen con lectura compartida y deniega escritura mientras lee. Las variantes nativas se probaron sin un handle adicional que proteja el origen. Comparan el resultado contra un hash esperado conocido, mientras .NET también calcula el hash durante la copia. Las cifras son orientativas para este equipo, muestra y estado de caché. GitHub Actions repite las comprobaciones de contenido, sin umbrales de velocidad.
 
-El siguiente incremento es definir y probar la recuperación de temporales con información persistida. Quedan pendientes disco lleno y fallo de flush del sistema, carreras de rutas, lectura sin caché y durabilidad ante pérdida de energía. La terminación del proceso mide el estado observable de los archivos con Windows en ejecución.
+### Recuperación de un temporal
+
+El experimento usa un bloqueo exclusivo por operación. Después de vaciar y verificar los datos del temporal, escribe y vacía un registro `.ready` con versión, SHA-256 del contenido y del nombre final, y una suma de comprobación del registro. Después mueve el temporal al nombre final sin sobrescribir. El registro permanece para distinguir una publicación ya realizada de un temporal pendiente y permitir reintentos.
+
+Al volver a abrir la operación, se lee el registro del disco y se verifica el archivo de nuevo. Si solo existe el temporal válido, se publica. Si solo existe el archivo final válido, se reconoce como publicado. Un registro ausente, incompleto, dañado o para otro nombre impide publicar. Si faltan ambos archivos, existen los dos o falla el hash, se informa el estado y se conservan los archivos para revisión. El bloqueo coordina a los procesos del ensayo, y la suma comprueba corrupción accidental.
+
+La prueba termina de verdad el proceso de copia antes de escribir el registro, después de guardarlo y después de mover el archivo. Otro proceso usa el estado en disco, repite la recuperación y comprueba la restauración. El alcance sigue siendo un archivo por operación en una carpeta sintética dedicada. Quedan pendientes la identidad y el confinamiento de rutas frente a sustituciones concurrentes, disco lleno, fallos de flush, lectura sin caché y pruebas de pérdida de energía. El siguiente incremento prueba fallos de E/S durante escritura y flush en un entorno acotado.
