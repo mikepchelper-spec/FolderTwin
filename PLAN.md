@@ -198,4 +198,8 @@ En NTFS se pudo convertir en junction un directorio sintético vacío mientras s
 
 El recorrido automatizado de CI ejecuta los manejadores de la ventana con selecciones simuladas. Comprueba cancelación, carpeta incorrecta, habilitación de acciones, un fallo visible con el origen ocupado y restauración byte por byte después de reintentar. El recorrido manual local comprobó el selector real y ambos botones. Los archivos de la sesión son temporales y se retiran al cerrar normalmente.
 
-La etapa 1 sigue abierta. La interfaz está limitada a los datos que genera el arnés. Queda preparar un laboratorio para reasignación física de letras, disco lleno real y fallos físicos. Los resultados ante terminación del proceso corresponden a Windows en ejecución.
+### Laboratorio de volumen desechable
+
+El workflow manual **Disposable volume lab** crea un VHDX de 128 MiB en un runner Windows hospedado. Vincula el disco a ese archivo antes de inicializarlo, lo formatea en NTFS, limita el relleno al disco virtual y ejecuta la copia hasta recibir un error real de disco lleno. Comprueba que el respaldo previo conserva su hash y que el temporal parcial queda sin publicar. Después deja otra copia verificada pendiente, reasigna la letra del disco virtual y vuelve a abrir el destino con la configuración guardada. El workflow desmonta el VHDX al terminar.
+
+La etapa 1 sigue abierta. El laboratorio usa datos sintéticos en un disco virtual. Queda ensayar desconexiones físicas y pérdidas de energía en hardware desechable. Las pruebas de terminación del proceso corresponden a Windows en ejecución.
