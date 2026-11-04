@@ -2,7 +2,7 @@
 
 *Copias locales. Versiones recuperables.*
 
-Fecha: 2026-10-29; revisión: 2026-10-30, incluidas dos opiniones externas. Las decisiones siguientes son de diseño; no son capacidades ya probadas de una aplicación existente. Fundamento, evaluación de propuestas y enlaces en [INVESTIGACION.md](INVESTIGACION.md).
+Fecha: 2026-10-29; revisión del plan y los ensayos: 2026-11-03, incluidas dos opiniones externas. Las decisiones siguientes son de diseño; no son capacidades ya probadas de una aplicación existente. Fundamento, evaluación de propuestas y enlaces en [INVESTIGACION.md](INVESTIGACION.md).
 
 ## 1. Resultado que buscamos
 
@@ -192,6 +192,8 @@ El arnés abre primero la raíz de la unidad o del volumen identificado por GUID
 
 En NTFS se pudo convertir en junction un directorio sintético vacío mientras su handle seguía abierto. El flujo vuelve a comprobar el tipo de directorio antes de abrir un hijo y antes de publicar. El ensayo convirtió el directorio en junction después de abrirlo y comprobó que una creación relativa se detuviera sin escribir en la carpeta apuntada. Las operaciones siguen usando el handle del padre. Esta prueba cubre esa secuencia concreta y no certifica todas las carreras posibles de filtros o dispositivos. [FSCTL_SET_REPARSE_POINT](https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/fsctl-set-reparse-point).
 
+El recorrido `--paths` también comprueba nombres con espacios, acentos, caracteres CJK y emoji en una ruta de más de 360 caracteres. Interrumpe la copia tras publicar el registro, recupera el temporal, repite la recuperación y restaura a un archivo nuevo. Compara los bytes del origen, la copia y la restauración. Los nombres con punto o espacio final, streams alternativos y caracteres inválidos se rechazan antes de crear archivos de la operación. Ese rechazo es una limitación explícita del prototipo; todavía no se conserva ese tipo de nombre ni se respalda el contenido de streams adicionales.
+
 ### Flujo visual del laboratorio
 
 `experiments/CopyLab` abre una ventana WPF con el tema Fluent del sistema. Usa el selector de carpetas de Windows y habilita la copia solo si se seleccionan las carpetas sintéticas Origen y Destino de la sesión. Los botones llaman al mismo flujo de copia recuperable del arnés. La restauración escribe en una tercera carpeta sintética y compara el contenido con el original. La ventana mantiene los controles deshabilitados durante cada operación y muestra el resultado.
@@ -205,6 +207,8 @@ El workflow manual **Disposable volume lab** crea un VHDX de 128 MiB en un runne
 En la primera ejecución, Windows devolvió `0x80070070`. El origen y la copia anterior conservaron sus hashes y el temporal parcial quedó sin un registro que autorizara su publicación. El volumen pasó de `E:` a `Z:`. Una segunda ejecución del programa reconoció el mismo directorio tanto por GUID como por la letra nueva, publicó la otra copia pendiente y reconoció el resultado al repetir la recuperación. [Registro de GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41759774184).
 
 El flujo ampliado desmonta ordenadamente el VHDX después del cambio de letra y comprueba que el lector de recuperación informa la ausencia del destino. Reutiliza temporalmente esa letra para una carpeta sintética de otro volumen con un marcador idéntico y comprueba que la identidad del destino bloquea cualquier escritura. Tras retirar el alias y volver a montar la imagen, valida de nuevo la identidad del volumen y del directorio y verifica el contenido recuperado. [Dismount-DiskImage](https://learn.microsoft.com/en-us/powershell/module/storage/dismount-diskimage), [subst](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/subst).
+
+La ejecución ampliada pasó los cuatro escenarios: disco lleno, destino ausente, letra reutilizada con marcador copiado y recuperación después de volver a montar el volumen original. La carpeta sustituta conservó únicamente el marcador preparado por el ensayo. El desmontaje fue ordenado, sin simular un corte de alimentación durante una escritura. [Registro de GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41762570533).
 
 Para el siguiente nivel de validación, preparar una VM de Windows con un segundo disco virtual exclusivo para el ensayo y datos sintéticos. Partir de una imagen conocida para cada caso, conservar el hash de referencia fuera del disco probado e interrumpir la VM en cada punto del protocolo. Después de arrancar, inspeccionar los archivos antes de limpiar o volver a copiar. Aceptar como completos solo los archivos que pueda verificar el lector de recuperación. Un apagado abrupto de la VM comprueba recuperación tras reiniciar Windows, con el host y su almacenamiento todavía activos. La desconexión de un dispositivo y el corte de energía físico se prueban por separado en hardware desechable.
 

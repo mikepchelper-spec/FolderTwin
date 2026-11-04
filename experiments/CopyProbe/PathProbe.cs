@@ -94,6 +94,7 @@ internal static class PathProbe
             Directory.Move(movedChild, child);
             CheckCopyAndRecovery(fixture, root, child, movedChild, outside, sentinel);
             BindingProbe.Run();
+            CheckLongPaths();
             return 0;
         }
         finally
@@ -172,6 +173,66 @@ internal static class PathProbe
             !SHA256.HashData(File.ReadAllBytes(destination)).AsSpan().SequenceEqual(SHA256.HashData("synthetic copy"u8)))
             throw new InvalidDataException("The original directory did not recover.");
         Console.WriteLine("PASS copy and recovery reject the substituted junction and recover in the original directory.");
+    }
+
+    private static void CheckLongPaths()
+    {
+        string fixture = Directory.CreateTempSubdirectory("FolderTwin-LongPaths-").FullName;
+        var directories = new List<string> { fixture };
+        string root = fixture;
+        string[] files = [];
+        try
+        {
+            while (root.Length < 360)
+            {
+                root = Path.Combine(root, "carpeta con espacios á漢字-0123456789");
+                Directory.CreateDirectory(root);
+                directories.Add(root);
+            }
+
+            string source = Path.Combine(root, "origen á漢字🧪.bin");
+            string temporary = Path.Combine(root, "copia á漢字🧪.tmp");
+            string destination = Path.Combine(root, "copia á漢字🧪.bin");
+            string restored = Path.Combine(root, "restaurado á漢字🧪.bin");
+            string restoreTemporary = Path.Combine(root, "restaurado á漢字🧪.tmp");
+            files = [source, temporary, destination, restored, restoreTemporary,
+                CopyRecovery.ReceiptPath(temporary), CopyRecovery.LockPath(temporary),
+                CopyRecovery.ReceiptPath(temporary) + ".tmp", CopyRecovery.ReceiptPath(restoreTemporary),
+                CopyRecovery.LockPath(restoreTemporary), CopyRecovery.ReceiptPath(restoreTemporary) + ".tmp"];
+            byte[] content = new byte[65_537];
+            new Random(42).NextBytes(content);
+            byte[] hash = SHA256.HashData(content);
+            File.WriteAllBytes(source, content);
+
+            // These names are deliberately outside the prototype's supported set.
+            foreach (string name in new[] { "trailing.", "trailing ", "file.bin:stream", "invalid?.bin" })
+                Expect<ArgumentException>(() => VerifiedCopy.Run(source, Path.Combine(root, name), temporary,
+                    recoveryRoot: root));
+            if (Directory.EnumerateFileSystemEntries(root).Single() != source)
+                throw new InvalidDataException("An unsupported name left operation files.");
+            Console.WriteLine("PASS unsupported names are rejected before creating operation files.");
+
+            Expect<InjectedFailure>(() => VerifiedCopy.Run(source, destination, temporary, (step, _) =>
+            {
+                if (step == CopyStep.Verified)
+                    throw new InjectedFailure();
+            }, recoveryRoot: root));
+            if (CopyRecovery.Recover(root, temporary, destination) != RecoveryResult.Published ||
+                CopyRecovery.Recover(root, temporary, destination) != RecoveryResult.AlreadyPublished)
+                throw new InvalidDataException("The long-path operation did not recover idempotently.");
+            VerifiedCopy.Run(destination, restored, restoreTemporary, expectedHash: hash, recoveryRoot: root);
+            foreach (string path in new[] { source, destination, restored })
+                if (!File.ReadAllBytes(path).AsSpan().SequenceEqual(content))
+                    throw new InvalidDataException("Long-path copy or restoration changed the content.");
+            Console.WriteLine("PASS Unicode paths beyond 360 characters preserve content through copy, recovery, and restoration.");
+        }
+        finally
+        {
+            foreach (string path in files)
+                File.Delete(path);
+            foreach (string directory in directories.AsEnumerable().Reverse())
+                Directory.Delete(directory);
+        }
     }
 
     private static void Expect<T>(Action action) where T : Exception

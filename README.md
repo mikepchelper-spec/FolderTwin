@@ -22,11 +22,11 @@ Con el SDK de .NET 10, ejecuta `dotnet run --project experiments/CopyProbe` en W
 
 Añade `-- --compare` para comparar el flujo de .NET, CopyFile2 y Robocopy sobre el mismo conjunto sintético. Consulta el [resultado y sus límites](PLAN.md#resultado-de-la-comparación-de-transferencia).
 
-Usa `-- --uncached` para comparar la verificación con y sin la caché de Windows, o `-- --paths` para probar la selección de una raíz local, la sustitución de carpetas y la reapertura de un destino registrado. [Resultados del laboratorio](PLAN.md#fallos-de-es-rutas-y-verificación-sin-caché).
+Usa `-- --uncached` para comparar la verificación con y sin la caché de Windows, o `-- --paths` para probar la selección de una raíz local, la sustitución de carpetas, la reapertura de un destino registrado y la recuperación con nombres Unicode en rutas largas. [Resultados del laboratorio](PLAN.md#fallos-de-es-rutas-y-verificación-sin-caché).
 
 Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Elige las carpetas **Origen** y **Destino** que se muestran en el selector. Después usa **Copiar y verificar** y **Restaurar y verificar**. La ventana trabaja con un archivo generado para la sesión y retira sus archivos temporales al cerrar normalmente. CI ejecuta el recorrido con `-- --smoke`.
 
-Para repetir el ensayo de disco lleno, cambio de letra y reconexión, ejecuta **Disposable volume lab** en la pestaña Actions de GitHub. Usa un disco virtual de 128 MiB en un runner Windows desechable. [Alcance y resultados](PLAN.md#laboratorio-de-volumen-desechable).
+Para repetir el ensayo de disco lleno, cambio de letra, destino sustituido y reconexión ordenada, ejecuta **Disposable volume lab** en la pestaña Actions de GitHub. Usa un disco virtual de 128 MiB en un runner Windows desechable. El ensayo de corte eléctrico en hardware queda aplazado. [Alcance y resultados](PLAN.md#laboratorio-de-volumen-desechable).
 
 La revisión de opiniones externas incorpora diagnóstico de archivos en uso, recuperación por carpetas/fecha, bandeja y cuarentena previa al borrado. Las optimizaciones de E/S y consumo se deciden mediante pruebas. El plan distingue medidas de protección de garantías todavía no demostradas.
 
