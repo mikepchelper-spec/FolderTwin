@@ -20,10 +20,12 @@ internal static class VerifiedCopy
         using (var input = fence is null
             ? new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read)
             : WindowsProbeNative.OpenPlainFile(fence.Parent(source), source, FileAccess.Read, FileShare.Read))
-        using (var output = directory is null
-            ? new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
-            : WindowsProbeNative.OpenPlainFile(directory, temporary, FileAccess.Write, FileShare.None, FileMode.CreateNew))
         {
+            if (fence is not null)
+                WindowsProbeNative.RequireNoNamedStreams(input.SafeFileHandle, Path.GetFileName(source));
+            using var output = directory is null
+                ? new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+                : WindowsProbeNative.OpenPlainFile(directory, temporary, FileAccess.Write, FileShare.None, FileMode.CreateNew);
             byte[] buffer = new byte[64 * 1024];
             int count;
             while ((count = input.Read(buffer)) != 0)
@@ -37,6 +39,8 @@ internal static class VerifiedCopy
             cancellationToken.ThrowIfCancellationRequested();
             checkpoint?.Invoke(CopyStep.Flushing, temporary);
             output.Flush(flushToDisk: true);
+            if (fence is not null)
+                WindowsProbeNative.RequireNoNamedStreams(input.SafeFileHandle, Path.GetFileName(source));
         }
         checkpoint?.Invoke(CopyStep.Flushed, temporary);
 
@@ -45,6 +49,8 @@ internal static class VerifiedCopy
             ? File.OpenRead(temporary)
             : WindowsProbeNative.OpenPlainFile(directory, temporary, FileAccess.Read, FileShare.Read, rename: true))
         {
+            if (directory is not null)
+                WindowsProbeNative.RequireNoNamedStreams(input.SafeFileHandle, Path.GetFileName(temporary));
             if (!SHA256.HashData(input).AsSpan().SequenceEqual(sourceHash) ||
                 (expectedHash is not null && !sourceHash.AsSpan().SequenceEqual(expectedHash)))
                 throw new InvalidDataException("The copy does not match the expected SHA-256.");
@@ -53,7 +59,10 @@ internal static class VerifiedCopy
                 CopyRecovery.RecordVerified(temporary, destination, sourceHash, directory, checkpoint);
             checkpoint?.Invoke(CopyStep.Verified, temporary);
             if (directory is not null)
+            {
+                WindowsProbeNative.RequireNoNamedStreams(input.SafeFileHandle, Path.GetFileName(temporary));
                 WindowsProbeNative.RenameNew(input.SafeFileHandle, directory, Path.GetFileName(destination));
+            }
         }
         if (directory is null)
             File.Move(temporary, destination);

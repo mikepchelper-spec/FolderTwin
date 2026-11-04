@@ -155,6 +155,27 @@ internal static class WindowsProbeNative
         return identity;
     }
 
+    internal static void RequireNoNamedStreams(SafeFileHandle handle, string label)
+    {
+        const int fileStreamInfo = 7;
+        const int headerSize = 24;
+        // Only the unnamed data stream is supported. A larger response is not needed to authorize a copy.
+        byte[] buffer = new byte[4096];
+        if (!GetIdentity(handle, fileStreamInfo, buffer, buffer.Length))
+        {
+            int error = Marshal.GetLastPInvokeError();
+            if (error == 38) // ERROR_HANDLE_EOF: no streams, as on a plain directory.
+                return;
+            throw new IOException($"No se pudieron comprobar los flujos NTFS de «{label}».", new Win32Exception(error));
+        }
+
+        uint nameBytes = BitConverter.ToUInt32(buffer, 4);
+        if (BitConverter.ToUInt32(buffer, 0) != 0 ||
+            nameBytes != "::$DATA".Length * sizeof(char) ||
+            !buffer.AsSpan(headerSize, (int)nameBytes).SequenceEqual(MemoryMarshal.AsBytes("::$DATA".AsSpan())))
+            throw new InvalidDataException($"«{label}» tiene flujos de datos alternativos. Requiere revisión.");
+    }
+
     internal readonly record struct DirectoryEntry(string Name, FileAttributes Attributes, long Length);
 
     internal static IEnumerable<DirectoryEntry> ReadDirectory(SafeFileHandle directory)
