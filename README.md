@@ -46,6 +46,8 @@ En un lote confirmado, pulsa **Verificar respaldo** para comprobar las carpetas 
 
 El laboratorio admite el flujo principal de cada archivo. Si encuentra flujos de datos alternativos de NTFS en un archivo o carpeta, lo indica para revisión y conserva el contenido existente.
 
+También revisa los atributos al abrir las rutas, incluida la raíz. Los archivos o carpetas detectados como offline, cifrados con EFS o con puntos de reanálisis quedan para revisión. La validación con proveedores de nube reales sigue pendiente.
+
 Abre **Historial de intentos** para ver las últimas 20 copias, restauraciones o verificaciones de la sesión, incluidas las incidencias de intentos anteriores. El historial guarda nombres relativos del lote sintético y categorías de incidencia en la carpeta de la sesión. Si hay registros ilegibles o falla la escritura del historial, la ventana lo indica aparte del resultado de la operación.
 
 Si un archivo está en uso, el laboratorio intenta mostrar las aplicaciones que detecta Windows mediante Restart Manager. Si no puede identificarlas, conserva el aviso y permite reintentar. El diagnóstico no cierra aplicaciones.

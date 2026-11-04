@@ -45,14 +45,14 @@ internal static class FolderBatch
             throw new InvalidDataException("El destino tiene archivos o datos pendientes que necesitan revisión.");
         string[] directories = inventory.Entries.Where(entry => entry.IsDirectory).Select(entry => entry.RelativePath)
             .OrderBy(path => path, StringComparer.Ordinal).ToArray();
-        CheckDirectoryStreams(source, directories);
+        CheckDirectoryData(source, directories);
         var files = new List<BatchFile>();
         foreach (var entry in inventory.Entries.Where(entry => !entry.IsDirectory).OrderBy(entry => entry.RelativePath, StringComparer.Ordinal))
         {
             string path = Path.Combine(source, entry.RelativePath);
             using var fence = new DirectoryFence(source, path);
             using var file = WindowsProbeNative.OpenPlainFile(fence.Parent(path), path, FileAccess.Read, FileShare.Read);
-            WindowsProbeNative.RequireNoNamedStreams(file.SafeFileHandle, entry.RelativePath);
+            WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath);
             if (file.Length != entry.Length)
                 throw new InvalidDataException("El origen cambió durante el análisis.");
             files.Add(new(entry.RelativePath, entry.Length, SHA256.HashData(file)));
@@ -119,14 +119,14 @@ internal static class FolderBatch
                     if (entry.IsDirectory)
                     {
                         using var directory = new DirectoryFence(output);
-                        WindowsProbeNative.RequireNoNamedStreams(directory.Root, entry.RelativePath);
+                        WindowsProbeNative.RequireSupportedData(directory.Root, entry.RelativePath);
                     }
                     else
                     {
                         var item = expectedFiles[entry.RelativePath];
                         using var fence = new DirectoryFence(plan.Destination, output);
                         using var file = WindowsProbeNative.OpenPlainFile(fence.Parent(output), output, FileAccess.Read, FileShare.Read);
-                        WindowsProbeNative.RequireNoNamedStreams(file.SafeFileHandle, entry.RelativePath);
+                        WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath);
                         if (file.Length != item.Length || !SHA256.HashData(file).AsSpan().SequenceEqual(item.Hash))
                             throw new InvalidDataException("La copia cambió antes de terminar el lote.");
                     }
@@ -174,7 +174,7 @@ internal static class FolderBatch
                 EnsureSource();
                 using var sourceFileFence = new DirectoryFence(plan.Source, input);
                 using var sourceFile = WindowsProbeNative.OpenPlainFile(sourceFileFence.Parent(input), input, FileAccess.Read, FileShare.Read);
-                WindowsProbeNative.RequireNoNamedStreams(sourceFile.SafeFileHandle, item.RelativePath);
+                WindowsProbeNative.RequireSupportedData(sourceFile.SafeFileHandle, item.RelativePath);
                 if (sourceFile.Length != item.Length || !SHA256.HashData(sourceFile).AsSpan().SequenceEqual(item.Hash))
                     throw new InvalidDataException("El contenido cambió desde el análisis. Revisa el archivo.");
                 if (!resume)
@@ -293,17 +293,17 @@ internal static class FolderBatch
             !entries.Where(entry => !entry.IsDirectory).Select(entry => (entry.RelativePath, entry.Length)).OrderBy(entry => entry.RelativePath, StringComparer.Ordinal)
                 .SequenceEqual(plan.Files.Select(file => (file.RelativePath, file.Length)).OrderBy(entry => entry.RelativePath, StringComparer.Ordinal)))
             throw new InvalidDataException("El inventario del origen cambió. Repite el análisis.");
-        CheckDirectoryStreams(plan.Source, plan.Directories);
+        CheckDirectoryData(plan.Source, plan.Directories);
     }
 
-    private static void CheckDirectoryStreams(string root, string[] directories)
+    private static void CheckDirectoryData(string root, string[] directories)
     {
         using var rootFence = new DirectoryFence(root);
-        WindowsProbeNative.RequireNoNamedStreams(rootFence.Root, Path.GetFileName(root));
+        WindowsProbeNative.RequireSupportedData(rootFence.Root, Path.GetFileName(root));
         foreach (string relative in directories)
         {
             using var directory = new DirectoryFence(Path.Combine(root, relative));
-            WindowsProbeNative.RequireNoNamedStreams(directory.Root, relative);
+            WindowsProbeNative.RequireSupportedData(directory.Root, relative);
         }
     }
 

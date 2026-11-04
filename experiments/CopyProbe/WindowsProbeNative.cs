@@ -136,14 +136,22 @@ internal static class WindowsProbeNative
         }
     }
 
-    private static void RequirePlain(SafeFileHandle handle, bool directory)
+    private static void RequirePlain(SafeFileHandle handle, bool? directory = null)
     {
         const int attributeTagInfo = 9;
         if (handle.IsInvalid || !GetAttributeTag(handle, attributeTagInfo, out AttributeTag info, Marshal.SizeOf<AttributeTag>()))
             throw new IOException("Opening the operation path failed.", new Win32Exception(Marshal.GetLastPInvokeError()));
-        if (info.Attributes.HasFlag(FileAttributes.ReparsePoint) ||
-            info.Attributes.HasFlag(FileAttributes.Directory) != directory)
-            throw new InvalidDataException("Unexpected path type or reparse point.");
+        if (directory is { } expected && info.Attributes.HasFlag(FileAttributes.Directory) != expected)
+            throw new InvalidDataException("Tipo de ruta inesperado.");
+        switch (FolderInventory.Omission(info.Attributes))
+        {
+            case InventoryIssueKind.Unavailable:
+                throw new InvalidDataException("La ruta tiene datos no disponibles localmente. Requiere revisión.");
+            case InventoryIssueKind.ReparsePoint:
+                throw new InvalidDataException("La ruta contiene un punto de reanálisis. Requiere revisión.");
+            case InventoryIssueKind.Encrypted:
+                throw new InvalidDataException("La ruta está cifrada con EFS. Requiere revisión.");
+        }
     }
 
     internal static byte[] DirectoryIdentity(SafeFileHandle directory)
@@ -155,8 +163,9 @@ internal static class WindowsProbeNative
         return identity;
     }
 
-    internal static void RequireNoNamedStreams(SafeFileHandle handle, string label)
+    internal static void RequireSupportedData(SafeFileHandle handle, string label)
     {
+        RequirePlain(handle);
         const int fileStreamInfo = 7;
         const int headerSize = 24;
         // Only the unnamed data stream is supported. A larger response is not needed to authorize a copy.

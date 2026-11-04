@@ -148,6 +148,32 @@ internal static class BatchProbe
         }
         using (var fixture = new BatchFixture())
         {
+            var plan = fixture.Analyze();
+            string relative = BatchFixture.SampleNames[0];
+            string pending = FolderBatch.TemporaryPath(fixture.Destination, relative);
+            FileAttributes original = File.GetAttributes(fixture.SourceFile);
+            bool changed = false;
+            try
+            {
+                var result = fixture.Copy(checkpoint: (path, step, _) =>
+                {
+                    if (path == relative && step == CopyStep.Written)
+                    {
+                        File.SetAttributes(fixture.SourceFile, original | FileAttributes.Offline);
+                        changed = true;
+                    }
+                });
+                Check(changed && !result.Complete && result.Entries.Any(entry => entry.RelativePath == relative &&
+                    entry.Detail?.Contains("no disponibles localmente", StringComparison.Ordinal) == true) &&
+                    File.Exists(pending) && !File.Exists(CopyRecovery.ReceiptPath(pending)) && !File.Exists(fixture.CopyFile) &&
+                    !File.Exists(Path.Combine(fixture.Destination, BatchCatalog.CommitName)),
+                    "An offline source observed after the read authorized publication.");
+            }
+            finally { File.SetAttributes(fixture.SourceFile, original); }
+            Pass("an offline attribute set during copying leaves no verified receipt or complete point");
+        }
+        using (var fixture = new BatchFixture())
+        {
             fixture.Analyze();
             string outside = Path.Combine(fixture.Root, "outside");
             string sentinel = Path.Combine(outside, "sentinel.bin");

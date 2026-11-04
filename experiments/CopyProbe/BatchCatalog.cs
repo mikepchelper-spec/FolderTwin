@@ -108,7 +108,7 @@ internal static class BatchCatalog
     {
         using var root = new DirectoryFence(backup);
         using var marker = expected.OpenVerifiedMarker(root.Root);
-        WindowsProbeNative.RequireNoNamedStreams(root.Root, Path.GetFileName(backup));
+        WindowsProbeNative.RequireSupportedData(root.Root, Path.GetFileName(backup));
         using var operation = WindowsProbeNative.OpenPlainFile(root.Root, FolderBatch.LockName, FileAccess.Read, FileShare.None);
         var catalog = ReadLocked(root);
         BatchFixture.ValidateSamples(catalog.Files, catalog.Directories);
@@ -118,7 +118,7 @@ internal static class BatchCatalog
             Check(relative, isDirectory: true, () =>
             {
                 using var directory = new DirectoryFence(Path.Combine(backup, relative));
-                WindowsProbeNative.RequireNoNamedStreams(directory.Root, relative);
+                WindowsProbeNative.RequireSupportedData(directory.Root, relative);
             });
         int verifiedFiles = 0;
         for (int index = 0; index < catalog.Files.Length; index++)
@@ -336,11 +336,11 @@ internal static class BatchCatalog
     private static void VerifyData(BatchPlan plan)
     {
         using var root = new DirectoryFence(plan.Destination);
-        WindowsProbeNative.RequireNoNamedStreams(root.Root, Path.GetFileName(plan.Destination));
+        WindowsProbeNative.RequireSupportedData(root.Root, Path.GetFileName(plan.Destination));
         foreach (string relative in plan.Directories)
         {
             using var directory = new DirectoryFence(Path.Combine(plan.Destination, relative));
-            WindowsProbeNative.RequireNoNamedStreams(directory.Root, relative);
+            WindowsProbeNative.RequireSupportedData(directory.Root, relative);
         }
         foreach (var item in plan.Files)
             VerifyFile(plan.Destination, item);
@@ -351,7 +351,7 @@ internal static class BatchCatalog
         string path = Path.Combine(backup, item.RelativePath);
         using var parent = new DirectoryFence(backup, path);
         using var file = WindowsProbeNative.OpenPlainFile(parent.Parent(path), path, FileAccess.Read, FileShare.Read);
-        WindowsProbeNative.RequireNoNamedStreams(file.SafeFileHandle, item.RelativePath);
+        WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, item.RelativePath);
         if (file.Length != item.Length || !SHA256.HashData(file).AsSpan().SequenceEqual(item.Hash))
             throw new InvalidDataException("El contenido del respaldo no coincide con el catálogo.");
     }

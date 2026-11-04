@@ -44,6 +44,17 @@ internal static class InventoryProbe
                 missingResult.Issues.Any(issue => issue.Kind == InventoryIssueKind.ReadFailure), "An absent root was mistaken for an empty source.");
             Console.WriteLine("PASS an empty source is distinguished from an unavailable source.");
 
+            FileAttributes emptyAttributes = File.GetAttributes(empty);
+            try
+            {
+                File.SetAttributes(empty, emptyAttributes | FileAttributes.Offline);
+                var offline = FolderInventory.Scan(empty);
+                Check(!offline.Complete && offline.Entries.Length == 0, "An offline root was reported as empty.");
+                Check(!FolderInventory.Scan(root).Complete, "An offline subtree was reported as complete.");
+            }
+            finally { File.SetAttributes(empty, emptyAttributes); }
+            Console.WriteLine("PASS an offline root and an offline subtree cannot produce a complete inventory.");
+
             using (var blocked = WindowsProbeNative.CreateFile(nested, 0x01 | 0x80, FileShare.None, 0, 3, 0x02200000, 0))
             {
                 if (blocked.IsInvalid)
