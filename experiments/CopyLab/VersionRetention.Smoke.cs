@@ -19,6 +19,10 @@ public partial class VersionWindow
             {
                 File.WriteAllText(Path.Combine(source, "shared.txt"), "shared");
                 File.WriteAllText(Path.Combine(source, "change.txt"), days.ToString(CultureInfo.InvariantCulture));
+                if (days < 0)
+                    File.WriteAllText(Path.Combine(source, "obsolete.txt"), "-3");
+                else
+                    File.Delete(Path.Combine(source, "obsolete.txt"));
                 string id = DateTimeOffset.UtcNow.AddDays(days).ToString("yyyyMMdd'T'HHmmssfffffff'Z'", CultureInfo.InvariantCulture) +
                     "-" + Guid.NewGuid().ToString("N");
                 store.CreatePoint(source, id);
@@ -38,6 +42,11 @@ public partial class VersionWindow
                 await Click(window.ApplyRetentionButton, window);
                 Check(window.points.Count(point => point.Confirmed?.Expired == true) == 2 && window.UndoRetentionButton.IsEnabled &&
                     !window.PurgeRetentionButton.IsEnabled, window.StatusText.Text);
+                window.OnlyChanges.IsChecked = true;
+                await window.activeTask;
+                window.Files.SelectedItem = window.Files.Items.Cast<VersionEntry>().Single(entry => entry.Change == VersionChange.Removed);
+                Check(!window.RestoreFileButton.IsEnabled && window.ComparisonText.Text.Contains("El anterior expiró", StringComparison.Ordinal),
+                    "An expired previous point allowed restoration of its removed file or hid its expiration.");
                 window.Timeline.SelectedItem = window.points.First(point => point.Confirmed?.Expired == true);
                 await window.activeTask;
                 Check(!window.RestorePointButton.IsEnabled && window.Files.Items.Count > 0,

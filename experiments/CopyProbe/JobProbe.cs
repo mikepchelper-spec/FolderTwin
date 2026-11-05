@@ -61,6 +61,16 @@ internal static class JobProbe
                 "A replacement source with identical content was accepted.");
             Directory.Delete(source, recursive: true); // Only this test's replacement source.
             Directory.Move(absent, source);
+            using (var target = new DirectoryFence(destination))
+            using (WindowsProbeNative.OpenPlainFile(target.Root, FolderBatch.LockName, FileAccess.ReadWrite, FileShare.None))
+                Check(VersionJob.Run(workspace, id).State == VersionJobState.Busy,
+                    "A manual store operation did not exclude the independent worker.");
+            var reconnected = VersionJob.Run(workspace, id);
+            var afterReconnect = VersionJob.History(workspace, id).Results;
+            Check(reconnected.State == VersionJobState.Confirmed && store.ListPoints().Length == 3 &&
+                afterReconnect.First() == reconnected && afterReconnect.Any(result => result.State == VersionJobState.WaitingForDestination) &&
+                afterReconnect.Any(result => result.State == VersionJobState.Review) && !store.Verify(reconnected.Generation!),
+                "Returning the registered roots failed to recover or erased prior incidents.");
             string result = Directory.EnumerateFiles(workspace.Root, $".foldertwin-job-{id:N}-*.result").First();
             File.WriteAllText(result, "truncado");
             var history = VersionJob.History(workspace, id);

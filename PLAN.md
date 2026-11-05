@@ -235,6 +235,8 @@ La bandeja, el horario real, la aceptación del motor y las dos compilaciones re
 
 ### Trabajo pendiente para completar el piloto
 
+La [matriz de aceptación](ACEPTACION.md) cruza los requisitos de las etapas 2 a 5 con implementación, arnés y comprobaciones pendientes. La auditoría no considera la copia inicial como modo acumulativo actualizado ni el catálogo de un punto expirado como prueba de que sus datos siguen disponibles.
+
 - Revisar la automatización de extremo a extremo en el entorno del piloto. El registro y retirada del arranque opcional del monitor pasaron en Windows. El modo de horario actual requiere sesión iniciada. El inicio real de sesión y la recuperación de horarios perdidos tras apagar, suspender o reiniciar Windows necesitan el entorno de VM indicado en el plan. Mantener separadas esas pruebas de la validación ya realizada con un disparador de hora próxima.
 - Ampliar la medición de retención a las generaciones previstas para el piloto. La validación de Windows y la distribución reproducible del motor de retención pasaron en CI. El registro replicado se cruza con los conjuntos exactos de catálogos y confirmaciones; enumerarlos por sí solo no autoriza limpieza.
 - Conservar la limpieza manual hasta la observación del piloto. La política revisable, las referencias, el diario y la purga con gracia ya pasaron el arnés sintético y el recorrido WPF; hay una medición de ocho generaciones con 4.096 archivos y falta medir el conjunto mayor previsto para el piloto.

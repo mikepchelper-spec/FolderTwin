@@ -337,7 +337,8 @@ public partial class VersionWindow : Window
             ComparisonText.Text = "Sin un punto anterior disponible para comparar.";
         }
         else
-            ComparisonText.Text = $"Punto {row.Date} · anterior {previous.Date}";
+            ComparisonText.Text = $"Punto {row.Date} · anterior {previous.Date}" +
+                (previous.Confirmed.Expired ? " · El anterior expiró. Deshaz su cuarentena antes de recuperar archivos eliminados." : "");
         comparisonId = OnlyChanges.IsChecked == true ? previous?.Id : null;
         var current = store!;
         var selection = await Task.Run(() =>
@@ -358,7 +359,8 @@ public partial class VersionWindow : Window
         browser = selection.Fallback;
         indexKey = selection.Key;
         await LoadDirectoryAsync("");
-        string message = selection.Degraded ? "Se usó una réplica íntegra del catálogo." : "Punto confirmado. Puedes verificarlo o restaurarlo.";
+        string message = point.Expired ? "Punto expirado. Su catálogo sigue disponible; deshaz su cuarentena para restaurarlo." :
+            selection.Degraded ? "Se usó una réplica íntegra del catálogo." : "Punto confirmado. Puedes verificarlo o restaurarlo.";
         SetStatus(message + (browser is null ? "" : IndexUnavailable));
     }
 
@@ -435,7 +437,7 @@ public partial class VersionWindow : Window
     private void Restore(string? relative, bool fromPrevious)
     {
         var row = fromPrevious ? previous : Timeline.SelectedItem as PointRow;
-        if (busy || store is not { } current || row?.Confirmed is not { Problem: null })
+        if (busy || store is not { } current || row?.Confirmed is not { Problem: null, Expired: false })
             return;
         string? output = PickFolder("Elige una subcarpeta vacía para restaurar");
         if (output is null)
@@ -495,7 +497,8 @@ public partial class VersionWindow : Window
         JobChoice.IsEnabled = !busy && store is not null;
         ResumeButton.IsEnabled = !busy && row?.Pending is not null;
         VerifyButton.IsEnabled = RestorePointButton.IsEnabled = retained;
-        RestoreFileButton.IsEnabled = retained && entry is { IsDirectory: false };
+        RestoreFileButton.IsEnabled = retained && entry is { IsDirectory: false } &&
+            (entry.Change != VersionChange.Removed || previous?.Confirmed?.Expired == false);
         OnlyChanges.IsEnabled = confirmed && previous?.Confirmed is { Problem: null };
         OpenDirectoryButton.IsEnabled = confirmed && entry is { IsDirectory: true };
         ParentButton.IsEnabled = confirmed && directory.Length != 0;
