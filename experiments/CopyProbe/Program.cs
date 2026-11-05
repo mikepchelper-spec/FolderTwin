@@ -32,6 +32,10 @@ if (args is ["--version-scale", var fileCount, var objectCount] &&
 if (args is ["--object-layout", var layoutCount] && int.TryParse(layoutCount, out int layoutObjects) &&
     layoutObjects is >= 1 and <= 1_000_000)
     return ObjectLayoutProbe.Run(layoutObjects);
+if (args is ["--object-layout-volume", var volumeCount, var volumeLevel] &&
+    int.TryParse(volumeCount, out int volumeObjects) && volumeObjects is >= 1 and <= 1_000_000 &&
+    int.TryParse(volumeLevel, out int selectedLevel) && selectedLevel is 1 or 2)
+    return ObjectLayoutProbe.Run(volumeObjects, selectedLevel, disposableVolume: true);
 if (args is ["--recover-version", var recoveryWorkspace, var recoveryStore, var recoveryGeneration, var recoveryOutput])
     return VersionRecovery.Run(recoveryWorkspace, recoveryStore, recoveryGeneration, recoveryOutput);
 if (args is ["--run-version-job", var jobWorkspace, var jobId] && Guid.TryParseExact(jobId, "N", out var parsedJobId))

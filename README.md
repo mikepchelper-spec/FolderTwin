@@ -48,7 +48,7 @@ El comando `--recover-version` permite recuperar un punto del laboratorio desde 
 
 Usa `-- --version-scale 10240 32` para medir 10.240 archivos sintéticos con 32 contenidos distintos. El ensayo registra tiempo, E/S y memoria, verifica todos los objetos y restaura una ruta de muestra tras apartar el origen. [Método y resultados](PLAN.md#mediciones-del-versionado).
 
-El workflow manual **Synthetic object layout** compara una y dos carpetas de prefijo con 329.000 y un millón de objetos sintéticos. También importa 329.000 rutas en SQLite y comprueba la navegación y los cambios desde catálogos generados para el ensayo. Cada trabajo usa un runner Windows desechable.
+El workflow manual **Synthetic object layout** permite elegir 4.096, 329.000 o un millón de objetos sintéticos. Cada distribución se ejecuta en su propia imagen NTFS desechable. También importa 329.000 rutas en SQLite y comprueba la navegación y los cambios desde catálogos generados para el ensayo. Los resultados iniciales, el límite de tiempo encontrado y la decisión de conservar un nivel de prefijo figuran en [PLAN.md](PLAN.md#mediciones-del-versionado).
 
 Usa `-- --catalog` para probar los catálogos JSONL duplicados, su confirmación y la restauración desde otro proceso con el origen ausente. El lector rechaza catálogos truncados, rutas inseguras y réplicas contradictorias. Una réplica íntegra de un lote confirmado permite restaurar con un aviso sobre la copia dañada. [Formato experimental](experiments/CopyProbe/CATALOG.md).
 

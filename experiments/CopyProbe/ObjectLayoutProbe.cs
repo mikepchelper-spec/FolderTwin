@@ -4,8 +4,10 @@ using System.Security.Cryptography;
 
 internal static class ObjectLayoutProbe
 {
-    internal static int Run(int count)
+    internal static int Run(int count, int? onlyLevel = null, bool disposableVolume = false)
     {
+        if (disposableVolume)
+            RequireDisposableVolume();
         var workspace = LabWorkspace.Create();
         using var process = Process.GetCurrentProcess();
         try
@@ -14,7 +16,7 @@ internal static class ObjectLayoutProbe
                 LabWorkspace.RequireSpace(256L * 1024 * 1024 + 16L * 1024 * count,
                     LabWorkspace.AvailableSpace(scope.Root));
             Console.WriteLine($"Windows {Environment.OSVersion.Version}; .NET {Environment.Version}; {count} objects of eight bytes.");
-            foreach (int levels in new[] { 1, 2 })
+            foreach (int levels in onlyLevel is { } selected ? new[] { selected } : new[] { 1, 2 })
             {
                 string root = Directory.CreateDirectory(Path.Combine(workspace.Root, $"layout-{levels}")).FullName;
                 var buckets = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -66,7 +68,8 @@ internal static class ObjectLayoutProbe
                 // Each layout is an immediate child of this freshly created registered workspace.
                 using (workspace.OpenRegisteredRoot()) { }
                 workspace.CheckChild(root);
-                Directory.Delete(root, recursive: true);
+                if (!disposableVolume)
+                    Directory.Delete(root, recursive: true);
 
                 void Measure(string phase, Action operation)
                 {
@@ -83,8 +86,27 @@ internal static class ObjectLayoutProbe
         finally
         {
             using (workspace.OpenRegisteredRoot()) { }
-            Directory.Delete(workspace.Root, recursive: true);
+            if (disposableVolume)
+            {
+                RequireDisposableVolume();
+                Console.WriteLine("The dedicated VHDX owner will detach and remove the image after this process exits.");
+            }
+            else
+                Directory.Delete(workspace.Root, recursive: true);
         }
+    }
+
+    private static void RequireDisposableVolume()
+    {
+        string label = Environment.GetEnvironmentVariable("FOLDERTWIN_LAYOUT_VOLUME") ?? "";
+        var drive = new DriveInfo(Path.GetPathRoot(Path.GetTempPath())!);
+        if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
+            Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT") != "github-hosted" ||
+            label.Length != 11 || !label.StartsWith("FTO", StringComparison.Ordinal) ||
+            label.AsSpan(3).ContainsAnyExcept("0123456789abcdef") ||
+            drive.VolumeLabel != label || drive.DriveFormat != "NTFS" ||
+            drive.TotalSize < 31L * 1024 * 1024 * 1024 || drive.TotalSize > 32L * 1024 * 1024 * 1024)
+            throw new InvalidOperationException("The object layout volume does not match the isolated runner image.");
     }
 
     private static byte[] Payload(int index)

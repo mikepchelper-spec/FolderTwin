@@ -2,6 +2,12 @@ name: Synthetic object layout
 
 on:
   workflow_dispatch:
+    inputs:
+      count:
+        description: Synthetic objects per layout
+        type: choice
+        default: '4096'
+        options: ['4096', '329000', '1000000']
 
 permissions:
   contents: read
@@ -32,7 +38,7 @@ jobs:
     timeout-minutes: 50
     strategy:
       matrix:
-        count: [329000, 1000000]
+        level: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,10 +46,15 @@ jobs:
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
-      - name: Compare both layouts in disposable synthetic directories
+      - name: Build the layout probe
+        shell: pwsh
+        run: |
+          dotnet build experiments/CopyProbe -c Release --output "$env:RUNNER_TEMP\FolderTwin-Layout-Build"
+          if ($LASTEXITCODE -ne 0) { throw 'The layout probe did not build.' }
+      - name: Measure a layout on a dedicated disposable NTFS image
         shell: pwsh
         env:
-          OBJECT_COUNT: ${{ matrix.count }}
+          OBJECT_COUNT: ${{ inputs.count }}
+          LAYOUT_LEVEL: ${{ matrix.level }}
         run: |
-          dotnet run --project experiments/CopyProbe -c Release -- --object-layout $env:OBJECT_COUNT
-          if ($LASTEXITCODE -ne 0) { throw 'The object layout comparison failed.' }
+          ./experiments/CopyProbe/Run-ObjectLayout.ps1 -Count $env:OBJECT_COUNT -Levels $env:LAYOUT_LEVEL
