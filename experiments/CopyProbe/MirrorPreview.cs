@@ -1,7 +1,6 @@
-using System.Security.Cryptography;
 using Microsoft.Win32.SafeHandles;
 
-internal sealed record MirrorPreview(string Generation, BatchPlan SourcePlan, string? Previous, byte[] PreviousHash,
+internal sealed record MirrorPreview(string Generation, BatchPlan SourcePlan, byte[] DocumentHash, string? Previous, byte[] PreviousHash,
     byte[] RegistryHash, byte[] CurrentIdentity, int Added, int Replaced, int Removed, int AddedDirectories, int RemovedDirectories,
     string[] Conflicts, long StageBytes, long EstimatedBytes, ulong AvailableBytes, int MaximumChangePercent,
     bool RequiresEmptyReview, bool RequiresMassReview);
@@ -32,7 +31,8 @@ internal sealed partial class VersionStore
         return BuildMirrorPreview(scope.Root, store.Root, source, maximumChangePercent);
     }
 
-    private MirrorPreview BuildMirrorPreview(SafeFileHandle scope, SafeFileHandle root, string source, int maximumChangePercent)
+    private MirrorPreview BuildMirrorPreview(SafeFileHandle scope, SafeFileHandle root, string source, int maximumChangePercent,
+        string? generation = null)
     {
         using var mirror = MirrorJournal.Open(root, binding, out var currentIdentity);
         RequireNoPendingMirror(root);
@@ -44,7 +44,8 @@ internal sealed partial class VersionStore
         var sourcePlan = FolderBatch.AnalyzeSource(workspace.Root, source, Destination, binding, sourceIdentity, BatchCatalog.VersionMaximumEntries);
         PendingBatch.ValidatePlan(sourcePlan, BatchCatalog.VersionMaximumEntries);
         FolderBatch.RequireSameInventory(sourcePlan);
-        string generation = NewGenerationId();
+        generation ??= NewGenerationId();
+        byte[] hash = BatchCatalog.WriteMetadata(Stream.Null, sourcePlan, generation, out int catalogBytes);
         var before = MirrorPrevious(scope, root, registry.MirrorGeneration, sourceIdentity);
         if (before is not null && !before.DocumentHash.AsSpan().SequenceEqual(registry.Generations[registry.MirrorGeneration!]))
             throw new InvalidDataException("El catálogo actual del espejo no coincide con su registro.");
@@ -60,9 +61,9 @@ internal sealed partial class VersionStore
         long stageBytes = desired.Values.Where(file => !previous.TryGetValue(file.RelativePath, out var old) || !SameMirrorFile(old, file)).Sum(file => file.Length);
         long previousEntries = previous.Count + (before?.Directories.Length ?? 0);
         bool mass = previousEntries > 0 && (replaced + removed + removedDirectories) * 100L >= previousEntries * maximumChangePercent;
-        return new(generation, sourcePlan, registry.MirrorGeneration, before?.DocumentHash ?? new byte[32], registry.LastHash,
+        return new(generation, sourcePlan, hash, registry.MirrorGeneration, before?.DocumentHash ?? new byte[32], registry.LastHash,
             currentIdentity, added, replaced, removed, addedDirectories, removedDirectories, conflicts, stageBytes,
-            checked(sourcePlan.Bytes + stageBytes), LabWorkspace.AvailableSpace(root), maximumChangePercent,
+            checked(sourcePlan.Bytes + stageBytes + 3L * catalogBytes), LabWorkspace.AvailableSpace(root), maximumChangePercent,
             sourcePlan.Files.Length == 0 && sourcePlan.Directories.Length == 0, mass);
     }
 

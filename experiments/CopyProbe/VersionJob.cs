@@ -32,15 +32,46 @@ internal static class VersionJob
     {
         try
         {
-            var result = Run(LabWorkspace.Open(root), id);
-            Console.WriteLine(JsonSerializer.Serialize(result, Json));
-            return result.State == VersionJobState.Confirmed && !result.HistoryProblem ? 0 : 1;
+            return Report(Run(LabWorkspace.Open(root), id));
         }
         catch (Exception error) when (Expected(error))
         {
             Console.Error.WriteLine("El trabajo requiere revisión. " + error.Message);
             return 1;
         }
+    }
+
+    internal static async Task<int> RunScheduledCommandAsync(string root, Guid id, Func<TimeSpan, Task>? delay = null,
+        Func<LabWorkspace, Guid, bool>? canRetry = null)
+    {
+        try
+        {
+            var workspace = LabWorkspace.Open(root);
+            for (int retries = 0; ; retries++)
+            {
+                var result = await Task.Run(() => Run(workspace, id));
+                int exitCode = Report(result);
+                if (result.HistoryProblem || retries == 3 ||
+                    result.State is not (VersionJobState.Busy or VersionJobState.WaitingForSource or VersionJobState.WaitingForDestination))
+                    return exitCode;
+                // Run released both locks. Each retry must reopen and revalidate
+                // the registered job and append its own result.
+                await (delay ?? Task.Delay)(TimeSpan.FromMinutes(5));
+                if (canRetry?.Invoke(workspace, id) == false)
+                    return exitCode;
+            }
+        }
+        catch (Exception error) when (Expected(error))
+        {
+            Console.Error.WriteLine("El trabajo programado requiere revisión. " + error.Message);
+            return 1;
+        }
+    }
+
+    private static int Report(VersionJobResult result)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(result, Json));
+        return result.State == VersionJobState.Confirmed && !result.HistoryProblem ? 0 : 1;
     }
 
     internal static Guid Create(LabWorkspace workspace, string source, string destination)

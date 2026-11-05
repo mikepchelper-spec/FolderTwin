@@ -13,7 +13,7 @@ El asistente de copia conserva los metadatos declarados en ALFA. Los enlaces, da
 
 ## Operar y recuperar
 
-- En **Horario y bandeja**, escribe una hora local en formato HH:mm y pulsa **Programar**. La aplicación instala el ejecutor verificado en una carpeta estable del usuario. El modo actual requiere una sesión iniciada. Cierra la interfaz y vuelve a abrir el espacio tras la hora elegida. Revisa el historial, la antigüedad y el resultado de verificación. También puedes usar **Copiar en segundo plano** o **Respaldar ahora** desde la bandeja.
+- En **Horario y bandeja**, escribe una hora local en formato HH:mm y pulsa **Programar**. La aplicación instala el ejecutor verificado en una carpeta estable del usuario. El modo actual requiere una sesión iniciada. Cierra la interfaz y vuelve a abrir el espacio tras la hora elegida. Revisa el historial, la antigüedad y el resultado de verificación. Un horario reintenta hasta tres veces, cada cinco minutos, si falta una raíz o el almacén está ocupado. Vuelve a pulsar **Programar** al actualizar una instalación anterior. También puedes usar **Copiar en segundo plano** o **Respaldar ahora** desde la bandeja.
 - Usa **Minimizar a bandeja** para consultar los trabajos y abrir la aplicación. Si quieres comprobar el monitor al iniciar sesión en una VM preparada, activa **Mostrar estado al iniciar sesión** y pulsa **Aplicar inicio**. La bandeja avisa de incidencias y muestra la antigüedad del último punto consultable. Para comprobar todos sus objetos, abre el punto y pulsa **Verificar punto**.
 - En **Espejo protegido**, prepara la carpeta actual, selecciona el origen y revisa altas, reemplazos, retiradas, conflictos y espacio. Aplica la revisión, incluidos los consentimientos adicionales cuando correspondan. Abre **Ver carpeta actual** y recupera un archivo anterior desde la fecha que lo conserva. Una actualización pendiente se continúa desde **Reanudar espejo**. Conserva las carpetas de la operación y respeta el estado del origen solicitado por el mensaje.
 - En **Retención y cuarentena**, revisa los días, semanas, meses y gracia. Registra qué fechas se conservarán. Con un conjunto desechable, prueba **Mover a cuarentena** y **Deshacer cuarentena**. Para comprobar una purga en este piloto, usa una operación distinta con datos desechables, espera la gracia real desde la finalización, verifica un punto retenido y revisa la aceptación de borrado. Mantén la limpieza manual durante todo el piloto.
@@ -35,6 +35,15 @@ Detén nuevas ejecuciones del modo afectado ante un hash inesperado, un punto in
 
 ## Validaciones fuera de la aceptación de software
 
-En una VM o equipo de pruebas, comprueba inicio y cierre de sesión, reinicio, suspensión y ejecución recuperada de horarios perdidos. En laboratorio aparte, comprueba USB NTFS físico, reconexión y sustitución, 512e/4Kn, nube real sin descargas involuntarias, recuperación en otra cuenta o equipo, escala de pantalla, notificaciones y carga interactiva. Usa solo datos sintéticos. La aceptación de Windows en CI cubre arneses, terminaciones de proceso, tareas reales desde el paquete y reproducción de archivos distribuidos. Cada validación externa conserva su propio resultado. El corte eléctrico físico queda excluido.
+| Entorno | Comprobación pendiente y evidencia esperada |
+|---|---|
+| VM Windows con una cuenta de prueba | Programa una hora, cierra sesión y registra que el modo interactivo espera. Inicia sesión con el monitor habilitado y registra su aparición, hora, historial y estado. |
+| VM con reinicio o suspensión controlados | Deja pasar una hora programada, vuelve a la sesión y registra si Windows recupera el horario, cuánto demora y si el punto se verifica. Ensaya reinicio abrupto de la VM por separado con una copia sintética pendiente. |
+| Equipo de laboratorio con NTFS extraíble | Registra desconexión, retorno y disco sustituido. Comprueba que la identidad equivocada se rechaza, que el retorno permite verificar y que se conservan los incidentes. Registra geometría 512e o 4Kn y resultado de la lectura de prueba. |
+| Nube de laboratorio | Usa archivos sintéticos locales, parcialmente descargados y solo en la nube. Comprueba el inventario, los avisos y que el ensayo no provoque hidratación involuntaria. |
+| Otra cuenta o equipo de laboratorio | Prueba extracción de un punto sintético sin el índice local. Registra los límites de permisos y de reasociación de identidad. |
+| Escritorio interactivo de pruebas | Comprueba teclado, foco, escala, pantallas y entrega visible de avisos. Mide respuesta de otras aplicaciones durante un respaldo en las configuraciones HDD/SSD y CPU disponibles. |
+
+Cada validación externa conserva su propio resultado. Usa solo datos sintéticos. La aceptación de Windows en CI cubre arneses, terminaciones de proceso, tareas reales desde el paquete y reproducción de archivos distribuidos. El corte eléctrico físico queda excluido.
 
 Consulta la matriz para ver la evidencia del commit y el alcance de cada comprobación. [Matriz de aceptación](ACEPTACION.md).

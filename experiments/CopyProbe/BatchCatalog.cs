@@ -221,7 +221,10 @@ internal static class BatchCatalog
         }
     }
 
-    internal static byte[] WriteMetadata(Stream output, BatchPlan plan, string generation = "initial")
+    internal static byte[] WriteMetadata(Stream output, BatchPlan plan, string generation = "initial") =>
+        WriteMetadata(output, plan, generation, out _);
+
+    internal static byte[] WriteMetadata(Stream output, BatchPlan plan, string generation, out int byteCount)
     {
         if (plan.Files.Length + plan.Directories.Length > EntryLimit(generation))
             throw new InvalidDataException("Demasiadas entradas en el catálogo.");
@@ -243,6 +246,7 @@ internal static class BatchCatalog
                 Line(new DatedFileRecord("file", file.RelativePath, file.Length, file.Hash, metadata.LastWriteUtc));
         }
         Line(new Footer("footer", plan.Files.Length, plan.Directories.Length, body.GetHashAndReset()), footer: true);
+        byteCount = total;
         return document.GetHashAndReset();
 
         void Line<T>(T value, bool footer = false)

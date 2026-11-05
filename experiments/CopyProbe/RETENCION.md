@@ -45,3 +45,11 @@ El workflow **Synthetic retention scale** usa tres generaciones reales de 329.00
 | Purga | 11,716 | 11,703 | 657.170.270 | 64 | 1.108.574.208 |
 
 Estos datos motivaron procesar catálogos de uno en uno y guardar referencias únicas por generación. El ensayo mide el patrón de contenidos compartidos descrito. Una colección con más objetos únicos o más generaciones puede consumir más memoria y E/S.
+
+La variante optimizada volvió a conservar dos puntos y purgar solo el objeto exclusivo con el origen ausente. La preparación tomó 93,181 s y los respaldos 66,205 / 58,826 / 58,939 s. El máximo residente del proceso completo bajó a 501.125.120 bytes en la segunda ejecución. Los runners hospedados pueden tener distinta carga. Los tiempos son observaciones de cada ejecución. [Ejecución optimizada](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41958434672).
+
+| Fase optimizada | Tiempo (s) | CPU (s) | Bytes leídos | Bytes escritos | Máximo residente acumulado (bytes) |
+|---|---:|---:|---:|---:|---:|
+| Revisión | 3,232 | 3,250 | 657.181.457 | 0 | 501.125.120 |
+| Cuarentena | 8,048 | 8,094 | 1.460.415.140 | 1.580 | 501.125.120 |
+| Purga | 3,168 | 3,156 | 657.185.489 | 64 | 501.125.120 |

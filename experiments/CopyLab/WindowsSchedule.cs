@@ -78,8 +78,7 @@ internal sealed class WindowsSchedule : IDisposable
                 Element("MultipleInstancesPolicy", "IgnoreNew"), Element("DisallowStartIfOnBatteries", false),
                 Element("StopIfGoingOnBatteries", false), Element("AllowHardTerminate", false),
                 Element("StartWhenAvailable", !tray), Element("AllowStartOnDemand", true),
-                Element("Enabled", false), Element("ExecutionTimeLimit", "PT0S"),
-                Element("RestartOnFailure", Element("Interval", "PT5M"), Element("Count", 3))),
+                Element("Enabled", false), Element("ExecutionTimeLimit", "PT0S")),
             new XElement(Schema + "Actions", new XAttribute("Context", "Author"),
                 Element("Exec", Element("Command", executable), Element("Arguments", Arguments(workspace, id, tray)),
                     Element("WorkingDirectory", Path.GetDirectoryName(executable))))));
@@ -112,9 +111,16 @@ internal sealed class WindowsSchedule : IDisposable
             _ = VerifyOwnership(xml, workspace, id);
             if (!(bool)task.Enabled || !MeetsPolicy(xml, tray: false))
                 throw new InvalidDataException("El horario necesita revisión antes de ejecutarse.");
-            dynamic running = task.Run(null);
-            if (running is not null)
-                Marshal.FinalReleaseComObject(running);
+            try
+            {
+                dynamic running = task.Run(null);
+                if (running is not null)
+                    Marshal.FinalReleaseComObject(running);
+            }
+            catch (COMException error) when (error.HResult == unchecked((int)0x8004131F))
+            {
+                // IgnoreNew may report SCHED_E_ALREADY_RUNNING.
+            }
         }
         finally { Marshal.FinalReleaseComObject(task); }
     }
@@ -144,11 +150,14 @@ internal sealed class WindowsSchedule : IDisposable
         var actions = root.Element(Schema + "Actions")?.Elements().ToArray() ?? [];
         string? account = (string?)principal?.Element(Schema + "UserId");
         string? executable = actions.Length == 1 ? (string?)actions[0].Element(Schema + "Command") : null;
+        string? arguments = actions.Length == 1 ? (string?)actions[0].Element(Schema + "Arguments") : null;
+        bool recognized = arguments == Arguments(workspace, id, tray) ||
+            !tray && arguments == $"--run-version-job \"{workspace.Root}\" {id:N}";
         string? sid = NormalizeSid(account);
         if ((string?)root.Element(Schema + "RegistrationInfo")?.Element(Schema + "Description") != Description(id, tray) ||
             sid != user || (string?)principal?.Element(Schema + "LogonType") != "InteractiveToken" ||
             actions.Length != 1 || actions[0].Name != Schema + "Exec" ||
-            (string?)actions[0].Element(Schema + "Arguments") != Arguments(workspace, id, tray) ||
+            !recognized ||
             executable is null || !LabInstallation.IsInstalledWorker(executable))
             throw new InvalidDataException("La tarea existente no coincide con el trabajo. Se conservó para revisión.");
         return executable;
@@ -175,10 +184,11 @@ internal sealed class WindowsSchedule : IDisposable
             return "StartWhenAvailable";
         if ((string?)settings?.Element(Schema + "ExecutionTimeLimit") != "PT0S")
             return "ExecutionTimeLimit";
-        if ((string?)settings?.Element(Schema + "RestartOnFailure")?.Element(Schema + "Count") != "3")
-            return "RestartOnFailure.Count";
-        if ((string?)settings?.Element(Schema + "RestartOnFailure")?.Element(Schema + "Interval") != "PT5M")
-            return "RestartOnFailure.Interval";
+        if (!tray && settings?.Element(Schema + "RestartOnFailure") is not null)
+            return "RestartOnFailure";
+        string? arguments = (string?)root?.Element(Schema + "Actions")?.Element(Schema + "Exec")?.Element(Schema + "Arguments");
+        if (!tray && arguments?.StartsWith("--run-scheduled-version-job ", StringComparison.Ordinal) != true)
+            return "Actions.Exec.Arguments";
         return null;
     }
 
@@ -216,7 +226,7 @@ internal sealed class WindowsSchedule : IDisposable
     private static string Name(Guid id, bool tray = false) => tray ? $"FolderTwin-Lab-Tray-{id:N}" : $"FolderTwin-Lab-{id:N}";
     private static string Description(Guid id, bool tray = false) => tray ? $"FolderTwin bandeja v1 {id:N}" : $"FolderTwin laboratorio v1 {id:N}";
     private static string Arguments(LabWorkspace workspace, Guid id, bool tray = false) => tray ?
-        $"--tray-workspace \"{workspace.Root}\"" : $"--run-version-job \"{workspace.Root}\" {id:N}";
+        $"--tray-workspace \"{workspace.Root}\"" : $"--run-scheduled-version-job \"{workspace.Root}\" {id:N}";
 
     public void Dispose()
     {

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Security.Cryptography;
 
 internal static class MirrorProbe
 {
@@ -12,6 +13,8 @@ internal static class MirrorProbe
             var review = fixture.Store.PreviewMirror(fixture.Source);
             Check(review is { Added: 2, Replaced: 1, Removed: 2, Conflicts.Length: 0, RequiresMassReview: true },
                 "The preview did not identify updates, removals or a type change.");
+            Check(review.EstimatedBytes > review.StageBytes + review.SourcePlan.Bytes,
+                "The preview omitted space for its catalog replicas and pending metadata.");
             Reject(() => fixture.Store.BeginMirror(review));
             bool reached = false;
             Reject(() => fixture.Store.BeginMirror(review, massReviewed: true, checkpoint: step =>
@@ -66,8 +69,31 @@ internal static class MirrorProbe
         CheckGuards();
         CheckReadyConflict();
         CheckMissingJournal();
+        CheckRecoveryCorruption();
         CheckTerminatedWorker();
         return 0;
+    }
+
+    private static void CheckRecoveryCorruption()
+    {
+        using var fixture = new Fixture();
+        fixture.Change();
+        var review = fixture.Store.PreviewMirror(fixture.Source);
+        string digest = Convert.ToHexStringLower(SHA256.HashData("anterior"u8));
+        string recovery = Path.Combine(fixture.Destination, "objects", "sha256", digest[..2], digest);
+        Reject(() => fixture.Store.BeginMirror(review, massReviewed: true, checkpoint: step =>
+        {
+            if (step == MirrorStep.Registered)
+                File.WriteAllText(recovery, "dañado");
+        }));
+        string retired = Path.Combine(fixture.Destination, "mirror", "operations", review.Generation, "retired");
+        Check(Directory.EnumerateFiles(retired).Count(file => File.ReadAllText(file) == "anterior") == 2 &&
+            fixture.Store.ListMirrorOperations().Any(item => item.Generation == review.Generation && !item.Applied),
+            "Retired files were released while their recovery object was corrupt.");
+        File.WriteAllText(recovery, "anterior");
+        fixture.Store.ResumeMirror(review.Generation);
+        fixture.VerifyUpdated();
+        Console.WriteLine("PASS retirement copies remain when recovery data changes before their release.");
     }
 
     private static void CheckMissingJournal()

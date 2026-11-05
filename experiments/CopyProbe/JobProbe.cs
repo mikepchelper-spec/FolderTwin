@@ -71,6 +71,27 @@ internal static class JobProbe
                 afterReconnect.First() == reconnected && afterReconnect.Any(result => result.State == VersionJobState.WaitingForDestination) &&
                 afterReconnect.Any(result => result.State == VersionJobState.Review) && !store.Verify(reconnected.Generation!),
                 "Returning the registered roots failed to recover or erased prior incidents.");
+            string away = Path.Combine(workspace.Root, "destino temporalmente ausente");
+            Directory.Move(destination, away);
+            try
+            {
+                var intervals = new List<TimeSpan>();
+                int exit = VersionJob.RunScheduledCommandAsync(workspace.Root, id, interval =>
+                {
+                    intervals.Add(interval);
+                    return Task.CompletedTask;
+                }).GetAwaiter().GetResult();
+                var attempts = VersionJob.History(workspace, id).Results.Take(4).ToArray();
+                Check(exit == 1 && intervals.SequenceEqual(Enumerable.Repeat(TimeSpan.FromMinutes(5), 3)) &&
+                    attempts.Length == 4 && attempts.All(item => item.Sequence > reconnected.Sequence &&
+                        item.State == VersionJobState.WaitingForDestination),
+                    "The scheduled worker did not bound retries or keep every incident.");
+                exit = VersionJob.RunScheduledCommandAsync(workspace.Root, id, _ => Task.CompletedTask,
+                    canRetry: (_, _) => false).GetAwaiter().GetResult();
+                Check(exit == 1 && VersionJob.History(workspace, id).Results.First().Sequence == attempts[0].Sequence + 1,
+                    "An unregistered schedule still retried after waiting.");
+            }
+            finally { Directory.Move(away, destination); }
             string result = Directory.EnumerateFiles(workspace.Root, $".foldertwin-job-{id:N}-*.result").First();
             File.WriteAllText(result, "truncado");
             var history = VersionJob.History(workspace, id);

@@ -40,47 +40,24 @@ internal static class ScheduleProbe
                     throw new InvalidOperationException("The daily schedule update did not verify.");
                 string detached = Path.Combine(workspace.Root, "destino apartado");
                 Directory.Move(destination, detached);
-                try
-                {
-                    scheduler.RunNow(workspace, id);
-                    var missing = await WaitForAttemptAsync(result.Sequence);
-                    if (missing.State != VersionJobState.WaitingForDestination)
-                        throw new InvalidOperationException("The scheduled worker did not report its absent destination.");
-                    result = missing;
-                }
-                finally { Directory.Move(detached, destination); }
-
-                using (var target = new DirectoryFence(destination))
-                using (WindowsProbeNative.OpenPlainFile(target.Root, FolderBatch.LockName, FileAccess.ReadWrite, FileShare.None))
-                {
-                    scheduler.RunNow(workspace, id);
-                    var busy = await WaitForAttemptAsync(result.Sequence);
-                    if (busy.State != VersionJobState.Busy)
-                        throw new InvalidOperationException("The scheduled worker bypassed the store lock.");
-                    result = busy;
-                }
-                scheduler.RunNow(workspace, id);
-                var recovered = await WaitForAttemptAsync(result.Sequence);
-                var history = VersionJob.History(workspace, id).Results;
-                if (recovered.State != VersionJobState.Confirmed || store.Verify(recovered.Generation!) ||
-                    !history.Take(3).Select(item => item.State).SequenceEqual(
-                        [VersionJobState.Confirmed, VersionJobState.Busy, VersionJobState.WaitingForDestination]))
-                    throw new InvalidOperationException("The scheduled worker did not recover or preserve the prior incidents.");
-
-                Directory.Move(destination, detached);
                 VersionJobResult retryAfter;
                 try
                 {
                     scheduler.Register(workspace, id, executable, DateTime.Now.AddSeconds(5), daily: false);
-                    retryAfter = await WaitForAttemptAsync(recovered.Sequence);
-                    if (retryAfter.State != VersionJobState.WaitingForDestination)
+                    retryAfter = await WaitForAttemptAsync(result.Sequence, waitForExit: false);
+                    if (retryAfter.State != VersionJobState.WaitingForDestination || scheduler.Read(workspace, id) is not { Running: true })
                         throw new InvalidOperationException("The retry fixture did not fail on its time trigger.");
+                    scheduler.RunNow(workspace, id);
+                    await Task.Delay(1000);
+                    if (VersionJob.History(workspace, id).Results.First().Sequence != retryAfter.Sequence)
+                        throw new InvalidOperationException("The schedule started a second worker during a deferred retry.");
                 }
                 finally { Directory.Move(detached, destination); }
                 var retried = await WaitForAttemptAsync(retryAfter.Sequence, TimeSpan.FromMinutes(7));
                 if (retried.State != VersionJobState.Confirmed || store.Verify(retried.Generation!) ||
+                    VersionJob.History(workspace, id).Results.Skip(1).First() != retryAfter ||
                     retried.FinishedUtc - retryAfter.FinishedUtc < TimeSpan.FromMinutes(4.5))
-                    throw new InvalidOperationException("The scheduler did not run its deferred retry as configured.");
+                    throw new InvalidOperationException("The scheduled worker did not run its deferred retry as configured.");
                 Console.Error.WriteLine(FormattableString.Invariant(
                     $"PASS a failed time trigger retried without intervention after {(retried.FinishedUtc - retryAfter.FinishedUtc).TotalSeconds:F1} seconds."));
 
@@ -95,16 +72,17 @@ internal static class ScheduleProbe
                     throw new InvalidOperationException("The optional logon tray definition was not removed.");
             }
             Console.Error.WriteLine("PASS the portable app installs a stable worker; an actual Windows time trigger confirms a point, updates to daily and removes its owned schedule.");
-            Console.Error.WriteLine("PASS the scheduled action reports missing destination and manual-store contention, then recovers and preserves both incidents.");
+            Console.Error.WriteLine("PASS the scheduled action preserves the missing-destination incident and does not start a second instance during retry.");
 
-            async Task<VersionJobResult> WaitForAttemptAsync(long afterSequence, TimeSpan? limit = null)
+            async Task<VersionJobResult> WaitForAttemptAsync(long afterSequence, TimeSpan? limit = null, bool waitForExit = true)
             {
                 using var scheduler = new WindowsSchedule();
                 var deadline = DateTime.UtcNow + (limit ?? TimeSpan.FromMinutes(2));
                 while (DateTime.UtcNow < deadline)
                 {
                     var latest = VersionJob.History(workspace, id).Results.FirstOrDefault();
-                    if (latest is not null && latest.Sequence > afterSequence && scheduler.Read(workspace, id) is { Running: false })
+                    if (latest is not null && latest.Sequence > afterSequence &&
+                        (!waitForExit || scheduler.Read(workspace, id) is { Running: false }))
                         return latest;
                     await Task.Delay(250);
                 }

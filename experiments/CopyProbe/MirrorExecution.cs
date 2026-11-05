@@ -14,12 +14,11 @@ internal sealed partial class VersionStore
         using var root = new DirectoryFence(Destination);
         using var marker = binding.OpenVerifiedMarker(root.Root);
         using var operation = OpenLock(root.Root, FileAccess.ReadWrite);
-        var fresh = BuildMirrorPreview(scope.Root, root.Root, review.SourcePlan.Source, review.MaximumChangePercent);
-        byte[] hash = BatchCatalog.WriteMetadata(Stream.Null, fresh.SourcePlan, review.Generation);
+        var fresh = BuildMirrorPreview(scope.Root, root.Root, review.SourcePlan.Source, review.MaximumChangePercent, review.Generation);
         if (!fresh.RegistryHash.AsSpan().SequenceEqual(review.RegistryHash) || fresh.Previous != review.Previous ||
             !fresh.CurrentIdentity.AsSpan().SequenceEqual(review.CurrentIdentity) || fresh.Conflicts.Length != 0 ||
             !fresh.SourcePlan.SourceIdentity.AsSpan().SequenceEqual(review.SourcePlan.SourceIdentity) ||
-            !hash.AsSpan().SequenceEqual(BatchCatalog.WriteMetadata(Stream.Null, review.SourcePlan, review.Generation)))
+            !fresh.DocumentHash.AsSpan().SequenceEqual(review.DocumentHash))
             throw new InvalidDataException("El origen, el espejo o su registro cambiaron desde la revisión. Repite el análisis.");
         if (fresh.RequiresEmptyReview && !emptyReviewed || fresh.RequiresMassReview && !massReviewed)
             throw new InvalidDataException("Revisa expresamente el origen vacío o el alcance de los cambios antes de actualizar el espejo.");
@@ -28,7 +27,7 @@ internal sealed partial class VersionStore
         using var operations = WindowsProbeNative.OpenPlainDirectory(mirror, MirrorJournal.OperationsName);
         using var directory = WindowsProbeNative.OpenOrCreatePlainDirectory(operations, review.Generation);
         LabWorkspace.RequireEmpty(directory);
-        var plan = new MirrorPlan(2, review.Generation, hash, fresh.Previous, fresh.PreviousHash,
+        var plan = new MirrorPlan(2, review.Generation, fresh.DocumentHash, fresh.Previous, fresh.PreviousHash,
             Path.GetFileName(fresh.SourcePlan.Source), fresh.SourcePlan.SourceIdentity, currentIdentity,
             binding.Marker, binding.Identity, fresh.MaximumChangePercent, emptyReviewed, massReviewed);
         RetentionJournal.WriteFile(directory, "plan", MirrorJournal.Encode(plan));
@@ -133,12 +132,18 @@ internal sealed partial class VersionStore
         checkpoint?.Invoke(MirrorStep.Registered);
         // The previous verified catalog and CAS objects are the recovery area.
         // Release redundant retired files only once publication is durable.
+        using (var objects = WindowsProbeNative.OpenPlainDirectory(root, ObjectDirectory))
+        using (var algorithm = WindowsProbeNative.OpenPlainDirectory(objects, Algorithm))
         using (var retired = WindowsProbeNative.OpenPlainDirectory(directory, "retired"))
             foreach (var file in RetiredMirrorFiles(before, after))
             {
                 string token = MirrorToken(file.RelativePath);
                 if (!WindowsProbeNative.PlainFileExists(retired, token))
                     continue;
+                string digest = Digest(file);
+                using var bucket = WindowsProbeNative.OpenPlainDirectory(algorithm, digest[..2]);
+                using var recovery = WindowsProbeNative.OpenPlainFile(bucket, digest, FileAccess.Read, FileShare.Read);
+                RequireObject(recovery, file.RelativePath, file);
                 using (var copy = WindowsProbeNative.OpenPlainFile(retired, token, FileAccess.Read, FileShare.None, rename: true))
                 {
                     RequireObject(copy, file.RelativePath, file);
