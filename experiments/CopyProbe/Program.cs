@@ -21,6 +21,14 @@ if (args is ["--product-roots"])
     return LocalJobRootsProbe.Run();
 if (args is ["--product-jobs"])
     return ProductJobRegistryProbe.Run();
+if (args is ["--review-product-pending", var pendingRegistry, var pendingJob] && Guid.TryParseExact(pendingJob, "N", out var pendingId))
+    return ProductRunner.AbandonCommand(pendingRegistry, pendingId);
+if (args is ["--abandon-product-version", var abandonRegistry, var abandonProductJob, var abandonReview] &&
+    Guid.TryParseExact(abandonProductJob, "N", out var abandonId) && Guid.TryParseExact(abandonReview, "N", out var abandonRun))
+    return ProductRunner.AbandonCommand(abandonRegistry, abandonId, abandonRun);
+if (args is ["--held-product-abandon-child", var heldAbandonRoot, var heldAbandonJob, var heldAbandonReview] &&
+    Guid.TryParseExact(heldAbandonJob, "N", out var heldAbandonId) && Guid.TryParseExact(heldAbandonReview, "N", out var heldAbandonRun))
+    return VersionAbandonProbe.HeldProductChild(heldAbandonRoot, heldAbandonId, heldAbandonRun);
 if (args is ["--product-config"])
     return ProductConfigurationProbe.Run();
 if (args is ["--version-abandon"])

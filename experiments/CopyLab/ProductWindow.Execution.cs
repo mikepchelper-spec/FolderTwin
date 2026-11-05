@@ -43,6 +43,7 @@ public partial class ProductWindow
         SelectedJobText.Text = job is null ? "" : $"Origen\n{job.Source.VolumePath}\nDestino\n{job.Destination.LastVolumePath}";
         if (mirrorJobId != job?.Id) ResetProductActions();
         RefreshMirrorReviewDisplay(job, executing);
+        RefreshPendingReviewDisplay(job, executing);
         RefreshRuntimeDisplay();
         RefreshProductRetentionActions();
         if (RecoveryPanel.Visibility == Visibility.Visible && recoveryJob?.Id == job?.Id)

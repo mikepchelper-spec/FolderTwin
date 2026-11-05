@@ -52,6 +52,15 @@
                                 </ListBox.ItemTemplate>
                             </ListBox>
                         </Expander>
+                        <Expander x:Name="PendingVersionPanel" Header="Resolver un plan de versionado pendiente" Visibility="Collapsed" Margin="0,4,0,4">
+                            <StackPanel>
+                                <TextBlock Text="Si el origen cambió y no puedes completar el plan anterior, revísalo antes de permitir un análisis nuevo. Se conservan sus datos parciales; no contará como respaldo correcto." TextWrapping="Wrap" />
+                                <Button x:Name="ReviewPendingButton" Content="Revisar plan pendiente" Click="ReviewPendingClick" HorizontalAlignment="Left" Margin="0,8,0,0" />
+                                <TextBlock x:Name="PendingReviewText" TextWrapping="Wrap" Margin="0,8,0,0" AutomationProperties.LiveSetting="Polite" />
+                                <CheckBox x:Name="AcceptPendingPlan" Content="Conservar el plan incompleto y permitir uno nuevo" Checked="PendingChoiceChanged" Unchecked="PendingChoiceChanged" Margin="0,8,0,0" />
+                                <Button x:Name="ApplyPendingButton" Content="Conservar plan anterior" Click="ApplyPendingClick" HorizontalAlignment="Left" IsEnabled="False" Margin="0,8,0,0" />
+                            </StackPanel>
+                        </Expander>
                         <Expander x:Name="JobSettingsPanel" Header="Editar trabajo y horario" Margin="0,4,0,4" IsEnabled="False">
                             <StackPanel>
                                 <Label Content="_Nombre" Target="{Binding ElementName=EditJobName}" />

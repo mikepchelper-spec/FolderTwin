@@ -224,6 +224,12 @@ internal static partial class ProductRunner
         private WorkPhase? lastPhase;
         internal WorkProgress Current { get; private set; } = new(WorkPhase.Analyzing, 0, 0);
 
+        internal void ObserveBoundary(WorkProgress work)
+        {
+            lastPhase = null;
+            Observe(work);
+        }
+
         internal void Observe(WorkProgress work)
         {
             Current = work;

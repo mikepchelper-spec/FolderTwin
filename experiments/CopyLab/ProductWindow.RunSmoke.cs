@@ -85,7 +85,7 @@ public partial class ProductWindow
         Console.Error.WriteLine("PASS WPF controls real worker pause/resume; closing the UI preserves its process and reopening reads its verified result.");
     }
 
-    private static Process StartHeldWorker(string root, Guid id, Guid? request = null, bool mirrorReview = false)
+    private static Process StartHeldWorker(string root, Guid id, Guid? request = null, bool mirrorReview = false, bool abandon = false)
     {
         string executable = Environment.ProcessPath ?? throw new IOException("Executable unavailable.");
         var start = new ProcessStartInfo(executable)
@@ -95,7 +95,7 @@ public partial class ProductWindow
         };
         if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
             start.ArgumentList.Add(typeof(ProductRunner).Assembly.Location);
-        foreach (string argument in new[] { mirrorReview ? "--held-mirror-review-child" : request is null ? "--held-product-child" : "--held-restore-child", root, id.ToString("N") })
+        foreach (string argument in new[] { abandon ? "--held-product-abandon-child" : mirrorReview ? "--held-mirror-review-child" : request is null ? "--held-product-child" : "--held-restore-child", root, id.ToString("N") })
             start.ArgumentList.Add(argument);
         if (request is { } selected) start.ArgumentList.Add(selected.ToString("N"));
         return Process.Start(start) ?? throw new IOException("Could not start the controlled worker.");

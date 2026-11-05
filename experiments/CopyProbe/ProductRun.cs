@@ -5,7 +5,7 @@ using Microsoft.Win32.SafeHandles;
 
 internal enum ProductRunState { Confirmed, Cancelled, WaitingForSource, WaitingForDestination, Busy, Review }
 internal enum ProductRunAction { Pause, Resume, Cancel }
-internal enum ProductRunOperation { Backup, Verify, Restore, ReviewMirror }
+internal enum ProductRunOperation { Backup, Verify, Restore, ReviewMirror, ReviewAbandon, AbandonVersion }
 internal enum WorkPhase { Analyzing, Copying, Verifying, Publishing, Restoring, Preparing }
 internal sealed record WorkProgress(WorkPhase Phase, int Processed, int Total, string? RelativePath = null);
 internal sealed record ProductRunIntent(int Version, Guid Job, Guid Id, long Sequence, byte[] JobStamp, DateTimeOffset StartedUtc,
@@ -18,7 +18,7 @@ internal sealed record ProductRunProgress(int Version, byte[] IntentHash, long R
 internal sealed record ProductRunCommand(int Version, byte[] IntentHash, long Number, ProductRunAction Action);
 internal sealed record ProductRunView(ProductRunIntent Intent, ProductRunResult? Result, string? Generation,
     ProductRunProgress? Progress, bool Running, ProductRetry? Retry = null, bool RetryRunning = false,
-    ProductRestoreRequest? Restore = null, ProductMirrorReview? Mirror = null);
+    ProductRestoreRequest? Restore = null, ProductMirrorReview? Mirror = null, ProductAbandonReview? Abandon = null);
 internal sealed record ProductRetry(int Version, byte[] IntentHash, int Number, DateTimeOffset NextUtc);
 internal sealed record ProductRunHistory(ProductRunView[] Runs, int Unreadable);
 
@@ -146,6 +146,17 @@ internal sealed partial class ProductJobRegistry
                         throw new InvalidDataException("Falta la revisión confirmada del espejo.");
                 }
                 ProductRetry? retry = null;
+                ProductAbandonReview? abandon = null;
+                if (intent.Operation is ProductRunOperation.ReviewAbandon or ProductRunOperation.AbandonVersion)
+                {
+                    if (WindowsProbeNative.PlainFileExists(run, "abandon-review"))
+                    {
+                        abandon = Decode<ProductAbandonReview>(run, "abandon-review");
+                        ValidateAbandonReview(abandon, intent, generation);
+                    }
+                    if (result?.State == ProductRunState.Confirmed && abandon is null)
+                        throw new InvalidDataException("Falta la revisión del plan conservado.");
+                }
                 bool retryRunning = false;
                 if (WindowsProbeNative.PlainFileExists(run, "retry"))
                 {
@@ -156,7 +167,7 @@ internal sealed partial class ProductJobRegistry
                         throw new InvalidDataException("El reintento no corresponde al resultado registrado.");
                     retryRunning = IsLocked(run, "retry.active");
                 }
-                found.Add(new(intent, result, generation, progress, running, retry, retryRunning, restore, mirror));
+                found.Add(new(intent, result, generation, progress, running, retry, retryRunning, restore, mirror, abandon));
             }
             catch (Exception error) when (VersionJob.Expected(error)) { unreadable++; }
         }
@@ -292,6 +303,11 @@ internal sealed partial class ProductJobRegistry
         {
             ValidateMirrorReview(review, Intent, Generation);
             RetentionJournal.WriteFile(run, "mirror-review", Encode(review));
+        }
+        internal void SaveAbandonReview(ProductAbandonReview review)
+        {
+            ValidateAbandonReview(review, Intent, Generation);
+            RetentionJournal.WriteFile(run, "abandon-review", Encode(review));
         }
         internal void Progress(WorkProgress work, bool paused)
         {

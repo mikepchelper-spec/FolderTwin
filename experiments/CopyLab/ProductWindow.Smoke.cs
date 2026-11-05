@@ -240,6 +240,7 @@ public partial class ProductWindow
             await RunWorkerSmokeAsync();
             await RunRestoreWorkerSmokeAsync();
             await RunMirrorReviewSmokeAsync();
+            await RunPendingVersionSmokeAsync();
             await ProductTrayProbe.RunAsync();
             await RunProductRetentionSmokeAsync();
             await RunConfigurationSmokeAsync();
@@ -258,7 +259,8 @@ public partial class ProductWindow
         Check(button.IsEnabled, "A wizard action was unexpectedly disabled.");
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         await window.activeTask;
-        if (button == window.BackupJobButton || button == window.ApplyMirrorButton || button == window.VerifyPointButton || button == window.RestorePointButton)
+        if (button == window.BackupJobButton || button == window.ApplyMirrorButton || button == window.VerifyPointButton || button == window.RestorePointButton ||
+            button == window.ReviewPendingButton || button == window.ApplyPendingButton)
             await window.WaitForWorkersAsync();
     }
 

@@ -82,6 +82,8 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
             var latest = protection.FirstOrDefault();
             var result = protection.FirstOrDefault(run => run.Result is not null)?.Result;
             var activity = history.Runs.FirstOrDefault(run => run.Intent.Operation != ProductRunOperation.Restore);
+            if (activity is { Running: false, Intent.Operation: ProductRunOperation.ReviewAbandon or ProductRunOperation.AbandonVersion })
+                attention.Add($"{job.Id:N}-pending-plan");
             if (activity is { Intent.Operation: ProductRunOperation.ReviewMirror, Running: false } &&
                 (activity.Result?.State != ProductRunState.Confirmed || activity.Mirror is { ResumePending: true } or { Conflicts: > 0 } ||
                     activity.Mirror is { RequiresEmptyReview: true } or { RequiresMassReview: true }))

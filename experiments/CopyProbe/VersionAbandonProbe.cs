@@ -12,6 +12,8 @@ internal static class VersionAbandonProbe
         CheckRetention();
         CheckObjectsOnlyRetention();
         CheckWorker();
+        CheckProductWorkers();
+        CheckStaleProductReview();
         Console.WriteLine("PASS version abandonment preserves plans, catalogs and shared objects, resumes metadata boundaries, rejects committed points and permits a fresh verified backup with guarded retention.");
         return 0;
     }
@@ -185,6 +187,93 @@ internal static class VersionAbandonProbe
                 "A real process interruption lost a point or could not resume without the source.");
         }
         finally { if (!worker.HasExited) { worker.Kill(); worker.WaitForExit(15000); } }
+    }
+
+    internal static int HeldProductChild(string root, Guid job, Guid review)
+    {
+        var fixture = LabWorkspace.Open(root);
+        using var registry = new ProductJobRegistry(Path.Combine(fixture.Root, "settings"));
+        bool held = false;
+        var result = ProductRunner.AbandonVersion(registry, job, review, work =>
+        {
+            if (held || work.Phase != WorkPhase.Publishing || work.Processed != 4) return;
+            held = true;
+            Console.WriteLine("READY"); Console.Out.Flush(); Console.ReadLine();
+        });
+        return result.State is ProductRunState.Confirmed or ProductRunState.Cancelled ? 0 : 1;
+    }
+
+    private static void CheckProductWorkers()
+    {
+        foreach (string action in new[] { "resume", "cancel", "terminate" })
+        {
+            using var fixture = new Fixture(catalogs: true);
+            using var registry = fixture.Open();
+            var baseline = registry.RunHistory(fixture.Job.Id).Runs[0];
+            Check(ProductRunner.AbandonVersion(registry, fixture.Job.Id, baseline.Intent.Id).State == ProductRunState.Review,
+                "An ordinary backup result authorized abandonment.");
+            Check(ProductRunner.ReviewAbandon(registry, fixture.Job.Id).State == ProductRunState.Confirmed, "Product pending review failed.");
+            var review = registry.RunHistory(fixture.Job.Id).Runs[0];
+            Check(review.Abandon is { ResumePending: false, Proof: not null } && review.Generation == fixture.Pending &&
+                fixture.Store.ListPoints().Length == 1, "Review changed points or lost its durable proof.");
+            string executable = Environment.ProcessPath ?? throw new IOException("Executable unavailable.");
+            var start = new ProcessStartInfo(executable)
+            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+            if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+                start.ArgumentList.Add(typeof(ProductRunner).Assembly.Location);
+            foreach (string argument in new[] { "--held-product-abandon-child", fixture.Root.Root, fixture.Job.Id.ToString("N"), review.Intent.Id.ToString("N") })
+                start.ArgumentList.Add(argument);
+            using var worker = Process.Start(start) ?? throw new IOException("Could not start controlled abandonment.");
+            var errors = worker.StandardError.ReadToEndAsync();
+            try
+            {
+                Check(worker.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(20)).GetAwaiter().GetResult() == "READY",
+                    "Product abandonment did not reach its archive boundary.");
+                var active = registry.RunHistory(fixture.Job.Id).Runs[0];
+                registry.RequestRun(fixture.Job.Id, active.Intent.Id, ProductRunAction.Pause);
+                worker.StandardInput.WriteLine(); worker.StandardInput.Flush();
+                var timer = Stopwatch.StartNew();
+                while (registry.RunHistory(fixture.Job.Id).Runs[0].Progress?.Paused != true && timer.Elapsed < TimeSpan.FromSeconds(10)) Thread.Sleep(50);
+                Check(registry.RunHistory(fixture.Job.Id).Runs[0].Progress?.Paused == true, "The real abandonment did not pause.");
+                if (action == "terminate") worker.Kill();
+                else registry.RequestRun(fixture.Job.Id, active.Intent.Id, action == "cancel" ? ProductRunAction.Cancel : ProductRunAction.Resume);
+                Check(worker.WaitForExit(15000), "Controlled abandonment did not exit.");
+                if (action != "terminate") Check(worker.ExitCode == 0, errors.GetAwaiter().GetResult());
+                string aside = Path.Combine(fixture.Root.Root, "source absent");
+                Directory.Move(fixture.Source, aside);
+                if (action != "resume")
+                {
+                    Reject(() => fixture.Store.PreviewRetention(new()));
+                    Check(ProductRunner.ReviewAbandon(registry, fixture.Job.Id).State == ProductRunState.Confirmed, "Interrupted journal review failed.");
+                    var resume = registry.RunHistory(fixture.Job.Id).Runs[0];
+                    Check(resume.Abandon is { ResumePending: true, Proof: null } &&
+                        ProductRunner.AbandonVersion(registry, fixture.Job.Id, resume.Intent.Id).State == ProductRunState.Confirmed,
+                        "The product worker did not resume an interrupted journal without its source.");
+                }
+                Check(!fixture.Store.Verify(fixture.Baseline) && fixture.Store.ListPending().Length == 0 &&
+                    registry.RunHistory(fixture.Job.Id).Runs.Single(run => run.Intent.Id == baseline.Intent.Id).Result!.FinishedUtc == baseline.Result!.FinishedUtc,
+                    "Conserving an incomplete plan changed protection history or lost an earlier point.");
+                Directory.Move(aside, fixture.Source);
+                File.WriteAllText(fixture.Data, "new source after abandoning old plan");
+                var fresh = ProductRunner.Run(registry, fixture.Job.Id);
+                Check(fresh.State == ProductRunState.Confirmed && fresh.Generation != fixture.Pending && !fixture.Store.Verify(fresh.Generation!),
+                    fresh.Detail ?? "The product worker could not create a new complete backup.");
+            }
+            finally { if (!worker.HasExited) { worker.Kill(); worker.WaitForExit(15000); } }
+        }
+        Console.WriteLine("PASS product abandonment workers pause, cancel, survive termination and resume without source while preserving backup dates and allowing a fresh verified point.");
+    }
+
+    private static void CheckStaleProductReview()
+    {
+        using var fixture = new Fixture(catalogs: true);
+        using var registry = fixture.Open();
+        Check(ProductRunner.ReviewAbandon(registry, fixture.Job.Id).State == ProductRunState.Confirmed, "Could not review the pending plan.");
+        Guid reviewed = registry.RunHistory(fixture.Job.Id).Runs[0].Intent.Id;
+        fixture.Store.ResumePoint(fixture.Pending);
+        Check(ProductRunner.AbandonVersion(registry, fixture.Job.Id, reviewed).State == ProductRunState.Review &&
+            !fixture.Store.Verify(fixture.Pending) && fixture.Store.ListVersionAbandons().Length == 0,
+            "A stale review abandoned a point that had already become a complete backup.");
     }
 
     private sealed class Fixture : IDisposable

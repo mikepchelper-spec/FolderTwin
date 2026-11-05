@@ -118,6 +118,8 @@ public partial class ProductWindow
             ProductRunState.Confirmed => result.Degraded ? "Verificado; catálogo requiere atención" : last.Intent.Operation switch
             {
                 ProductRunOperation.ReviewMirror => last.Mirror?.ResumePending == true ? "Actualización pendiente de reanudar" : "Revisión del espejo lista",
+                ProductRunOperation.ReviewAbandon => "Plan pendiente revisado",
+                ProductRunOperation.AbandonVersion => "Plan anterior conservado; crea un respaldo nuevo",
                 ProductRunOperation.Restore => "Recuperación completa",
                 ProductRunOperation.Verify => "Verificación completa",
                 _ => "Respaldo completo"
@@ -137,6 +139,10 @@ public partial class ProductWindow
 
     private static string ResultText(ProductRunView run, ProductRunResult result) => result.State switch
     {
+        ProductRunState.Confirmed when run.Intent.Operation == ProductRunOperation.ReviewAbandon =>
+            "Revisión terminada. Decide si conservar el plan incompleto y permitir uno nuevo; no se creó un respaldo.",
+        ProductRunState.Confirmed when run.Intent.Operation == ProductRunOperation.AbandonVersion =>
+            "Plan incompleto conservado. Ya puedes crear un respaldo nuevo; los datos parciales permanecen para la retención manual.",
         ProductRunState.Confirmed when run.Mirror is { } review => review.ResumePending ? "Reanuda la actualización pendiente desde su diario." :
             review.Conflicts > 0 ? "La revisión detectó conflictos. Conserva los cambios externos antes de repetir el análisis." :
                 "Revisión terminada. Comprueba los cambios antes de aplicar el espejo.",

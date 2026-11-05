@@ -1,6 +1,8 @@
 # Conservación de planes incompletos
 
-El motor incorpora una transición explícita para abandonar una generación incompleta de un trabajo de **versionado de producto** y permitir un análisis nuevo. Es una capacidad del motor en prueba, todavía sin acción pública en WPF. La integración del ejecutor, los borradores incompletos y las actualizaciones pendientes de acumulativo y espejo siguen pendientes. Los ensayos usan datos sintéticos.
+La vista previa WPF permite revisar y conservar una generación incompleta de un trabajo de **versionado de producto** y permitir un análisis nuevo. Revisión y conservación se ejecutan en procesos separados, con controles compartidos e historial durable. Los borradores incompletos y las actualizaciones pendientes de acumulativo y espejo siguen pendientes. Los ensayos usan datos sintéticos.
+
+En el trabajo de versionado, abre **Resolver un plan de versionado pendiente** y **Revisar plan pendiente**. El resumen indica la fecha y número de archivos previstos. Acepta **Conservar el plan incompleto y permitir uno nuevo** antes de aplicar. Después usa **Respaldar ahora** para analizar el origen actual. Conservar el plan no actualiza la fecha del último respaldo ni verifica datos nuevos. La bandeja mantiene un aviso hasta realizar un respaldo posterior. Si se cancela o interrumpe la conservación, vuelve a revisar: la interfaz ofrece reanudar su diario, también con el origen ausente. Los puntos completos anteriores permanecen disponibles.
 
 ## Invariantes
 
@@ -28,4 +30,6 @@ Los objetos existentes que solo pertenecen a planes abandonados pueden entrar en
 
 `--version-abandon` interrumpe cada paso del diario y las cuatro escrituras del evento replicado, conserva los límites de publicación de ambos catálogos y del recibo temporal y rechaza el recibo final. Termina un trabajador real después de mover un catálogo y reanuda sin origen. Prueba una copia parcial cuyo origen cambia, el nuevo respaldo, referencias compartidas, cuarentena, deshacer, purga con reloj sintético y rechazo del diario dañado.
 
-Faltan la acción y revisión en WPF, su ejecución persistente, el tratamiento de intenciones que todavía no tengan descriptor completo y el abandono seguro de acumulativo y espejo. Una actualización que haya empezado a modificar la carpeta actual requiere completar su diario verificado; no se descartará para evitar reanudarla. Estas comprobaciones de software no sustituyen cortes de energía, USB físico ni las observaciones de entorno de la matriz de v1.
+El mismo arnés controla trabajadores de producto reales: pausa, continúa, cancela, termina el proceso y reanuda sin origen. Conserva las fechas de respaldo y rechaza usar un intento de copia como autorización. `--product-smoke` añade revisión y aceptación WPF, cierre de ventana con el proceso activo, recuperación del resultado y reanudación del diario después de cancelar. Termina con un respaldo nuevo verificado. Ambos recorridos pasaron localmente.
+
+Faltan el tratamiento de intenciones que todavía no tengan descriptor completo y el abandono seguro de acumulativo y espejo. Una actualización que haya empezado a modificar la carpeta actual requiere completar su diario verificado; no se descartará para evitar reanudarla. Estas comprobaciones de software no sustituyen cortes de energía, USB físico ni las observaciones de entorno de la matriz de v1.

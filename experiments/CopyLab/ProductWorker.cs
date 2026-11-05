@@ -16,6 +16,10 @@ internal static class ProductWorker
         Launch(["--restore-product-job", registry, id.ToString("N"), request.ToString("N")]);
     internal static Process StartMirrorReview(string registry, Guid id) =>
         Launch(["--review-product-mirror", registry, id.ToString("N")]);
+    internal static Process StartPendingReview(string registry, Guid id) =>
+        Launch(["--review-product-pending", registry, id.ToString("N")]);
+    internal static Process StartAbandonVersion(string registry, Guid id, Guid review) =>
+        Launch(["--abandon-product-version", registry, id.ToString("N"), review.ToString("N")]);
 
     private static Process Launch(string[] arguments)
     {

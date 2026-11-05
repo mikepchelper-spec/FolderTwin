@@ -16,12 +16,13 @@ public partial class App : Application
         bool heldProductChild = e.Args is ["--held-product-child", _, _];
         bool heldRestoreChild = e.Args is ["--held-restore-child", _, _, _];
         bool heldMirrorChild = e.Args is ["--held-mirror-review-child", _, _];
+        bool heldAbandonChild = e.Args is ["--held-product-abandon-child", _, _, _];
         bool trayStartup = e.Args is ["--tray-workspace", _];
         bool scheduled = e.Args is ["--run-scheduled-version-job", _, _];
         bool productScheduled = e.Args is ["--run-scheduled-product-job", _, _];
-        bool productWorker = productScheduled || e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _] or ["--restore-product-job", _, _, _] or ["--review-product-mirror", _, _];
+        bool productWorker = productScheduled || e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _] or ["--restore-product-job", _, _, _] or ["--review-product-mirror", _, _] or ["--review-product-pending", _, _] or ["--abandon-product-version", _, _, _];
         bool worker = productWorker || scheduled || e.Args is ["--run-version-job", _, _];
-        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !heldMirrorChild && !productScheduleSmoke)
+        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !heldMirrorChild && !heldAbandonChild && !productScheduleSmoke)
         {
             Shutdown(2);
             return;
@@ -29,6 +30,13 @@ public partial class App : Application
 
         try
         {
+            if (heldAbandonChild)
+            {
+                if (!Guid.TryParseExact(e.Args[2], "N", out var abandonId) || !Guid.TryParseExact(e.Args[3], "N", out var reviewRun)) { Shutdown(2); return; }
+                int heldResult = await Task.Run(() => VersionAbandonProbe.HeldProductChild(e.Args[1], abandonId, reviewRun));
+                Shutdown(heldResult);
+                return;
+            }
             if (heldMirrorChild)
             {
                 if (!Guid.TryParseExact(e.Args[2], "N", out var reviewId)) { Shutdown(2); return; }
@@ -86,6 +94,18 @@ public partial class App : Application
                 }
                 if (productWorker)
                 {
+                    if (e.Args[0] is "--review-product-pending" or "--abandon-product-version")
+                    {
+                        Guid? reviewedRun = null;
+                        if (e.Args.Length == 4)
+                        {
+                            if (!Guid.TryParseExact(e.Args[3], "N", out var reviewedId)) { Shutdown(2); return; }
+                            reviewedRun = reviewedId;
+                        }
+                        int conserved = await Task.Run(() => ProductRunner.AbandonCommand(e.Args[1], id, reviewedRun));
+                        Shutdown(conserved);
+                        return;
+                    }
                     if (e.Args[0] == "--review-product-mirror")
                     {
                         int reviewed = await Task.Run(() => ProductRunner.ReviewMirrorCommand(e.Args[1], id));

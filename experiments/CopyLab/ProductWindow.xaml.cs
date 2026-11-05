@@ -35,6 +35,7 @@ public partial class ProductWindow : Window
     private readonly Func<string, Guid, Guid, System.Diagnostics.Process>? testRestoreWorker;
     private readonly Func<bool, string?>? testConfigurationPicker;
     private readonly Func<string, Guid, System.Diagnostics.Process>? testMirrorReviewWorker;
+    private readonly Func<string, Guid, Guid, System.Diagnostics.Process>? testAbandonWorker;
     private readonly VersionIndex productIndex;
     private string? origin;
     private string? parent;
@@ -48,7 +49,8 @@ public partial class ProductWindow : Window
         Action<string, Guid, bool>? testSchedule = null,
         Func<string, Guid, Guid, System.Diagnostics.Process>? testRestoreWorker = null,
         Func<bool, string?>? testConfigurationPicker = null,
-        Func<string, Guid, System.Diagnostics.Process>? testMirrorReviewWorker = null)
+        Func<string, Guid, System.Diagnostics.Process>? testMirrorReviewWorker = null,
+        Func<string, Guid, Guid, System.Diagnostics.Process>? testAbandonWorker = null)
     {
         this.openRegistry = openRegistry ?? ProductJobRegistry.OpenLocal;
         this.testPicker = testPicker;
@@ -57,6 +59,7 @@ public partial class ProductWindow : Window
         this.testRestoreWorker = testRestoreWorker;
         this.testConfigurationPicker = testConfigurationPicker;
         this.testMirrorReviewWorker = testMirrorReviewWorker;
+        this.testAbandonWorker = testAbandonWorker;
         productIndex = new(() =>
         {
             using var registry = this.openRegistry();
