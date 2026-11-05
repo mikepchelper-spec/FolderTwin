@@ -1,6 +1,6 @@
 # Notas del candidato de FolderTwin 1.0
 
-Estado: candidato anterior `8bde43f` retenido por pérdida de foco en recuperación y búsqueda con Enter. La corrección está en aceptación; no iniciar el piloto con aquel paquete. [ENTREGA.md](ENTREGA.md) conserva su identidad y el punto de reanudación. La [matriz de v1](V1.md) distingue la nueva aceptación del paquete, la repetición VHDX en cola y las validaciones externas. Consulta [GUIA.md](GUIA.md) para operar desde la interfaz y [PILOTO.md](PILOTO.md) para registrar el ensayo.
+Estado: candidato `76b7eed` con aceptación de software aprobada y validaciones externas pendientes. Corrige la pérdida de foco al abrir recuperación y buscar con Enter. Pasaron Windows, WPF, el laboratorio VHDX y el recorrido normal de los tres modos en escritorio. [ENTREGA.md](ENTREGA.md) fija el ZIP, sus hashes y la evidencia posterior a compilarlo. La [matriz de v1](V1.md) mantiene abiertos el piloto y las comprobaciones externas, sin entorno disponible por ahora. Consulta [GUIA.md](GUIA.md) y [PILOTO.md](PILOTO.md). No se declara v1 final.
 
 ## Funciones disponibles
 
@@ -24,8 +24,6 @@ Los almacenes nuevos y anteriores conservan lectores explícitos. No se permite 
 
 ## Pendientes antes de cerrar v1
 
-- Aceptación del paquete con la corrección de foco después de abrir recuperación o ejecutar una búsqueda con Enter.
-- Resultado de la repetición VHDX `42068399899`, actualmente en cola. La ejecución anterior aprobada corresponde al mismo motor sin cambios; no se sustituye la conclusión pendiente.
 - Recorrido completo de accesibilidad, lector activo y escalado real de Windows. El recorrido funcional de los tres modos en perfil de producto vacío pasó desde el artefacto descargado; no acredita otra cuenta o equipo.
 - Piloto de 7–14 días y validaciones externas de USB NTFS físico, ciclos de Windows, otra cuenta o equipo y proveedor de nube real.
 

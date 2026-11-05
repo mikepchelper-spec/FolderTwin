@@ -1,55 +1,61 @@
 # Candidato de FolderTwin 1.0
 
-Estado del 5 de noviembre de 2026: **candidato 8bde43f retenido por un fallo de foco de teclado**. La revisión adicional en tema claro reprodujo pérdida de foco al abrir recuperación y después de buscar con Enter. La regresión automatizada reproduce el fallo y la corrección está en aceptación. No iniciar el piloto con ese paquete. El ZIP anterior se conserva como evidencia y no se modifica; seleccionar un nuevo candidato tras comprobar la corrección. El objetivo de v1 continúa abierto.
+Estado del 5 de noviembre de 2026: **candidato a lanzamiento 76b7eed, con aceptación de software aprobada y validaciones externas pendientes**. No se declara v1 final ni se ha iniciado el piloto. El candidato anterior 8bde43f quedó retenido tras reproducir un fallo de foco; se conserva como evidencia histórica.
 
 ## Artefacto elegido
 
 | Dato | Valor |
 |---|---|
-| Código | `8bde43f8b2cb8ba161938edb0b21c58502d73446` |
-| Plataforma | Windows 11 x64, NTFS local; runtime .NET incluido |
-| Paquete | `FolderTwin-win-x64-8bde43f8b2cb8ba161938edb0b21c58502d73446` |
-| CI de Windows | [42068611369 — aprobada](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42068611369) |
-| Artefacto de Actions | ID `13436900822`, 76.999.944 bytes |
-| SHA-256 del ZIP descargado | `c5520de86811667b8d12c552f3b4f72c082e8d0977c74d9aa7d8560004bf8323` |
-| SHA-256 de SHA256SUMS.txt | `3c337e9e757ebac4bf6eeccf32d778c57c8e828be1777c1032441e62abd83d02` |
-| Contenido comprobado | 505 archivos, cada hash y conjunto exacto; manifiesto separado |
-| Reproducción | Dos árboles limpios en CI y otros dos en Windows 11 local; los cuatro manifiestos coinciden |
+| Código | `76b7eed6981381bb7242853f29f64768d4576b11` |
+| Plataforma | Windows 11 x64, NTFS local; runtime .NET 10.0.14 incluido |
+| CI de Windows | [42104199340 — aprobada](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42104199340) |
+| Volumen virtual NTFS | [42105791375 — aprobada](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42105791375) |
+| Artefacto de Actions | `FolderTwin-win-x64-76b7eed6981381bb7242853f29f64768d4576b11`, ID `13451048794` |
+| ZIP | `FolderTwin-win-x64-76b7eed.zip`, 77.002.196 bytes |
+| SHA-256 del ZIP descargado | `b287866c8eea33922d7747417ae66513ebe1d179586f272b0048c80753ae5190` |
+| SHA-256 de SHA256SUMS.txt | `f4dd952099b35628c13d1791b903133316f2627f6f2e961c7bcd5fee518237f3` |
+| Contenido comprobado | 506 archivos: cada hash y conjunto exacto; manifiesto separado |
+| Reproducción | Dos árboles limpios en CI y otros dos locales; los cuatro manifiestos coinciden |
 
-El paquete incluye ejecutables, runtime 10.0.14, código fuente del commit, licencia GPL, licencias de .NET, guía, instalación, compatibilidad, notas y procedimiento del piloto. No requiere instalar .NET por separado. Las notas dentro del ZIP reflejan el estado anterior a esta aceptación; este registro y la [matriz actual](V1.md) describen sus resultados posteriores. Los artefactos de Actions caducan a los 30 días: conservar el ZIP y este registro durante todo el piloto.
+El paquete incluye ejecutables, runtime, código fuente del commit, licencia GPL, licencias de .NET, guía, instalación, compatibilidad, notas y procedimiento del piloto. No requiere instalar .NET aparte. El ZIP queda congelado. Las notas interiores reflejan el estado al compilar; este registro incorpora su aceptación posterior sin modificar el paquete. Conservar el ZIP y el manifiesto durante todo el piloto; los artefactos de Actions caducan a los 30 días.
 
-El borrador **v1.0.0-rc.1**, ID `435666824`, en [Releases](https://github.com/mikepchelper-spec/FolderTwin/releases) conserva el mismo ZIP, su checksum, el manifiesto y el registro como archivos separados. GitHub confirmó el digest del ZIP y el del manifiesto tras subirlos. Está marcado como borrador, prelanzamiento y retenido por la revisión de teclado; no se publicó una versión final. Las actualizaciones del registro no modifican el ZIP congelado. Se usa la lista de Releases porque la URL temporal del borrador cambió al editar sus notas.
+El borrador **v1.0.0-rc.1**, ID `435666824`, se gestiona en [Releases](https://github.com/mikepchelper-spec/FolderTwin/releases). Sus adjuntos deben coincidir con esta tabla antes de distribuir el candidato. No se ha publicado una versión final. Se usa la lista de Releases porque GitHub cambió la URL temporal del borrador al editar sus notas.
 
 ## Aceptación del paquete
 
-Windows CI aprobó los arneses de copia, raíces, registro de trabajos, acumulativo, versiones, espejo, inventario, catálogos, reanudación, retención, configuración y trabajadores. Ejecutó el recorrido WPF del paquete, compatibilidad de formatos anteriores, análisis del espejo, conservación de doce planes incompatibles, retención, importación y retirada de instalaciones.
+Windows CI aprobó copia, raíces, registro de trabajos, acumulativo, versiones, espejo, inventario, catálogos, reanudación, retención, configuración y trabajadores. Ejecutó WPF desde el paquete, compatibilidad, análisis del espejo, conservación de doce planes incompatibles y gestión de instalaciones. Los horarios nativos ejecutaron los tres modos y reintentaron el destino ausente tras cinco minutos, conservando la incidencia. La actualización cambió solo tareas propias habilitadas; la retirada eliminó dos runtimes reales y después restauró los tres modos. Una tarea ajena oculta bloqueó la retirada correspondiente y permaneció intacta.
 
-Los horarios nativos ejecutaron los tres modos. El destino ausente se reintentó a los 301,1 segundos y conservó su incidencia. La actualización instaló otro ejecutor, cambió únicamente tareas propias habilitadas y verificó el resultado. La retirada eliminó dos runtimes reales y luego restauró los tres modos. Una tarea ajena oculta bloqueó la retirada correspondiente y permaneció intacta.
+El VHDX del mismo commit agotó capacidad después de comenzar la copia en cada modo, conservó el punto anterior y reanudó la misma generación al liberar espacio. Comprobó ausencia, sustitución por una letra reutilizada y retorno con otra letra; verificó y restauró los tres modos sin origen, conservando las incidencias. Es un volumen virtual desechable, no una prueba con USB físico.
 
-El [VHDX de 050da68](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42067012181) aprobó disco lleno después de comenzar la copia, ausencia, sustitución y retorno con otra letra para los tres modos, verificación y restauración sin origen. No hubo cambios del motor, su arnés o runtime entre ese commit y el candidato. La repetición exacta del candidato [42068399899](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42068399899) permanece en cola, sin trabajos asignados según la API. No hay resultado disponible ni causa de cancelación: no se canceló ni se reinició. Se mantiene como comprobación pendiente.
+La solicitud anterior `42068399899`, de 8bde43f, sigue figurando en cola sin trabajos en la API de consulta. Al intentar retirar esa solicitud obsoleta, GitHub respondió que ya estaba terminada. No se le asigna una conclusión verificable ni se usa como evidencia. La aceptación del candidato corregido corresponde a las dos ejecuciones aprobadas de la tabla; no se reinició un trabajador activo para obtenerla.
 
-## Recorrido interactivo EXT-06
+## Corrección de foco y escritorio
 
-Se descargó el artefacto de Actions y se abrió **FolderTwin.exe sin argumentos** en Windows 11 x64, compilación 26100, cuenta existente. El registro habitual de FolderTwin tenía cero trabajos antes del ensayo. Se usó una carpeta temporal propia marcada, con un texto sintético y una carpeta vacía. No se utilizó el espacio de laboratorio ni argumentos de vista previa. La preparación y las comprobaciones independientes de hashes fueron externas a la interfaz; todas las acciones de producto se hicieron con sus controles y selectores nativos.
+La revisión de teclado del candidato anterior reprodujo pérdida de foco al abrir recuperación y buscar con Enter. Una prueba con ventana visible falló antes de corregirlo. La restauración compartida del foco se hace después de habilitar y distribuir el panel: enfoca la fecha al entrar en recuperación y conserva el control anterior al consultar dentro del mismo panel. Rechaza controles de otra ventana, ocultos o deshabilitados.
+
+La regresión pasó localmente y desde el paquete de CI. En dos sesiones aisladas del paquete corregido se observaron tema claro y tema oscuro del sistema, foco en fecha, Tab hacia búsqueda, consulta vacía con Enter, selección con Ctrl+A y otra consulta con coincidencias, sin clics entre consultas. Se revisaron selección de archivo, acceso a verificación y apertura de una carpeta mediante su botón con teclado. En tema claro se comprobó también el foco de la aceptación y del botón de instalación en Aplicación, sin ejecutar esa instalación desde la inspección. Las referencias de foco del controlador se contrastaron con indicadores visuales y entrada real.
+
+## Recorrido normal EXT-06
+
+Se abrió **FolderTwin.exe sin argumentos** del paquete reproducido localmente, idéntico por manifiesto y archivos al ZIP descargado de CI. Windows 11 x64, compilación 26100, cuenta existente con cero trabajos previos en el registro habitual. Se usaron selectores nativos, origen sintético propio y destinos dedicados nuevos; no argumentos de desarrollo ni espacio de laboratorio.
 
 | Modo | Creación y respaldo | Verificación | Recuperación |
 |---|---|---|---|
 | Versionado | Asistente completo; punto confirmado | Completa | Archivo y carpeta vacía en salida nueva |
 | Copia acumulativa | Asistente completo; copia confirmada | Completa | Archivo y carpeta vacía en otra salida nueva |
-| Espejo protegido | Asistente; análisis visible; aprobación expresa antes de aplicar | Completa | Archivo y carpeta vacía en otra salida nueva |
+| Espejo protegido | Asistente, análisis visible y aprobación expresa antes de aplicar | Completa | Archivo y carpeta vacía en otra salida nueva |
 
-Las tres salidas y el original coincidieron en SHA-256: `9a52172734bb9222e856377e058051db9bda3d596c580d45a1276da4f75e8c51`. Se observaron Enter, Tab y flechas del asistente y foco visible en tema oscuro.
+Las tres salidas y el original coincidieron en SHA-256: `9a52172734bb9222e856377e058051db9bda3d596c580d45a1276da4f75e8c51`. Con los trabajadores inactivos se apartó temporalmente el mismo origen sintético. Versionado mostró **Esperando origen**, el aviso para reconectar y **Reintentar respaldo**, conservando la fecha del respaldo y verificación anteriores. Al devolver la carpeta, el reintento y su verificación terminaron bien. El historial conservó la incidencia y el éxito posterior.
 
-Con los trabajadores inactivos se apartó temporalmente la misma carpeta de origen sintético. Versionado mostró **Esperando origen**, **Reintentar respaldo** y un aviso para reconectar. Conservó la fecha del respaldo y verificación anteriores. Al devolver la carpeta y reintentar, confirmó un punto nuevo y su verificación completa. El historial mantuvo la incidencia y el éxito posterior. No se crearon horarios reales en esta cuenta.
-
-Se cerró la aplicación y se conservaron únicamente los tres trabajos sintéticos y su índice nuevo dentro de la carpeta del ensayo para revisión. El registro habitual volvió a sus entradas anteriores, preservando su archivo de bloqueo. No se tocaron datos personales. Este recorrido acredita un perfil de producto vacío en una cuenta existente; otra cuenta o equipo es EXT-04A.
+Todas las acciones de producto se realizaron en la interfaz; la preparación sintética y los hashes se comprobaron por separado. No se crearon horarios reales en esta cuenta. Se cerró la aplicación y se archivaron solo los tres trabajos de prueba y su índice nuevo dentro del fixture. El perfil habitual volvió a sus entradas anteriores. No se tocaron datos personales. Otra cuenta o equipo conserva su validación independiente EXT-04A.
 
 ## Punto exacto de reanudación
 
-1. Completar la aceptación de la corrección de foco: recuperación debe enfocar la fecha después de habilitar el panel y la búsqueda con Enter debe conservar el buscador para la siguiente consulta. Repetir el recorrido de teclado desde el paquete nuevo antes de seleccionarlo como candidato. El ZIP de la tabla permanece como evidencia del estado anterior.
-2. Consultar la ejecución **42068399899**, sin crear otra por falta temporal de salida. Incorporar su conclusión y registros. Si falla, preservar el fallo y corregirlo.
-3. Seguir [PILOTO.md](PILOTO.md) con el nuevo candidato aceptado durante 7–14 días y registrar fecha real de inicio, modos, horarios, verificaciones, restauraciones e incidencias. No contar tiempo de desarrollo como observación.
-4. Completar EXT-02, EXT-03A/B/C, EXT-04A/B y EXT-05A/B/C: USB físico, sesión, reinicio, suspensión, otra cuenta/equipo, proveedor real de nube y accesibilidad. Cada fila indica el entorno y la evidencia necesaria. No reiniciar ni cerrar la sesión del equipo de trabajo para obtener esos resultados.
-5. Resolver los fallos encontrados y repetir sus pruebas. Declarar v1 final solo tras cerrar la matriz obligatoria. Una ausencia de evidencia mantiene el estado de candidato.
+No hay por ahora entorno externo de pruebas disponible. Por indicación del usuario, el piloto y las comprobaciones que lo necesitan permanecen pendientes, sin fechas ni resultados ficticios.
 
-El reinicio abrupto en VM se registra separado del corte de proceso. El corte eléctrico físico está excluido. Pruebas VHDX, nombres accesibles por UI Automation y tamaños de ventana WPF no sustituyen USB físico, lector activo o DPI real.
+1. Conservar este ZIP, su manifiesto, commit y registro. Si se cambia código, identificar otro candidato y repetir las pruebas afectadas.
+2. Cuando haya entorno, seguir [PILOTO.md](PILOTO.md) durante 7–14 días, registrando la fecha real de inicio y los resultados por modo. No contar tiempo de desarrollo como observación.
+3. Completar EXT-02, EXT-03A/B/C, EXT-04A/B y EXT-05A/B/C: USB físico, sesión, reinicio, suspensión, otra cuenta/equipo, proveedor real de nube y aceptación completa de accesibilidad. La [matriz](V1.md) conserva las observaciones parciales de teclado y temas.
+4. Resolver fallos y repetir sus pruebas. Declarar v1 final solo cuando toda la matriz obligatoria tenga evidencia.
+
+No reiniciar ni cerrar la sesión del equipo de trabajo para sustituir el entorno ausente. El reinicio abrupto de VM se registra separado del corte de proceso. El corte eléctrico físico está excluido. VHDX, peers de UI Automation y tamaños de ventana WPF no acreditan USB físico, lector activo ni DPI real.
