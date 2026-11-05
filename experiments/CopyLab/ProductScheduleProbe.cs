@@ -59,7 +59,9 @@ internal static class ProductScheduleProbe
             var retried = await WaitAsync(versioned, failed.Intent.Sequence, limit: TimeSpan.FromMinutes(7));
             Check(retried.Result?.State == ProductRunState.Confirmed &&
                 retried.Result.FinishedUtc - failed.Result!.FinishedUtc >= TimeSpan.FromMinutes(4.5) &&
-                registry.RunHistory(versioned.Id).Runs.Any(run => run.Intent.Id == failed.Intent.Id && run.Result == failed.Result && !run.RetryRunning),
+                registry.RunHistory(versioned.Id).Runs.Any(run => run.Intent.Id == failed.Intent.Id && run.Result is { } saved &&
+                    saved.IntentHash.AsSpan().SequenceEqual(failed.Result.IntentHash) && saved.State == failed.Result.State &&
+                    saved.FinishedUtc == failed.Result.FinishedUtc && saved.Detail == failed.Result.Detail && !run.RetryRunning),
                 "The deferred retry lost its incident or did not run after the configured wait.");
             Console.Error.WriteLine($"PASS product time triggers run all three modes; missing target retries after {(retried.Result!.FinishedUtc - failed.Result!.FinishedUtc).TotalSeconds:F1} seconds and preserves the incident.");
 
