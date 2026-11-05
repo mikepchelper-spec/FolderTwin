@@ -40,7 +40,8 @@ internal static class ProductScheduleProbe
             }
             var versioned = jobs.Single(job => job.Options.Mode == ProductBackupMode.Versions);
             long sequence = registry.RunHistory(versioned.Id).Runs[0].Intent.Sequence;
-            string detached = Path.Combine(parent, "detached");
+            // Keep the same volume-GUID prefix: Directory.Move compares textual roots.
+            string detached = Path.Combine(Path.GetDirectoryName(versioned.Destination.LastVolumePath)!, "detached");
             Directory.Move(versioned.Destination.LastVolumePath, detached);
             ProductRunView failed;
             try
