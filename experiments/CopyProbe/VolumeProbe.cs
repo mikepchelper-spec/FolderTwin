@@ -35,6 +35,7 @@ internal static class VolumeProbe
             }
             catch (IOException error) when (error.InnerException is Win32Exception { NativeErrorCode: 2 or 3 or 15 or 21 or 55 or 1167 })
             {
+                VerifyProductUnavailable(state);
                 Console.WriteLine("PASS recovery refused the unavailable volume while it was detached.");
                 return 0;
             }
@@ -55,6 +56,8 @@ internal static class VolumeProbe
             catch (InvalidDataException)
             {
                 Check(Directory.EnumerateFileSystemEntries(root).Count() == 1, "Recovery wrote into the substitute.");
+                VerifyProductUnavailable(state);
+                Check(Directory.EnumerateFileSystemEntries(root).Count() == 1, "A product job wrote into the reused letter.");
                 Console.WriteLine("PASS recovery refused the reused letter with a copied marker and left the substitute unchanged.");
                 return 0;
             }
@@ -104,6 +107,7 @@ internal static class VolumeProbe
             CheckHash(final, expected);
             CheckHash(previous, SHA256.HashData(Previous));
             Check(File.Exists(fullPending) && !File.Exists(fullFinal), "The disk-full temporary was not preserved.");
+            VerifyProductReturn(state);
             Console.WriteLine("PASS the reattached volume matches its saved identity; pending copy recovered.");
             return 0;
         }
@@ -212,54 +216,90 @@ internal static class VolumeProbe
         string source = Path.Combine(state, "product-source");
         string settings = Path.Combine(state, "product-settings");
         string recovery = Path.Combine(state, "product-recovery");
-        var created = new List<ProductJob>();
         Directory.CreateDirectory(source);
         Directory.CreateDirectory(settings);
         Directory.CreateDirectory(recovery);
         byte[] expected = SHA256.HashData("product backup between NTFS volumes"u8);
         WriteNew(Path.Combine(source, "datos.txt"), "product backup between NTFS volumes"u8);
+        using var registry = new ProductJobRegistry(settings);
+        foreach (var mode in Enum.GetValues<ProductBackupMode>())
+        {
+            var job = registry.Create(new(mode.ToString(), mode, null), LocalJobRoots.ReviewDedicatedDestination(source, parent));
+            using (var roots = LocalJobRoots.Reopen(new(job.Source,
+                new(job.Destination.LastVolumePath, job.Destination.Identity), 0, false)))
+                Check(!roots.Review.SameVolume, "The product-mode test did not use two NTFS volumes.");
+            var copied = ProductRunner.Run(registry, job.Id);
+            Check(copied.State == ProductRunState.Confirmed && copied.Generation is not null,
+                copied.Detail ?? "The product runner did not confirm its cross-volume backup.");
+            Check(ProductRunner.Verify(registry, job.Id, copied.Generation!).State == ProductRunState.Confirmed,
+                "The product runner could not verify the cross-volume backup.");
+            string output = Directory.CreateDirectory(Path.Combine(recovery, mode.ToString())).FullName;
+            VersionStore.OpenProduct(job).Restore(copied.Generation!, output);
+            CheckHash(Path.Combine(output, "datos.txt"), expected);
+            CheckHash(Path.Combine(source, "datos.txt"), expected);
+        }
+        Console.WriteLine("PASS all three product runners copied to another NTFS volume, verified and restored back with matching hashes; their registered jobs remain for detach and return.");
+    }
+
+    private static void VerifyProductUnavailable(string state)
+    {
+        using var registry = new ProductJobRegistry(Path.Combine(state, "product-settings"));
+        var jobs = registry.List().Jobs;
+        Check(jobs.Length == 3, "The detached-volume fixture lost its three product jobs.");
+        foreach (var job in jobs)
+        {
+            var prior = registry.RunHistory(job.Id).Runs.First(run => run.Intent.Operation == ProductRunOperation.Backup &&
+                run.Result?.State == ProductRunState.Confirmed).Result!;
+            var attempt = ProductRunner.Run(registry, job.Id);
+            Check(attempt.State == ProductRunState.WaitingForDestination,
+                attempt.Detail ?? "A product runner accepted the detached or substituted destination.");
+            var history = registry.RunHistory(job.Id);
+            Check(history.Runs[0].Result is { } saved && saved.State == attempt.State &&
+                saved.IntentHash.AsSpan().SequenceEqual(attempt.IntentHash) && history.Runs.Any(run =>
+                    run.Result is { } preserved && preserved.IntentHash.AsSpan().SequenceEqual(prior.IntentHash)),
+                "The unavailable product destination lost its incident or prior confirmed result.");
+        }
+        Console.WriteLine("PASS all three product runners report the absent registered volume and preserve their prior confirmed result and incidents.");
+    }
+
+    private static void VerifyProductReturn(string state)
+    {
+        using var registry = new ProductJobRegistry(Path.Combine(state, "product-settings"));
+        var jobs = registry.List().Jobs;
+        Check(jobs.Length == 3, "The returned-volume fixture lost its product jobs.");
+        var generations = new Dictionary<Guid, string>();
+        foreach (var job in jobs)
+        {
+            var result = ProductRunner.Run(registry, job.Id);
+            Check(result.State == ProductRunState.Confirmed && result.Generation is not null,
+                result.Detail ?? "A product runner did not resume after the volume returned with a new letter.");
+            generations.Add(job.Id, result.Generation!);
+            Check(ProductRunner.Verify(registry, job.Id, result.Generation!).State == ProductRunState.Confirmed &&
+                registry.RunHistory(job.Id).Runs.Count(run => run.Result?.State == ProductRunState.WaitingForDestination) == 2,
+                "The product return failed verification or lost an absence/substitution incident.");
+        }
+        string source = Path.Combine(state, "product-source"), absent = Path.Combine(state, "product-source-absent");
+        Directory.Move(source, absent);
         try
         {
-            using var registry = new ProductJobRegistry(settings);
-            foreach (var mode in Enum.GetValues<ProductBackupMode>())
+            foreach (var job in jobs)
             {
-                var job = registry.Create(new(mode.ToString(), mode, null), LocalJobRoots.ReviewDedicatedDestination(source, parent));
-                created.Add(job);
-                using (var roots = LocalJobRoots.Reopen(new(job.Source,
-                    new(job.Destination.LastVolumePath, job.Destination.Identity), 0, false)))
-                    Check(!roots.Review.SameVolume, "The product-mode test did not use two NTFS volumes.");
-                var store = VersionStore.OpenProduct(job, initialize: true);
-                string generation;
-                if (mode == ProductBackupMode.Versions)
-                {
-                    generation = VersionStore.NewGenerationId();
-                    store.CreatePoint(job.Source.VolumePath, generation);
-                }
-                else
-                {
-                    store.InitializeMirror(resumeInitialization: true);
-                    generation = store.BeginMirror(store.PreviewMirror(job.Source.VolumePath));
-                    Check(!store.VerifyCurrent(generation), "The cross-volume current folder failed verification.");
-                }
-                string output = Directory.CreateDirectory(Path.Combine(recovery, mode.ToString())).FullName;
-                store.Restore(generation, output);
-                CheckHash(Path.Combine(output, "datos.txt"), expected);
-                CheckHash(Path.Combine(source, "datos.txt"), expected);
+                var destination = LocalJobRoots.ReviewDedicatedDestination(job.Destination.LastVolumePath, Path.Combine(state, "product-recovery"));
+                Guid request = registry.ApproveRestore(job.Id, generations[job.Id], destination);
+                Check(ProductRunner.Restore(registry, job.Id, request).State == ProductRunState.Confirmed,
+                    "The returned product backup could not restore without its source.");
+                CheckHash(Path.Combine(destination.Parent.VolumePath, destination.FolderName, "datos.txt"),
+                    SHA256.HashData("product backup between NTFS volumes"u8));
             }
-            Console.WriteLine("PASS all three registered product modes copied to another NTFS volume and restored back with matching hashes.");
         }
-        finally
+        finally { Directory.Move(absent, source); }
+        foreach (var job in jobs)
         {
-            foreach (var job in created)
-            {
-                using (var fence = new DirectoryFence(job.Destination.LastVolumePath))
-                using (job.Destination.OpenVerifiedMarker(fence.Root)) { }
-                Directory.Delete(job.Destination.LastVolumePath, recursive: true);
-            }
-            Directory.Delete(source, recursive: true);
-            Directory.Delete(settings, recursive: true);
-            Directory.Delete(recovery, recursive: true);
+            using (var fence = new DirectoryFence(job.Destination.LastVolumePath))
+            using (job.Destination.OpenVerifiedMarker(fence.Root)) { }
+            Directory.Delete(job.Destination.LastVolumePath, recursive: true);
         }
+        Console.WriteLine("PASS packaged product runners reopen all three modes after VHDX detach, letter substitution and return, retain both incidents, verify and restore without the source.");
     }
 
     private static void WriteNew(string path, ReadOnlySpan<byte> bytes)

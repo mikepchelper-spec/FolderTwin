@@ -5,8 +5,8 @@ if (-not $IsWindows -or $env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONME
 }
 
 $tempRoot = [IO.Path]::GetFullPath($env:RUNNER_TEMP)
-$probe = Join-Path $tempRoot 'FolderTwin-Probe-Build\CopyProbe.dll'
-if (-not (Test-Path -LiteralPath $probe -PathType Leaf)) { throw 'Build CopyProbe first.' }
+$probe = Join-Path $tempRoot 'FolderTwin-volume-package\CopyProbe.exe'
+if (-not (Test-Path -LiteralPath $probe -PathType Leaf)) { throw 'Build the portable package first.' }
 if ($tempRoot.IndexOfAny([char[]]"`"`r`n") -ge 0) { throw 'Unexpected runner temp path.' }
 
 $label = 'FTL' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
@@ -27,7 +27,7 @@ function Get-OwnedDisk {
 }
 
 function Invoke-Probe([string] $phase) {
-    dotnet $probe --volume-lab $phase
+    & $probe --volume-lab $phase
     if ($LASTEXITCODE -ne 0) { throw "Volume probe failed in phase $phase ($LASTEXITCODE)." }
 }
 
@@ -127,6 +127,13 @@ finally {
     }
     foreach ($path in @($createScript, (Join-Path $work 'destination.json'))) {
         if (Test-Path -LiteralPath $path -PathType Leaf) { Remove-Item -LiteralPath $path }
+    }
+    foreach ($fixtureName in @('product-source', 'product-source-absent', 'product-settings', 'product-recovery')) {
+        $fixturePath = [IO.Path]::GetFullPath((Join-Path $work $fixtureName))
+        if ([IO.Path]::GetDirectoryName($fixturePath) -ne [IO.Path]::GetFullPath($work)) {
+            throw 'The generated fixture escaped the disposable runner directory.'
+        }
+        if (Test-Path -LiteralPath $fixturePath) { Remove-Item -LiteralPath $fixturePath -Recurse -Force }
     }
     [IO.Directory]::Delete($work)
 }
