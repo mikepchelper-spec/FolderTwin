@@ -31,6 +31,7 @@ public partial class ProductWindow : Window
     private readonly Func<ProductJobRegistry> openRegistry;
     private readonly Func<string, string?>? testPicker;
     private readonly Func<string, Guid, Guid?, System.Diagnostics.Process>? testWorker;
+    private readonly Action<string, Guid, bool>? testSchedule;
     private readonly VersionIndex productIndex;
     private string? origin;
     private string? parent;
@@ -40,11 +41,13 @@ public partial class ProductWindow : Window
     private Task activeTask = Task.CompletedTask;
 
     internal ProductWindow(Func<ProductJobRegistry>? openRegistry = null, Func<string, string?>? testPicker = null,
-        Func<string, Guid, Guid?, System.Diagnostics.Process>? testWorker = null)
+        Func<string, Guid, Guid?, System.Diagnostics.Process>? testWorker = null,
+        Action<string, Guid, bool>? testSchedule = null)
     {
         this.openRegistry = openRegistry ?? ProductJobRegistry.OpenLocal;
         this.testPicker = testPicker;
         this.testWorker = testWorker;
+        this.testSchedule = testSchedule;
         productIndex = new(() =>
         {
             using var registry = this.openRegistry();
@@ -145,15 +148,18 @@ public partial class ProductWindow : Window
         {
             try
             {
-                await Task.Run(() =>
+                string location = await Task.Run(() =>
                 {
                     using var registry = openRegistry();
                     registry.Create(current.Options, current.Destination);
+                    return registry.Location;
                 });
                 ShowJobs();
                 await LoadListAsync();
                 SelectJob(current.Destination.FolderId);
-                SetStatus("Trabajo guardado. Puedes volver a abrir su configuración.");
+                if (current.Options.DailyAt is not null)
+                    await ApplyScheduleAsync(location, current.Destination.FolderId);
+                else SetStatus("Trabajo guardado. Puedes ejecutarlo a demanda o editar su configuración.");
             }
             catch (Exception error) when (VersionJob.Expected(error))
             {
@@ -204,7 +210,7 @@ public partial class ProductWindow : Window
     {
         if (ResumeRegistrationButton is not null)
             ResumeRegistrationButton.IsEnabled = !busy && JobList.SelectedItem is JobRow { Pending: true };
-        if (BackupJobButton is not null) RefreshProductActions();
+        if (BackupJobButton is not null) { RefreshProductActions(); ShowJobSettings(); }
         if (!busy && JobList.SelectedItem is JobRow selected)
             SetStatus(runSnapshots.TryGetValue(selected.Id, out var history) && history.Runs.FirstOrDefault() is { Result: { } result } run ?
                 ResultText(run, result) : "");
@@ -223,7 +229,8 @@ public partial class ProductWindow : Window
             return registry.List();
         });
         JobRow[] rows = [.. list.Jobs.Select(job => new JobRow(job.Id, job.Options.Name,
-            $"{ModeName(job.Options.Mode)} · {Schedule(job.Options)}", false, job)),
+            $"{ModeName(job.Options.Mode)} · {Schedule(job.Options)}" +
+            (job.Retired ? " · Retirado" : !job.Enabled ? " · Deshabilitado" : ""), false, job)),
             .. list.Pending.Select(id => new JobRow(id, "Registro pendiente",
                 $"Selecciona Reanudar registro para continuar · {id.ToString("N")[..8]}", true))];
         JobList.ItemsSource = rows;
@@ -292,7 +299,7 @@ public partial class ProductWindow : Window
         Wizard.IsEnabled = JobListPanel.IsEnabled = RecoveryPanel.IsEnabled = false;
         SetStatus("Comprobando la selección…");
         try { await action(); }
-        catch (Exception error) when (VersionJob.Expected(error)) { SetStatus(error.Message); }
+        catch (Exception error) when (ProductAutomation.Expected(error)) { SetStatus(error.Message); }
         finally
         {
             busy = false;
@@ -329,5 +336,5 @@ public partial class ProductWindow : Window
     };
 
     private static string Schedule(ProductJobOptions options) =>
-        options.DailyAt is { } time ? "Horario propuesto " + time.ToString("HH:mm", CultureInfo.InvariantCulture) : "A demanda";
+        options.DailyAt is { } time ? "Hora diaria " + time.ToString("HH:mm", CultureInfo.InvariantCulture) : "A demanda";
 }

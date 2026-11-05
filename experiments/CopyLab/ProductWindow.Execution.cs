@@ -32,7 +32,10 @@ public partial class ProductWindow
         var job = (JobList.SelectedItem as JobRow)?.Job;
         bool executing = job is not null && IsJobRunning(job.Id);
         bool available = !busy && job is not null && !executing;
-        BackupJobButton.IsEnabled = RecoverJobButton.IsEnabled = available;
+        RecoverJobButton.IsEnabled = available;
+        BackupJobButton.IsEnabled = available && job is { Enabled: true, Retired: false };
+        SaveSettingsButton.IsEnabled = available;
+        ApplyScheduleButton.IsEnabled = available && job is { Enabled: true, Retired: false, Options.DailyAt: not null };
         SelectedJobText.Text = job is null ? "" : $"Origen\n{job.Source.VolumePath}\nDestino\n{job.Destination.LastVolumePath}";
         if (mirrorJobId != job?.Id) ResetProductActions();
         RefreshRuntimeDisplay();
@@ -40,7 +43,7 @@ public partial class ProductWindow
 
     private void BackupJobClick(object sender, RoutedEventArgs e)
     {
-        if (busy || (JobList.SelectedItem as JobRow)?.Job is not { } job) return;
+        if (busy || (JobList.SelectedItem as JobRow)?.Job is not { Enabled: true, Retired: false } job) return;
         ResetProductActions();
         Start(async () =>
         {

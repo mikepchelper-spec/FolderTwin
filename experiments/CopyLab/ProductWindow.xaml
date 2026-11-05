@@ -35,6 +35,7 @@
                     <StackPanel>
                         <TextBlock x:Name="SelectedJobText" TextWrapping="Wrap" />
                         <TextBlock x:Name="RuntimeStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        <TextBlock x:Name="ScheduleStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
                         <ProgressBar x:Name="RunProgress" Height="4" Margin="0,8,0,0" Visibility="Collapsed"
                                      AutomationProperties.Name="Progreso de la operación activa" />
                         <WrapPanel Margin="0,8,0,0">
@@ -51,6 +52,22 @@
                                     <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" /></DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
+                        </Expander>
+                        <Expander x:Name="JobSettingsPanel" Header="Editar trabajo y horario" Margin="0,4,0,4" IsEnabled="False">
+                            <StackPanel>
+                                <Label Content="_Nombre" Target="{Binding ElementName=EditJobName}" />
+                                <TextBox x:Name="EditJobName" MaxLength="100" AutomationProperties.Name="Nuevo nombre del trabajo" />
+                                <Label Content="Hora _diaria (vacía para ejecutar a demanda)" Target="{Binding ElementName=EditDailyTime}" />
+                                <TextBox x:Name="EditDailyTime" MaxLength="5" Width="92" HorizontalAlignment="Left" AutomationProperties.Name="Nueva hora diaria en formato HH:mm" />
+                                <CheckBox x:Name="EditEnabled" Content="Trabajo _habilitado" Margin="0,8,0,4" />
+                                <CheckBox x:Name="EditRetired" Content="Retirar trabajo; conservar datos y recuperación" Margin="0,0,0,8" />
+                                <TextBlock Text="Retirar desactiva el horario y los nuevos respaldos. Los datos siguen disponibles para recuperar. Para reactivarlo, desmarca Retirar y vuelve a habilitarlo. Para cambiar las carpetas o el modo, crea otro trabajo."
+                                           TextWrapping="Wrap" />
+                                <WrapPanel Margin="0,8,0,0">
+                                    <Button x:Name="SaveSettingsButton" Content="Guardar _cambios" Click="SaveSettingsClick" Margin="0,0,8,4" />
+                                    <Button x:Name="ApplyScheduleButton" Content="Reparar _horario" Click="ApplyScheduleClick" Margin="0,0,8,4" />
+                                </WrapPanel>
+                            </StackPanel>
                         </Expander>
                         <StackPanel x:Name="MirrorReviewPanel" Visibility="Collapsed" Margin="0,8,0,0">
                             <TextBlock x:Name="MirrorReviewText" TextWrapping="Wrap" />

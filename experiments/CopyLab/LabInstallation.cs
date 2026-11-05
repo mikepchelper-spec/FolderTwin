@@ -8,10 +8,10 @@ internal static class LabInstallation
 {
     private const string ManifestName = "SHA256SUMS.txt";
     private const string MarkerName = ".foldertwin-install-v1";
-    private static string AppsRoot => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FolderTwin-Lab", "app");
+    private static string AppsRoot(bool product) => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), product ? "FolderTwin" : "FolderTwin-Lab", "app");
 
-    internal static string EnsureWorker()
+    internal static string EnsureWorker(bool product = false)
     {
         string source = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
         using var sourceRoot = new DirectoryFence(source);
@@ -30,12 +30,12 @@ internal static class LabInstallation
         using var localRoot = new DirectoryFence(local);
         if (new DriveInfo(Path.GetPathRoot(local)!).DriveType != DriveType.Fixed)
             throw new InvalidDataException("La instalación requiere almacenamiento fijo local.");
-        using var application = WindowsProbeNative.OpenOrCreatePlainDirectory(localRoot.Root, "FolderTwin-Lab");
+        using var application = WindowsProbeNative.OpenOrCreatePlainDirectory(localRoot.Root, product ? "FolderTwin" : "FolderTwin-Lab");
         using var apps = WindowsProbeNative.OpenOrCreatePlainDirectory(application, "app");
         using var installLock = WindowsProbeNative.OpenPlainFile(apps, name + ".lock", FileAccess.ReadWrite,
             FileShare.None, FileMode.OpenOrCreate);
         using var directory = WindowsProbeNative.OpenOrCreatePlainDirectory(apps, name);
-        string target = Path.Combine(AppsRoot, name);
+        string target = Path.Combine(AppsRoot(product), name);
         var allowed = files.Keys.Append(ManifestName).Append(MarkerName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (string file in files.Keys)
             for (string? parent = Path.GetDirectoryName(file); !string.IsNullOrEmpty(parent); parent = Path.GetDirectoryName(parent))
@@ -88,10 +88,10 @@ internal static class LabInstallation
         }
     }
 
-    internal static bool IsInstalledWorker(string executable)
+    internal static bool IsInstalledWorker(string executable, bool product = false)
     {
         string? directory = Path.GetDirectoryName(executable);
-        if (Path.GetFileName(executable) != "CopyLab.exe" || directory is null || Path.GetDirectoryName(directory) != AppsRoot)
+        if (Path.GetFileName(executable) != "CopyLab.exe" || directory is null || Path.GetDirectoryName(directory) != AppsRoot(product))
             return false;
         string name = Path.GetFileName(directory);
         if (name.Length != 64 || name.AsSpan().ContainsAnyExcept("0123456789abcdef"))

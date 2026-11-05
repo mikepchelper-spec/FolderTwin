@@ -13,7 +13,8 @@ internal sealed record ProductJobOptions(string Name, ProductBackupMode Mode, Ti
             throw new InvalidDataException("El trabajo necesita un nombre de hasta 100 caracteres y un modo válido.");
     }
 }
-internal sealed record ProductJob(Guid Id, ProductJobOptions Options, LocalJobRoot Source, DestinationBinding Destination);
+internal sealed record ProductJob(Guid Id, ProductJobOptions Options, LocalJobRoot Source, DestinationBinding Destination,
+    bool Enabled = true, bool Retired = false);
 internal sealed record ProductJobList(ProductJob[] Jobs, Guid[] Pending, int Unreadable);
 
 internal sealed partial class ProductJobRegistry : IDisposable
@@ -197,7 +198,7 @@ internal sealed partial class ProductJobRegistry : IDisposable
         if (confirmed.ReadAtLeast(observed, observed.Length, false) != observed.Length || confirmed.ReadByte() != -1 ||
             !observed.SequenceEqual(Confirmation(intent, target)))
             throw new InvalidDataException("La confirmación del trabajo está dañada.");
-        return new(intent.Id, intent.Options, intent.Source, target.Binding);
+        return ApplySettings(job, new(intent.Id, intent.Options, intent.Source, target.Binding));
     }
 
     private Intent ReadIntent(SafeFileHandle job, Guid id, bool allowDraft = false)

@@ -44,6 +44,41 @@ internal sealed partial class ProductJobRegistry
 
 internal static class ProductRunner
 {
+    internal static async Task<int> RunScheduledAsync(string registryPath, Guid id, Func<bool> canRun,
+        Func<TimeSpan, Task>? delay = null)
+    {
+        try
+        {
+            using var registry = new ProductJobRegistry(registryPath);
+            using var invocation = registry.AcquireScheduledLock(id);
+            for (int retries = 0; ; retries++)
+            {
+                var job = registry.Get(id);
+                if (!job.Enabled || job.Retired || job.Options.DailyAt is null || !canRun()) return 0;
+                var result = await Task.Run(() => Run(registry, id));
+                if (result.State == ProductRunState.Confirmed) return 0;
+                if (retries == 3 || result.State is not
+                    (ProductRunState.Busy or ProductRunState.WaitingForSource or ProductRunState.WaitingForDestination)) return 1;
+                var attempt = registry.RunHistory(id).Runs.First(item => item.Result is { } saved &&
+                    saved.IntentHash.AsSpan().SequenceEqual(result.IntentHash));
+                using var waiting = registry.BeginRetry(id, attempt.Intent.Id, retries + 1);
+                // Poll ownership during the wait so removing or disabling a task
+                // stops its deferred retry without terminating its process.
+                for (int remaining = 300; remaining > 0; remaining -= 5)
+                {
+                    await (delay ?? Task.Delay)(TimeSpan.FromSeconds(5));
+                    job = registry.Get(id);
+                    if (!job.Enabled || job.Retired || job.Options.DailyAt is null || !canRun()) return 0;
+                }
+            }
+        }
+        catch (Exception error) when (VersionJob.Expected(error))
+        {
+            Console.Error.WriteLine("El horario necesita revisión. " + error.Message);
+            return VersionJob.SharingViolation(error) ? 2 : 1;
+        }
+    }
+
     internal static ProductRunResult Run(ProductJobRegistry registry, Guid id, Guid? approvalId = null,
         Action<WorkProgress>? checkpoint = null, Func<DateTimeOffset>? clock = null)
     {

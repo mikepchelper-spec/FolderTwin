@@ -103,11 +103,17 @@ jobs:
           Get-Content -LiteralPath $productLog
           if ($product.ExitCode -ne 0) { throw "The packaged product wizard exited with $($product.ExitCode)." }
           $scheduleLog = Join-Path $env:RUNNER_TEMP 'FolderTwin-schedule-smoke.err'
-          $schedule = Start-Process -FilePath (Join-Path $outputA 'CopyLab.exe') -WorkingDirectory $outputA -ArgumentList '--schedule-smoke' -WindowStyle Hidden -RedirectStandardError $scheduleLog -PassThru -Wait
+          $schedule = Start-Process -FilePath (Join-Path $outputA 'CopyLab.exe') -WorkingDirectory $outputA -ArgumentList '--schedule-smoke' -WindowStyle Hidden -RedirectStandardError $scheduleLog -PassThru
+          $productScheduleLog = Join-Path $env:RUNNER_TEMP 'FolderTwin-product-schedule-smoke.err'
+          $productSchedule = Start-Process -FilePath (Join-Path $outputA 'CopyLab.exe') -WorkingDirectory $outputA -ArgumentList '--product-schedule-smoke' -WindowStyle Hidden -RedirectStandardError $productScheduleLog -PassThru
+          $schedule.WaitForExit()
+          $productSchedule.WaitForExit()
           Get-Content -LiteralPath $scheduleLog
           if ($schedule.ExitCode -ne 0) {
             throw "The packaged Windows schedule test exited with $($schedule.ExitCode)."
           }
+          Get-Content -LiteralPath $productScheduleLog
+          if ($productSchedule.ExitCode -ne 0) { throw "The packaged product schedule test exited with $($productSchedule.ExitCode)." }
       - name: Upload the verified alpha
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

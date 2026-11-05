@@ -12,11 +12,14 @@ public partial class App : Application
         bool scheduleSmoke = e.Args is ["--schedule-smoke"];
         bool productPreview = e.Args is ["--product-preview"];
         bool productSmoke = e.Args is ["--product-smoke"];
+        bool productScheduleSmoke = e.Args is ["--product-schedule-smoke"];
+        bool heldProductChild = e.Args is ["--held-product-child", _, _];
         bool trayStartup = e.Args is ["--tray-workspace", _];
         bool scheduled = e.Args is ["--run-scheduled-version-job", _, _];
-        bool productWorker = e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _];
+        bool productScheduled = e.Args is ["--run-scheduled-product-job", _, _];
+        bool productWorker = productScheduled || e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _];
         bool worker = productWorker || scheduled || e.Args is ["--run-version-job", _, _];
-        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !productSmoke)
+        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !productSmoke && !heldProductChild && !productScheduleSmoke)
         {
             Shutdown(2);
             return;
@@ -24,6 +27,19 @@ public partial class App : Application
 
         try
         {
+            if (heldProductChild)
+            {
+                if (!Guid.TryParseExact(e.Args[2], "N", out var heldId)) { Shutdown(2); return; }
+                int heldResult = await Task.Run(() => ProductRunProbe.HeldChild(e.Args[1], heldId));
+                Shutdown(heldResult);
+                return;
+            }
+            if (productScheduleSmoke)
+            {
+                await ProductScheduleProbe.RunAsync();
+                Shutdown(0);
+                return;
+            }
             if (productSmoke)
             {
                 await ProductWindow.RunSmokeAsync();
@@ -54,6 +70,12 @@ public partial class App : Application
                 }
                 if (productWorker)
                 {
+                    if (productScheduled)
+                    {
+                        int scheduledResult = await ProductRunner.RunScheduledAsync(e.Args[1], id, () => ProductAutomation.CanRun(e.Args[1], id));
+                        Shutdown(scheduledResult);
+                        return;
+                    }
                     if (e.Args[0] == "--verify-product-job")
                     {
                         int verified = await Task.Run(() => ProductRunner.VerifyCommand(e.Args[1], id, e.Args[3]));
@@ -109,7 +131,7 @@ public partial class App : Application
         }
         catch (Exception error)
         {
-            if (smoke || indexScale || worker || scheduleSmoke || productSmoke)
+            if (smoke || indexScale || worker || scheduleSmoke || productSmoke || heldProductChild || productScheduleSmoke)
                 Console.Error.WriteLine(error);
             else
                 MessageBox.Show(error.Message, "FolderTwin · Laboratorio", MessageBoxButton.OK, MessageBoxImage.Error);

@@ -69,6 +69,7 @@ public partial class ProductWindow
                 }
             }
             RefreshProductActions();
+            await RefreshScheduleAsync();
         }
         finally { polling = false; }
     }
@@ -89,6 +90,7 @@ public partial class ProductWindow
             (verified?.Generation is { } verifiedGeneration ? $"\nPunto verificado del {VersionStore.GenerationTime(verifiedGeneration).ToLocalTime():g}" : "") +
             (active?.Progress is { } progress ? $"\n{Phase(progress.Work.Phase)} · {progress.Work.Processed:N0}/{progress.Work.Total:N0}" +
                 (progress.Paused ? " · Pausado" : "") + (progress.Work.RelativePath is { } path ? "\n" + path : "") : "") +
+            (history.Runs.FirstOrDefault(run => run.RetryRunning)?.Retry is { } retry ? $"\nPróximo reintento · {retry.NextUtc.ToLocalTime():g}" : "") +
             (history.Unreadable > 0 ? $"\n{history.Unreadable} registros ilegibles conservados para revisión." : "");
         RunHistoryList.ItemsSource = history.Runs.Take(30).Select(run =>
             $"Intento {run.Intent.Sequence} · {run.Intent.StartedUtc.ToLocalTime():g} · " +

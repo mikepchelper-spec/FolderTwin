@@ -102,6 +102,7 @@ internal static class ProductRunProbe
                 registry.RunHistory(versioned.Id) is { Unreadable: 1, Runs: [{ Intent.Sequence: 5001 }, ..] } &&
                 File.ReadAllText(Path.Combine(torn, "intent.tmp")) == "partial synthetic intent",
                 "A torn history record was removed, reused its sequence or stopped independent backup work.");
+            CheckScheduledRetries(registry, versioned, settings).GetAwaiter().GetResult();
             CheckWorkers();
             Console.WriteLine("PASS persistent product attempts execute all three modes, retain issues, order independently of the clock and require mirror approval.");
             return 0;
@@ -112,6 +113,49 @@ internal static class ProductRunProbe
             Directory.Delete(workspace.Root, recursive: true);
         }
         string Folder(string name) => Directory.CreateDirectory(Path.Combine(workspace.Root, name)).FullName;
+    }
+
+    private static async Task CheckScheduledRetries(ProductJobRegistry registry, ProductJob job, string location)
+    {
+        registry.UpdateSettings(job.Id, "Trabajo actualizado", new TimeOnly(19, 5), enabled: true, retired: false);
+        string detached = Path.Combine(Path.GetDirectoryName(job.Destination.LastVolumePath)!, "Destino para reintento");
+        Directory.Move(job.Destination.LastVolumePath, detached);
+        int delays = 0;
+        try
+        {
+            int exit = await ProductRunner.RunScheduledAsync(location, job.Id, () => true, delay: _ =>
+            {
+                if (delays++ == 0)
+                {
+                    var waiting = registry.RunHistory(job.Id).Runs[0];
+                    Check(waiting.RetryRunning && waiting.Retry?.Number == 1, "The deferred retry was not tied to its live lease.");
+                    Directory.Move(detached, job.Destination.LastVolumePath);
+                }
+                return Task.CompletedTask;
+            });
+            var history = registry.RunHistory(job.Id);
+            Check(exit == 0 && delays == 60 && history.Runs[0].Result?.State == ProductRunState.Confirmed &&
+                history.Runs[1].Result?.State == ProductRunState.WaitingForDestination && !history.Runs[1].RetryRunning,
+                "Deferred retry lost the missing destination incident or did not release its waiting lease.");
+            Directory.Move(job.Destination.LastVolumePath, detached);
+            int cancelled = await ProductRunner.RunScheduledAsync(location, job.Id, () => true, delay: _ =>
+            {
+                registry.UpdateSettings(job.Id, "Trabajo detenido", new TimeOnly(19, 5), enabled: false, retired: false);
+                return Task.CompletedTask;
+            });
+            Check(cancelled == 0 && registry.RunHistory(job.Id).Runs[0].Result?.State == ProductRunState.WaitingForDestination,
+                "Disabling a job did not stop its deferred retry.");
+        }
+        finally { if (Directory.Exists(detached)) Directory.Move(detached, job.Destination.LastVolumePath); }
+        Reject(() => ProductRunner.Run(registry, job.Id));
+        var current = registry.Get(job.Id);
+        registry.UpdateSettings(job.Id, current.Options.Name, current.Options.DailyAt, enabled: false, retired: true);
+        Check(registry.Get(job.Id) is { Retired: true, Enabled: false } &&
+            ProductRunner.Verify(registry, job.Id, registry.RunHistory(job.Id).Runs.First(run => run.Result?.State == ProductRunState.Confirmed).Generation!).State == ProductRunState.Confirmed,
+            "Retirement prevented verification or changed the preserved backup.");
+        registry.UpdateSettings(job.Id, "Trabajo reactivado", new TimeOnly(20, 30), enabled: true, retired: false);
+        Check(registry.Get(job.Id).Destination.Marker == job.Destination.Marker && registry.Get(job.Id).Options.Mode == job.Options.Mode,
+            "Editing or reactivation changed the data identity or mode.");
     }
 
     internal static int HeldChild(string root, Guid id)

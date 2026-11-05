@@ -17,7 +17,7 @@ public partial class ProductWindow
             File.WriteAllText(Path.Combine(source, "datos.txt"), "original");
             ProductJobRegistry Open() => new(settings);
             var picks = new Queue<string>(Enumerable.Range(0, 3).SelectMany(_ => new[] { source, parent }));
-            var window = new ProductWindow(Open, _ => picks.Dequeue());
+            var window = new ProductWindow(Open, _ => picks.Dequeue(), testSchedule: (_, _, _) => { });
             try
             {
                 await window.InitializeAsync();
@@ -197,6 +197,27 @@ public partial class ProductWindow
                 window.AcceptMassChanges.IsChecked = true;
                 await Click(window, window.ApplyMirrorButton);
                 Check(File.ReadAllText(Path.Combine(mirrored.MirrorCurrentPath, "datos.txt")) == "tercera versión", window.StatusText.Text);
+                window.SelectJob(jobs.Single(job => job.Options.Mode == ProductBackupMode.Versions).Id);
+                var edited = (window.JobList.SelectedItem as JobRow)!.Job!;
+                window.EditJobName.Text = "Trabajo renombrado";
+                window.EditDailyTime.Text = "30:00";
+                await Click(window, window.SaveSettingsButton);
+                Check(window.StatusText.Text.Contains("HH:mm", StringComparison.Ordinal), "Invalid edited time was accepted.");
+                window.EditDailyTime.Text = "19:15";
+                window.EditEnabled.IsChecked = false;
+                await Click(window, window.SaveSettingsButton);
+                Check(!window.BackupJobButton.IsEnabled && window.RecoverJobButton.IsEnabled &&
+                    ((JobRow)window.JobList.SelectedItem).Job is { Enabled: false, Options.Name: "Trabajo renombrado" },
+                    "Disabling a job lost recovery or still allowed a backup.");
+                window.EditRetired.IsChecked = true;
+                await Click(window, window.SaveSettingsButton);
+                Check(((JobRow)window.JobList.SelectedItem).Job is { Retired: true } &&
+                    VersionStore.OpenProduct(edited).ListPoints().Length > 0, "Retirement deleted the stored points.");
+                window.EditRetired.IsChecked = false;
+                window.EditEnabled.IsChecked = true;
+                await Click(window, window.SaveSettingsButton);
+                Check(window.BackupJobButton.IsEnabled && ((JobRow)window.JobList.SelectedItem).Job!.Destination.Marker == edited.Destination.Marker,
+                    "Reactivation changed the job identity or failed to enable manual backup.");
             }
             finally { window.Close(); }
 
@@ -211,6 +232,7 @@ public partial class ProductWindow
             finally { reopened.Close(); }
             Console.Error.WriteLine("PASS WPF executes and recovers all three modes, preserves cumulative extras, retries busy files and reviews mass mirror changes.");
             Console.Error.WriteLine("PASS product recovery pages files, browses folders, searches Unicode, restores a deleted file and tolerates a corrupt local index.");
+            Console.Error.WriteLine("PASS WPF edits name and hour, rejects invalid time, disables, retires and reactivates while keeping recovery and data identity; native schedule operations are injected separately.");
             await RunWorkerSmokeAsync();
         }
         finally

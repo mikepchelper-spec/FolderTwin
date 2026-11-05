@@ -16,7 +16,8 @@ internal sealed record ProductRunResult(int Version, byte[] IntentHash, ProductR
 internal sealed record ProductRunProgress(int Version, byte[] IntentHash, long Revision, WorkProgress Work, bool Paused);
 internal sealed record ProductRunCommand(int Version, byte[] IntentHash, long Number, ProductRunAction Action);
 internal sealed record ProductRunView(ProductRunIntent Intent, ProductRunResult? Result, string? Generation,
-    ProductRunProgress? Progress, bool Running);
+    ProductRunProgress? Progress, bool Running, ProductRetry? Retry = null, bool RetryRunning = false);
+internal sealed record ProductRetry(int Version, byte[] IntentHash, int Number, DateTimeOffset NextUtc);
 internal sealed record ProductRunHistory(ProductRunView[] Runs, int Unreadable);
 
 internal sealed partial class ProductJobRegistry
@@ -36,6 +37,8 @@ internal sealed partial class ProductJobRegistry
         try
         {
             var definition = ReadConfirmed(job, ReadIntent(job, id));
+            if (operation == ProductRunOperation.Backup && (!definition.Enabled || definition.Retired))
+                throw new InvalidDataException("El trabajo está deshabilitado o retirado. Sus respaldos se conservan para recuperar.");
             execution = WindowsProbeNative.OpenPlainFile(job, "execution.lock", FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
             using var runs = WindowsProbeNative.OpenOrCreatePlainDirectory(job, "runs");
             var history = ReadRuns(job, runs, id);
@@ -123,7 +126,18 @@ internal sealed partial class ProductJobRegistry
                 // release of the worker's lock. Observe it before declaring an interruption.
                 if (result is null && !running) result = ReadResult(run, intent, generation);
                 if (result is not null) generation = result.Generation;
-                found.Add(new(intent, result, generation, progress, running));
+                ProductRetry? retry = null;
+                bool retryRunning = false;
+                if (WindowsProbeNative.PlainFileExists(run, "retry"))
+                {
+                    retry = Decode<ProductRetry>(run, "retry");
+                    if (retry.Version != 1 || retry.Number is < 1 or > 3 || retry.NextUtc.Offset != TimeSpan.Zero ||
+                        !retry.IntentHash.AsSpan().SequenceEqual(IntentHash(intent)) ||
+                        result?.State is not (ProductRunState.Busy or ProductRunState.WaitingForSource or ProductRunState.WaitingForDestination))
+                        throw new InvalidDataException("El reintento no corresponde al resultado registrado.");
+                    retryRunning = IsLocked(run, "retry.active");
+                }
+                found.Add(new(intent, result, generation, progress, running, retry, retryRunning));
             }
             catch (Exception error) when (VersionJob.Expected(error)) { unreadable++; }
         }
@@ -131,6 +145,33 @@ internal sealed partial class ProductJobRegistry
     }
 
     private sealed record RunGeneration(byte[] IntentHash, string Generation);
+    private static bool IsLocked(SafeFileHandle directory, string name)
+    {
+        try { using var probe = WindowsProbeNative.OpenPlainFile(directory, name, FileAccess.ReadWrite, FileShare.None); return false; }
+        catch (FileNotFoundException) { return false; }
+        catch (Exception error) when (VersionJob.SharingViolation(error)) { return true; }
+    }
+
+    internal FileStream AcquireScheduledLock(Guid id)
+    {
+        using var job = OpenJob(id);
+        _ = ReadConfirmed(job, ReadIntent(job, id));
+        return WindowsProbeNative.OpenPlainFile(job, "scheduled.lock", FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
+    }
+
+    internal IDisposable BeginRetry(Guid id, Guid runId, int number)
+    {
+        using var job = OpenJob(id);
+        using var runs = WindowsProbeNative.OpenPlainDirectory(job, "runs");
+        var previous = ReadRuns(job, runs, id).Runs.Single(item => item.Intent.Id == runId);
+        if (number is < 1 or > 3 || previous.Result?.State is not
+            (ProductRunState.Busy or ProductRunState.WaitingForSource or ProductRunState.WaitingForDestination))
+            throw new InvalidDataException("Este resultado no admite un reintento automático.");
+        using var run = WindowsProbeNative.OpenPlainDirectory(runs, RunName(previous.Intent));
+        var retry = new ProductRetry(1, IntentHash(previous.Intent), number, DateTimeOffset.UtcNow.AddMinutes(5));
+        RetentionJournal.WriteFile(run, "retry", Encode(retry));
+        return WindowsProbeNative.OpenPlainFile(run, "retry.active", FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
+    }
     private static string? ReadGeneration(SafeFileHandle run, ProductRunIntent intent)
     {
         if (!WindowsProbeNative.PlainFileExists(run, "generation")) return null;
