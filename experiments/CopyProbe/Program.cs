@@ -21,6 +21,8 @@ if (args is ["--product-roots"])
     return LocalJobRootsProbe.Run();
 if (args is ["--product-jobs"])
     return ProductJobRegistryProbe.Run();
+if (args is ["--product-config"])
+    return ProductConfigurationProbe.Run();
 if (args is ["--run-product-job", var productRegistry, var productId] && Guid.TryParseExact(productId, "N", out var productJobId))
     return ProductRunner.RunCommand(productRegistry, productJobId);
 if (args is ["--run-product-job", var approvedRegistry, var approvedJob, var approval] &&

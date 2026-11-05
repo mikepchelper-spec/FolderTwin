@@ -80,7 +80,8 @@ internal sealed partial class VersionStore
                 Destination, plan.CurrentIdentity, binding, baseline!.Directories, baseline.Files)) : ReadMirrorSource(plan);
             workspace.SaveIntent(intent, scope, IntentFiles(pending, plan.Generation));
         }
-        if (!intent.SourceIdentity.AsSpan().SequenceEqual(plan.SourceIdentity) || Path.GetFileName(intent.Source) != plan.Source ||
+        if (!intent.SourceIdentity.AsSpan().SequenceEqual(plan.SourceIdentity) ||
+            !intent.Source.Equals(workspace.SourcePath(plan.Source), StringComparison.OrdinalIgnoreCase) ||
             !BatchCatalog.WriteMetadata(Stream.Null, intent, plan.Generation).AsSpan().SequenceEqual(plan.DocumentHash))
             throw new InvalidDataException("El plan de datos no corresponde a la actualización del espejo.");
         if (!IsCommitted(root, plan.Generation))

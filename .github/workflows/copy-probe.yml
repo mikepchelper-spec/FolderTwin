@@ -31,6 +31,8 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-roots
       - name: Verify durable product job registration
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-jobs
+      - name: Verify reviewed portable configuration and restoration of imported jobs
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-config
       - name: Verify product versions, mirror, offline restoration and retention
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-store
       - name: Verify cumulative updates, destination conflicts and interrupted publication

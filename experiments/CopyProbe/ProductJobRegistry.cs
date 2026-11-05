@@ -14,7 +14,7 @@ internal sealed record ProductJobOptions(string Name, ProductBackupMode Mode, Ti
     }
 }
 internal sealed record ProductJob(Guid Id, ProductJobOptions Options, LocalJobRoot Source, DestinationBinding Destination,
-    bool Enabled = true, bool Retired = false);
+    bool Enabled = true, bool Retired = false, bool Imported = false, bool SourceReviewed = true, string[]? SourceAliases = null);
 internal sealed record ProductJobList(ProductJob[] Jobs, Guid[] Pending, int Unreadable);
 
 internal sealed partial class ProductJobRegistry : IDisposable
@@ -36,7 +36,8 @@ internal sealed partial class ProductJobRegistry : IDisposable
         MaxDepth = 12
     };
     private sealed record Intent(int Version, byte[] RegistryIdentity, Guid Id, ProductJobOptions Options,
-        LocalJobRoot Source, LocalJobRoot Parent);
+        LocalJobRoot Source, LocalJobRoot Parent,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ImportedBinding? Imported = null);
     private sealed record Target(int Version, Guid Id, byte[] IntentHash, DestinationBinding Binding);
 
     internal ProductJobRegistry(string path)
@@ -104,6 +105,7 @@ internal sealed partial class ProductJobRegistry : IDisposable
 
     private ProductJob Finish(SafeFileHandle job, Intent intent, Action<ProductRegistrationStep>? checkpoint)
     {
+        if (intent.Imported is not null) return FinishImported(job, intent, checkpoint);
         string destinationPath = TargetPath(intent);
         var (selectedRoots, record) = OpenRoots();
         using var roots = selectedRoots;
@@ -183,9 +185,10 @@ internal sealed partial class ProductJobRegistry : IDisposable
             using var job = OpenJob(other);
             RequireDisjointFromActiveRestores(job, other, intent.Source.VolumePath, destination);
             var existing = ReadIntent(job, other, allowDraft: !WindowsProbeNative.PlainFileExists(job, CommitName));
+            string existingSource = WindowsProbeNative.PlainFileExists(job, CommitName) ? ReadConfirmed(job, existing).Source.VolumePath : existing.Source.VolumePath;
             string existingTarget = TargetPath(existing);
             if (LocalJobRoots.Overlap(destination, existingTarget) ||
-                LocalJobRoots.Overlap(destination, existing.Source.VolumePath) ||
+                LocalJobRoots.Overlap(destination, existingSource) ||
                 LocalJobRoots.Overlap(intent.Source.VolumePath, existingTarget))
                 throw new InvalidDataException("Una carpeta se solapa con el destino de otro trabajo.");
         }
@@ -199,7 +202,9 @@ internal sealed partial class ProductJobRegistry : IDisposable
         if (confirmed.ReadAtLeast(observed, observed.Length, false) != observed.Length || confirmed.ReadByte() != -1 ||
             !observed.SequenceEqual(Confirmation(intent, target)))
             throw new InvalidDataException("La confirmación del trabajo está dañada.");
-        return ApplySettings(job, new(intent.Id, intent.Options, intent.Source, target.Binding));
+        return ApplySettings(job, new(intent.Id, intent.Options, intent.Source, target.Binding,
+            Enabled: intent.Imported is null, Imported: intent.Imported is not null,
+            SourceReviewed: intent.Imported?.SourceReviewed ?? true, SourceAliases: intent.Imported?.SourceAliases));
     }
 
     private Intent ReadIntent(SafeFileHandle job, Guid id, bool allowDraft = false)
@@ -213,6 +218,7 @@ internal sealed partial class ProductJobRegistry : IDisposable
     private void Validate(Intent intent, Guid id)
     {
         intent.Options.Validate();
+        if (intent.Imported is { } imported) ValidateImportedBinding(imported, intent.Source, intent.Parent);
         if (intent.Version != 1 || id == Guid.Empty || intent.Id != id ||
             !intent.RegistryIdentity.AsSpan().SequenceEqual(identity) ||
             !ValidRoot(intent.Source) || !ValidRoot(intent.Parent) ||
@@ -235,7 +241,7 @@ internal sealed partial class ProductJobRegistry : IDisposable
         return record;
     }
 
-    private static string TargetPath(Intent intent) => Path.Combine(intent.Parent.VolumePath, $"FolderTwin-{intent.Id:N}");
+    private static string TargetPath(Intent intent) => intent.Imported?.Target.LastVolumePath ?? Path.Combine(intent.Parent.VolumePath, $"FolderTwin-{intent.Id:N}");
 
     private static byte[] Confirmation(Intent intent, Target target) =>
         SHA256.HashData([.. SHA256.HashData(Encode(intent)), .. SHA256.HashData(Encode(target))]);

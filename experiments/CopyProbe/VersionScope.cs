@@ -47,7 +47,8 @@ internal sealed class VersionScope
     internal string SourcePath(string name)
     {
         if (lab is not null) return Path.Combine(Root, name);
-        if (name != Path.GetFileName(job!.Source.VolumePath))
+        if (name != Path.GetFileName(job!.Source.VolumePath) &&
+            !(job.SourceAliases?.Any(path => name == Path.GetFileName(path)) ?? false))
             throw new InvalidDataException("El origen del diario no corresponde al trabajo.");
         return job.Source.VolumePath;
     }

@@ -95,6 +95,12 @@ internal sealed class LocalJobRoots : IDisposable
         return path;
     }
 
+    internal static LocalJobRoot InspectSelected(string path, bool writable, bool allowVolumeRoot = false)
+    {
+        using var root = new DirectoryFence(path);
+        return Inspect(root.Root, writable, allowVolumeRoot);
+    }
+
     private static LocalJobRoot Inspect(SafeFileHandle handle, bool writable, bool allowVolumeRoot = false)
     {
         WindowsProbeNative.RequireNtfsVolume(handle, writable);

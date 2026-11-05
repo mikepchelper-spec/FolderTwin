@@ -65,7 +65,8 @@ internal sealed partial class ProductJobRegistry
             if (!Guid.TryParseExact(entry.Name, "N", out Guid other)) continue;
             using var job = OpenJob(other);
             var intent = ReadIntent(job, other, allowDraft: !WindowsProbeNative.PlainFileExists(job, CommitName));
-            if (LocalJobRoots.Overlap(output, intent.Source.VolumePath) || LocalJobRoots.Overlap(output, TargetPath(intent)))
+            string source = WindowsProbeNative.PlainFileExists(job, CommitName) ? ReadConfirmed(job, intent).Source.VolumePath : intent.Source.VolumePath;
+            if (LocalJobRoots.Overlap(output, source) || LocalJobRoots.Overlap(output, TargetPath(intent)))
                 throw new InvalidDataException("La recuperación debe quedar fuera del origen y destino de todos los trabajos.");
         }
     }

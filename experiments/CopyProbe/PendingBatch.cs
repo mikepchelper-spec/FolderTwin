@@ -187,7 +187,8 @@ internal static class PendingBatch
         if (location.Version != 2 || !WindowsProbeNative.DirectoryIdentity(scope).AsSpan().SequenceEqual(location.FixtureIdentity) ||
             !location.FixtureIdentity.AsSpan().SequenceEqual(job.Destination.Identity) ||
             !location.SourceIdentity.AsSpan().SequenceEqual(job.Source.Identity) ||
-            !location.SourceRelative.Equals(job.Source.VolumePath, StringComparison.OrdinalIgnoreCase))
+            !location.SourceRelative.Equals(job.Source.VolumePath, StringComparison.OrdinalIgnoreCase) &&
+            !(job.SourceAliases?.Contains(location.SourceRelative, StringComparer.OrdinalIgnoreCase) ?? false))
             throw new InvalidDataException("El descriptor pendiente no corresponde al origen y al destino del trabajo.");
         return location;
     }

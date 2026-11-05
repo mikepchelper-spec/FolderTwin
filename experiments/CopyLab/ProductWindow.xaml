@@ -25,6 +25,7 @@
                 <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,12">
                     <Button x:Name="NewJobButton" Content="_Nuevo trabajo" Click="NewJobClick" Margin="0,0,8,4" />
                     <Button x:Name="RefreshJobsButton" Content="Act_ualizar" Click="RefreshJobsClick" Margin="0,0,8,4" />
+                    <Button x:Name="ImportConfigurationButton" Content="_Importar configuración" Click="ImportConfigurationClick" Margin="0,0,8,4" />
                     <Button x:Name="ProductTrayButton" Content="Minimizar a _bandeja" Click="ProductTrayClick" Margin="0,0,8,4" />
                     <Button x:Name="ResumeRegistrationButton" Content="_Reanudar registro" Click="ResumeRegistrationClick"
                             IsEnabled="False" Margin="0,0,8,4" />
@@ -40,6 +41,7 @@
                         <WrapPanel Margin="0,8,0,0">
                             <Button x:Name="BackupJobButton" Content="_Respaldar ahora" Click="BackupJobClick" IsEnabled="False" Margin="0,0,8,4" />
                             <Button x:Name="RecoverJobButton" Content="Re_cuperar archivos" Click="RecoverJobClick" IsEnabled="False" Margin="0,0,8,4" />
+                            <Button x:Name="ExportConfigurationButton" Content="_Exportar configuración" Click="ExportConfigurationClick" IsEnabled="False" Margin="0,0,8,4" />
                         </WrapPanel>
                         <TextBlock Text="La pausa y la cancelación se atienden entre archivos o pasos recuperables. Puedes cerrar la ventana mientras el ejecutor sigue trabajando."
                                    TextWrapping="Wrap" Margin="0,4,0,4" />
@@ -61,6 +63,7 @@
                                 <TextBlock Text="Retirar desactiva el horario y los nuevos respaldos. Los datos siguen disponibles para recuperar. Para reactivarlo, desmarca Retirar y vuelve a habilitarlo. Para cambiar las carpetas o el modo, crea otro trabajo."
                                            TextWrapping="Wrap" />
                                 <WrapPanel Margin="0,8,0,0">
+                                    <Button x:Name="ReviewImportedSourceButton" Content="Revisar origen importado" Click="ReviewImportedSourceClick" IsEnabled="False" Margin="0,0,8,4" />
                                     <Button x:Name="SaveSettingsButton" Content="Guardar _cambios" Click="SaveSettingsClick" Margin="0,0,8,4" />
                                     <Button x:Name="ApplyScheduleButton" Content="Reparar _horario" Click="ApplyScheduleClick" Margin="0,0,8,4" />
                                 </WrapPanel>
@@ -110,6 +113,27 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
             </DockPanel>
+
+            <ScrollViewer x:Name="ImportPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+                    <TextBlock Text="Importar un trabajo" FontSize="20" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
+                    <TextBlock x:Name="ImportSummaryText" TextWrapping="Wrap" Margin="0,8,0,12" />
+                    <Button x:Name="ChooseImportDestinationButton" Content="Elegir respaldo _existente" Click="ChooseImportDestinationClick" HorizontalAlignment="Left" />
+                    <TextBlock x:Name="ImportDestinationText" TextWrapping="Wrap" Margin="0,4,0,8" />
+                    <WrapPanel>
+                        <Button x:Name="ChooseImportSourceButton" Content="Elegir _origen para futuras copias" Click="ChooseImportSourceClick" Margin="0,0,8,4" />
+                        <Button x:Name="ClearImportSourceButton" Content="Recuperar _sin origen" Click="ClearImportSourceClick" Margin="0,0,8,4" />
+                    </WrapPanel>
+                    <TextBlock x:Name="ImportSourceText" TextWrapping="Wrap" Margin="0,4,0,8" />
+                    <Button x:Name="ReviewImportButton" Content="_Comprobar identidades" Click="ReviewImportClick" IsEnabled="False" HorizontalAlignment="Left" />
+                    <TextBlock x:Name="ImportReviewText" TextWrapping="Wrap" Margin="0,8,0,8" />
+                    <CheckBox x:Name="AcceptImport" Content="He revisado el modo y las carpetas del trabajo" Checked="ImportAcceptedChanged" Unchecked="ImportAcceptedChanged" />
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button x:Name="SaveImportButton" Content="Guardar trabajo _deshabilitado" Click="SaveImportClick" IsEnabled="False" Margin="0,0,8,4" />
+                        <Button Content="Volver a _trabajos" Click="CancelImportClick" Margin="0,0,8,4" />
+                    </WrapPanel>
+                </StackPanel>
+            </ScrollViewer>
 
             <ScrollViewer x:Name="RecoveryPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">

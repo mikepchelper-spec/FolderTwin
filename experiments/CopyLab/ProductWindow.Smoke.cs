@@ -241,6 +241,7 @@ public partial class ProductWindow
             await RunRestoreWorkerSmokeAsync();
             await ProductTrayProbe.RunAsync();
             await RunProductRetentionSmokeAsync();
+            await RunConfigurationSmokeAsync();
         }
         finally
         {

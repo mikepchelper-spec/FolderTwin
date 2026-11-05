@@ -8,6 +8,15 @@ internal sealed partial class VersionStore
     private static ReadOnlySpan<byte> ProductStoreMagic => "FTVERS03"u8;
     private const string InitializationName = ".foldertwin-version-initialize";
 
+    internal static void InspectProductForImport(ProductJob job)
+    {
+        using var root = new VersionScope(job).OpenRegisteredRoot();
+        if (WindowsProbeNative.PlainFileExists(root.Root, StoreName)) { _ = OpenProduct(job); return; }
+        if (WindowsProbeNative.ReadDirectory(root.Root).Any(entry =>
+            entry.Name is not ("." or ".." or DestinationBinding.MarkerName or FolderBatch.LockName)))
+            throw new InvalidDataException("La preparación del respaldo está incompleta o contiene datos desconocidos. Conserva el destino para revisión.");
+    }
+
     internal static VersionStore OpenProduct(ProductJob job, bool initialize = false,
         Action<ProductStoreStep>? checkpoint = null, Action<WorkProgress>? observe = null)
     {
