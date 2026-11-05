@@ -202,9 +202,13 @@
                 </StackPanel>
             </ScrollViewer>
 
-            <ScrollViewer x:Name="RecoveryPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled">
-                <StackPanel>
+            <Grid x:Name="RecoveryPanel" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                  <StackPanel>
                     <TextBlock Text="Recuperar archivos" FontSize="20" FontWeight="SemiBold"
                                AutomationProperties.HeadingLevel="Level2" />
                     <Label Content="_Fecha del respaldo" Target="{Binding ElementName=RecoveryDates}" />
@@ -244,8 +248,13 @@
                         <Button x:Name="NextRecoveryPageButton" Content="Página s_iguiente" Click="NextRecoveryPageClick" Margin="0,0,8,4" />
                         <TextBlock x:Name="RecoveryPageText" TextWrapping="Wrap" VerticalAlignment="Center" />
                     </WrapPanel>
-                    <TextBlock x:Name="RestoreReviewText" TextWrapping="Wrap" Margin="0,0,0,8" />
-                    <WrapPanel>
+                  </StackPanel>
+                </ScrollViewer>
+                <StackPanel Grid.Row="1" Margin="0,8,0,0">
+                    <ScrollViewer MaxHeight="72" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <TextBlock x:Name="RestoreReviewText" TextWrapping="Wrap" />
+                    </ScrollViewer>
+                    <WrapPanel x:Name="RecoveryActions" Margin="0,4,0,0">
                         <Button x:Name="VerifyPointButton" Content="_Verificar respaldo" Click="VerifyPointClick" Margin="0,0,8,4" />
                         <Button x:Name="ReviewRestoreButton" Content="Recuperar _punto completo" Click="ReviewRestoreClick" Margin="0,0,8,4" />
                         <Button x:Name="ReviewFileRestoreButton" Content="Recuperar _archivo elegido" Click="ReviewFileRestoreClick" IsEnabled="False" Margin="0,0,8,4" />
@@ -254,7 +263,7 @@
                         <Button x:Name="ReturnToJobsButton" Content="Volver a _trabajos" Click="ReturnToJobsClick" Margin="0,0,8,4" />
                     </WrapPanel>
                 </StackPanel>
-            </ScrollViewer>
+            </Grid>
 
             <DockPanel x:Name="Wizard" Visibility="Collapsed" KeyboardNavigation.TabNavigation="Cycle">
                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">

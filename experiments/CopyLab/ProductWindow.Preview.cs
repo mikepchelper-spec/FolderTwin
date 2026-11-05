@@ -12,7 +12,16 @@ public partial class ProductWindow
         string settings = Path.Combine(fixture.Root, "settings");
         Directory.CreateDirectory(settings);
         ProductJobRegistry Open() => new(settings);
-        await Task.Run(() =>
+        if (variant == "empty")
+        {
+            string source = Directory.CreateDirectory(Path.Combine(fixture.Root, "origen")).FullName;
+            Directory.CreateDirectory(Path.Combine(source, "Carpeta vacía"));
+            Directory.CreateDirectory(Path.Combine(fixture.Root, "destinos"));
+            Directory.CreateDirectory(Path.Combine(fixture.Root, "recuperaciones"));
+            File.WriteAllText(Path.Combine(source, "Prueba.txt"), "Contenido sintético para la aceptación del escritorio.");
+            Console.Error.WriteLine("Carpeta desechable: " + fixture.Root);
+        }
+        else await Task.Run(() =>
         {
             using var registry = Open();
             foreach (var mode in Enum.GetValues<ProductBackupMode>())
@@ -34,7 +43,8 @@ public partial class ProductWindow
         });
         string installations = Directory.CreateDirectory(Path.Combine(fixture.Root, "installations")).FullName;
         var window = new ProductWindow(Open, testSchedule: (_, _, _) => { },
-            testPackageInstall: () => LabInstallation.EnsureAt(AppContext.BaseDirectory, installations), testInstallations: installations)
+            testPackageInstall: () => LabInstallation.EnsureAt(AppContext.BaseDirectory, installations), testInstallations: installations,
+            testFolderWorkspace: variant == "empty" ? fixture : null)
         { Title = "FolderTwin · Prueba desechable" };
         if (variant == "compact") { window.Width = 600; window.Height = 500; }
         // The pinned WPF SDK still labels the theme API experimental; this override is confined to the visual fixture.

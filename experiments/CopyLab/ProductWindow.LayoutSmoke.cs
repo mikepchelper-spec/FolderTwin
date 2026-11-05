@@ -32,6 +32,18 @@ public partial class ProductWindow
         Guid selected = ((JobRow)JobList.SelectedItem).Id;
         await LoadListAsync();
         Check((JobList.SelectedItem as JobRow)?.Id == selected, "Refreshing the dashboard lost the selected job.");
+        await Click(this, RecoverJobButton);
+        foreach (var size in new[] { new Size(1040, 740), new Size(600, 500) })
+        {
+            Width = size.Width;
+            Height = size.Height;
+            await Dispatcher.InvokeAsync(UpdateLayout, DispatcherPriority.ApplicationIdle);
+            var start = RecoveryActions.TranslatePoint(new Point(), RecoveryPanel);
+            Check(RecoveryActions.ActualHeight > 0 && start.Y >= 0 &&
+                start.Y + RecoveryActions.ActualHeight <= RecoveryPanel.ActualHeight + 0.5 && VerifyPointButton.IsEnabled,
+                $"Recovery actions are not reachable without scrolling at {size}.");
+        }
+        await Click(this, ReturnToJobsButton);
         var compatible = OpenLegacyWindow();
         try
         {
@@ -39,6 +51,6 @@ public partial class ProductWindow
                 "The product dashboard cannot open the isolated legacy recovery tools.");
         }
         finally { compatible.Close(); }
-        Console.Error.WriteLine("PASS WPF dashboard keeps a complete job row and reachable details at desktop and minimum sizes, exposes job names to UI Automation and preserves selection on refresh.");
+        Console.Error.WriteLine("PASS WPF dashboard keeps a complete job row and reachable details, recovery actions stay visible at desktop and minimum sizes, job names are accessible and selection survives refresh.");
     }
 }

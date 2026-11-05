@@ -47,7 +47,7 @@ La salida debe estar separada de los orígenes, destinos y configuración de los
 
 | Aviso o situación | Acción |
 |---|---|
-| Archivo ocupado | Guarda y cierra la aplicación que lo usa y vuelve a **Respaldar ahora**. Si se identifica el proceso, aparecerá en el diagnóstico; el mensaje genérico sigue siendo válido cuando no se identifica. |
+| Archivo o destino en uso | Guarda y cierra la aplicación que lo usa o espera a que termine la otra operación. Consulta la ruta indicada y pulsa **Reintentar respaldo**. Para un intento de verificación o recuperación, vuelve a la acción correspondiente. |
 | Origen o destino ausente | Reconecta la misma raíz registrada y reintenta. Un disco diferente con la misma letra no sustituye su identidad. |
 | Espacio insuficiente | Revisa la capacidad sin eliminar archivos internos del respaldo. La cuarentena todavía ocupa espacio. Un resultado parcial no cuenta como respaldo completo. |
 | Edición externa en destino | Conserva aparte la edición y revisa la ruta indicada. No fuerces la sustitución ni borres metadatos de FolderTwin. Repite cuando el estado requerido vuelva a coincidir. |

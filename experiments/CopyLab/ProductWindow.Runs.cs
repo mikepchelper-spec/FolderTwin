@@ -92,6 +92,9 @@ public partial class ProductWindow
         var active = history.Runs.FirstOrDefault(run => run.Running);
         var correct = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Backup && run.Result?.State == ProductRunState.Confirmed);
         var verified = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Verify && run.Result?.State == ProductRunState.Confirmed);
+        var lastBackup = history.Runs.FirstOrDefault(run => run.Intent.Operation is ProductRunOperation.Backup or ProductRunOperation.ReviewMirror);
+        BackupJobButton.Content = lastBackup is { Running: false, Result.State: not ProductRunState.Confirmed } or { Running: false, Result: null }
+            ? "_Reintentar respaldo" : "_Respaldar ahora";
         RuntimeStatusText.Text = job is null ? "" : Brief(history) +
             "\nÚltimo respaldo completo · " + Date(correct?.Result?.FinishedUtc) +
             "\nÚltima verificación completa · " + Date(verified?.Result?.FinishedUtc) +
@@ -168,6 +171,8 @@ public partial class ProductWindow
         ProductRunState.Cancelled => "Operación cancelada en un límite recuperable. Reintenta para continuar el trabajo pendiente.",
         ProductRunState.WaitingForSource => "El origen no está disponible. Reconéctalo y reintenta.",
         ProductRunState.WaitingForDestination => "El destino no está disponible. Reconéctalo y reintenta.",
+        ProductRunState.Busy => "Un archivo o el destino está en uso. Cierra la aplicación que lo usa o espera a que termine la otra operación. Luego reintenta." +
+            (result.RelativePath is { } busyPath ? "\n" + busyPath : ""),
         _ => (result.Detail ?? "La operación necesita revisión antes de continuar.") +
             (result.RelativePath is { } path ? "\n" + path : "")
     };

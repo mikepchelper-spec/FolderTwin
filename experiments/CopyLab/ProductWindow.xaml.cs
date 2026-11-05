@@ -38,6 +38,7 @@ public partial class ProductWindow : Window
     private readonly Func<string, Guid, Guid, System.Diagnostics.Process>? testAbandonWorker;
     private readonly Func<string>? testPackageInstall;
     private readonly string? testInstallations;
+    private readonly LabWorkspace? testFolderWorkspace;
     private readonly VersionIndex productIndex;
     private string? origin;
     private string? parent;
@@ -53,7 +54,7 @@ public partial class ProductWindow : Window
         Func<bool, string?>? testConfigurationPicker = null,
         Func<string, Guid, System.Diagnostics.Process>? testMirrorReviewWorker = null,
         Func<string, Guid, Guid, System.Diagnostics.Process>? testAbandonWorker = null,
-        Func<string>? testPackageInstall = null, string? testInstallations = null)
+        Func<string>? testPackageInstall = null, string? testInstallations = null, LabWorkspace? testFolderWorkspace = null)
     {
         this.openRegistry = openRegistry ?? ProductJobRegistry.OpenLocal;
         this.testPicker = testPicker;
@@ -65,6 +66,7 @@ public partial class ProductWindow : Window
         this.testAbandonWorker = testAbandonWorker;
         this.testPackageInstall = testPackageInstall;
         this.testInstallations = testInstallations;
+        this.testFolderWorkspace = testFolderWorkspace;
         productIndex = new(() =>
         {
             using var registry = this.openRegistry();
@@ -136,7 +138,16 @@ public partial class ProductWindow : Window
         if (busy) return null;
         if (testPicker is not null) return testPicker(title);
         var dialog = new OpenFolderDialog { Title = title, AddToRecent = false, DereferenceLinks = false };
-        return dialog.ShowDialog(this) == true ? Path.TrimEndingDirectorySeparator(dialog.FolderName) : null;
+        if (testFolderWorkspace is { } workspace) dialog.InitialDirectory = workspace.Root;
+        if (dialog.ShowDialog(this) != true) return null;
+        string selected = Path.TrimEndingDirectorySeparator(dialog.FolderName);
+        if (testFolderWorkspace is { } fixture)
+        {
+            try { fixture.CheckChild(selected); }
+            catch (Exception error) when (VersionJob.Expected(error))
+            { SetStatus("Elige una subcarpeta directa del espacio de prueba."); return null; }
+        }
+        return selected;
     }
 
     private void NextStepClick(object sender, RoutedEventArgs e)

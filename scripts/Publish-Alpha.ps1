@@ -38,11 +38,11 @@ try {
     $cache = $cache.Substring('global-packages: '.Length).Trim()
     $core = Join-Path $cache "microsoft.netcore.app.runtime.win-x64/$runtimeVersion"
     $desktop = Join-Path $cache "microsoft.windowsdesktop.app.runtime.win-x64/$runtimeVersion"
-    Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination (Join-Path $output 'LICENSE-FolderTwin.txt')
+    Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination $output
     Copy-Item -LiteralPath (Join-Path $core 'LICENSE.TXT') -Destination (Join-Path $output 'LICENSE-dotnet.txt')
     Copy-Item -LiteralPath (Join-Path $core 'THIRD-PARTY-NOTICES.TXT') -Destination (Join-Path $output 'THIRD-PARTY-NOTICES-dotnet.txt')
     Copy-Item -LiteralPath (Join-Path $desktop 'LICENSE') -Destination (Join-Path $output 'LICENSE-dotnet-desktop.txt')
-    foreach ($guide in @('README.md', 'GUIA.md', 'NOTAS.md', 'V1.md', 'ALFA.md', 'PILOTO.md', 'ACEPTACION.md', 'PLAN.md', 'INVESTIGACION.md', 'COMPATIBILIDAD.md', 'INSTALACION.md')) {
+    foreach ($guide in @('README.md', 'GUIA.md', 'NOTAS.md', 'V1.md', 'ALFA.md', 'PILOTO.md', 'ACEPTACION.md', 'PLAN.md', 'INVESTIGACION.md', 'COMPATIBILIDAD.md', 'INSTALACION.md', 'NOMBRES.md', 'global.json')) {
         Copy-Item -LiteralPath (Join-Path $repo $guide) -Destination $output
     }
     $probeDocs = Join-Path $output 'experiments/CopyProbe'

@@ -13,7 +13,7 @@ public partial class App : Application
         bool productPreview = e.Args.Length == 0 || e.Args is ["--product-preview"];
         bool labPreview = e.Args is ["--lab"];
         bool startupSmoke = e.Args is ["--product-startup-smoke"];
-        bool productSyntheticPreview = e.Args is ["--product-synthetic-preview"] or ["--product-synthetic-preview", "compact"] or ["--product-synthetic-preview", "light"];
+        bool productSyntheticPreview = e.Args is ["--product-synthetic-preview"] or ["--product-synthetic-preview", "compact" or "light" or "empty"];
         bool productSmoke = e.Args is ["--product-smoke"] or ["--product-preserved-smoke"];
         bool productScheduleSmoke = e.Args is ["--product-schedule-smoke"];
         bool heldProductChild = e.Args is ["--held-product-child", _, _];

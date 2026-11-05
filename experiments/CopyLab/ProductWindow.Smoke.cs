@@ -100,8 +100,10 @@ public partial class ProductWindow
                 using (var writer = new FileStream(Path.Combine(source, "datos.txt"), FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
                 {
                     await Click(window, window.BackupJobButton);
-                    Check(!window.StatusText.Text.StartsWith("Respaldo completo", StringComparison.Ordinal) && store.ListPoints().Length == 1,
-                        "A busy file was reported as a complete product backup.");
+                    Check(window.StatusText.Text.Contains("está en uso", StringComparison.Ordinal) &&
+                        window.StatusText.Text.Contains("datos.txt", StringComparison.Ordinal) &&
+                        Equals(window.BackupJobButton.Content, "_Reintentar respaldo") && store.ListPoints().Length == 1,
+                        "The product lost the busy-file path, retry action or confirmed-point distinction.");
                 }
                 File.WriteAllText(Path.Combine(source, "datos.txt"), "actualizado");
                 string documents = Directory.CreateDirectory(Path.Combine(source, "Documentos")).FullName;
