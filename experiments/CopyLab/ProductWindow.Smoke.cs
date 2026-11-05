@@ -8,6 +8,7 @@ public partial class ProductWindow
 {
     internal static async Task RunSmokeAsync()
     {
+        InstallationProbe.Run();
         var workspace = LabWorkspace.Create();
         try
         {

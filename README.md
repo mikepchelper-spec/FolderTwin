@@ -13,6 +13,7 @@ Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 - [Alcance y aceptación de la v1](V1.md): trabajo de producto, criterios de salida y comprobaciones externas.
 - [Guía del piloto](PILOTO.md): preparación, observación, recuperación y criterios de detención.
 - [Recuperar respaldos anteriores](COMPATIBILIDAD.md): acceso desde la interfaz, formatos admitidos y límites.
+- [Instalación y actualización](INSTALACION.md): paquete portable, ejecutor estable, reanudación y trabajo pendiente.
 - [Investigación](INVESTIGACION.md): necesidades observadas, documentación técnica y fuentes.
 - [Nombres](NOMBRES.md): elección, alternativas anteriores y estado de la comprobación de disponibilidad.
 

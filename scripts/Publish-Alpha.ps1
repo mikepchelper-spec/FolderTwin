@@ -42,7 +42,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $core 'LICENSE.TXT') -Destination (Join-Path $output 'LICENSE-dotnet.txt')
     Copy-Item -LiteralPath (Join-Path $core 'THIRD-PARTY-NOTICES.TXT') -Destination (Join-Path $output 'THIRD-PARTY-NOTICES-dotnet.txt')
     Copy-Item -LiteralPath (Join-Path $desktop 'LICENSE') -Destination (Join-Path $output 'LICENSE-dotnet-desktop.txt')
-    foreach ($guide in @('README.md', 'V1.md', 'ALFA.md', 'PILOTO.md', 'ACEPTACION.md', 'PLAN.md', 'INVESTIGACION.md', 'COMPATIBILIDAD.md')) {
+    foreach ($guide in @('README.md', 'V1.md', 'ALFA.md', 'PILOTO.md', 'ACEPTACION.md', 'PLAN.md', 'INVESTIGACION.md', 'COMPATIBILIDAD.md', 'INSTALACION.md')) {
         Copy-Item -LiteralPath (Join-Path $repo $guide) -Destination $output
     }
     $probeDocs = Join-Path $output 'experiments/CopyProbe'

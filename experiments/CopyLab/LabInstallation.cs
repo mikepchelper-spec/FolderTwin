@@ -4,6 +4,8 @@ using System.Text;
 
 namespace CopyLab;
 
+internal enum InstallStep { FilePartial, FileVerified, RecordPartial, Confirmed }
+
 internal static class LabInstallation
 {
     private const string ManifestName = "SHA256SUMS.txt";
@@ -13,29 +15,38 @@ internal static class LabInstallation
 
     internal static string EnsureWorker(bool product = false)
     {
-        string source = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
-        using var sourceRoot = new DirectoryFence(source);
-        if (!WindowsProbeNative.PlainFileExists(sourceRoot.Root, "coreclr.dll") ||
-            !WindowsProbeNative.PlainFileExists(sourceRoot.Root, "PresentationFramework.dll"))
-            throw new InvalidDataException("Para programar, abre la compilación portable con su runtime incluido.");
-        using var manifest = WindowsProbeNative.OpenPlainFile(sourceRoot.Root, ManifestName, FileAccess.Read, FileShare.Read);
-        byte[] document = ReadManifestBytes(manifest);
-        byte[] fingerprint = SHA256.HashData(document);
-        var files = ParseManifest(document);
-        foreach (string required in new[] { "CopyLab.exe", "CopyLab.dll", "CopyProbe.dll", "coreclr.dll", "PresentationFramework.dll" })
-            if (!files.ContainsKey(required))
-                throw new InvalidDataException("El paquete no contiene todos los archivos del ejecutor.");
-        string name = Convert.ToHexStringLower(fingerprint);
         string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         using var localRoot = new DirectoryFence(local);
         if (new DriveInfo(Path.GetPathRoot(local)!).DriveType != DriveType.Fixed)
             throw new InvalidDataException("La instalación requiere almacenamiento fijo local.");
         using var application = WindowsProbeNative.OpenOrCreatePlainDirectory(localRoot.Root, product ? "FolderTwin" : "FolderTwin-Lab");
         using var apps = WindowsProbeNative.OpenOrCreatePlainDirectory(application, "app");
-        using var installLock = WindowsProbeNative.OpenPlainFile(apps, name + ".lock", FileAccess.ReadWrite,
+        return EnsureAt(AppContext.BaseDirectory, AppsRoot(product));
+    }
+
+    // Explicit roots let the synthetic installation harness use a disposable workspace.
+    internal static string EnsureAt(string package, string installationRoot, Action<InstallStep, string>? checkpoint = null)
+    {
+        string source = Path.TrimEndingDirectorySeparator(package);
+        using var sourceRoot = new DirectoryFence(source);
+        if (!WindowsProbeNative.PlainFileExists(sourceRoot.Root, "coreclr.dll") ||
+            !WindowsProbeNative.PlainFileExists(sourceRoot.Root, "PresentationFramework.dll"))
+            throw new InvalidDataException("Para programar, abre la compilación portable con su runtime incluido.");
+        byte[] document;
+        using (var manifest = WindowsProbeNative.OpenPlainFile(sourceRoot.Root, ManifestName, FileAccess.Read, FileShare.Read))
+            document = ReadManifestBytes(manifest);
+        byte[] fingerprint = SHA256.HashData(document);
+        var files = ParseManifest(document);
+        foreach (string required in new[] { "CopyLab.exe", "CopyLab.dll", "CopyProbe.dll", "coreclr.dll", "PresentationFramework.dll" })
+            if (!files.ContainsKey(required))
+                throw new InvalidDataException("El paquete no contiene todos los archivos del ejecutor.");
+        string name = Convert.ToHexStringLower(fingerprint);
+        using var apps = new DirectoryFence(installationRoot);
+        WindowsProbeNative.RequireNtfsVolume(apps.Root, writable: true);
+        using var installLock = WindowsProbeNative.OpenPlainFile(apps.Root, name + ".lock", FileAccess.ReadWrite,
             FileShare.None, FileMode.OpenOrCreate);
-        using var directory = WindowsProbeNative.OpenOrCreatePlainDirectory(apps, name);
-        string target = Path.Combine(AppsRoot(product), name);
+        using var directory = WindowsProbeNative.OpenOrCreatePlainDirectory(apps.Root, name);
+        string target = Path.Combine(installationRoot, name);
         var allowed = files.Keys.Append(ManifestName).Append(MarkerName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (string file in files.Keys)
             for (string? parent = Path.GetDirectoryName(file); !string.IsNullOrEmpty(parent); parent = Path.GetDirectoryName(parent))
@@ -52,30 +63,71 @@ internal static class LabInstallation
                 string output = Path.Combine(target, relative);
                 using var origin = new DirectoryFence(source, input);
                 using var destination = new DirectoryFence(target, output);
-                if (!WindowsProbeNative.PlainFileExists(destination.Parent(output), Path.GetFileName(output)))
+                using var from = WindowsProbeNative.OpenPlainFile(origin.Parent(input), input, FileAccess.Read, FileShare.Read);
+                if (!SHA256.HashData(from).AsSpan().SequenceEqual(hash))
+                    throw new InvalidDataException("El paquete de origen no coincide con su manifiesto. No se instala.");
+                bool complete = false;
+                if (WindowsProbeNative.PlainFileExists(destination.Parent(output), Path.GetFileName(output)))
                 {
-                    using var from = WindowsProbeNative.OpenPlainFile(origin.Parent(input), input, FileAccess.Read, FileShare.Read);
-                    using var to = WindowsProbeNative.OpenPlainFile(destination.Parent(output), output, FileAccess.Write,
-                        FileShare.None, FileMode.CreateNew);
+                    using var existing = WindowsProbeNative.OpenPlainFile(destination.Parent(output), output, FileAccess.Read, FileShare.Read);
+                    complete = existing.Length == from.Length && SHA256.HashData(existing).AsSpan().SequenceEqual(hash);
+                }
+                if (!complete)
+                {
+                    from.Position = 0;
+                    using var to = WindowsProbeNative.OpenPlainFile(destination.Parent(output), output, FileAccess.ReadWrite,
+                        FileShare.None, FileMode.OpenOrCreate);
+                    if (to.Length > from.Length) throw new InvalidDataException("Un archivo instalado es mayor que el paquete esperado. Se conserva para revisión.");
+                    byte[] expected = new byte[65536], observed = new byte[65536];
+                    long remaining = to.Length;
+                    while (remaining > 0)
+                    {
+                        int count = (int)Math.Min(expected.Length, remaining);
+                        from.ReadExactly(expected.AsSpan(0, count));
+                        to.ReadExactly(observed.AsSpan(0, count));
+                        if (!expected.AsSpan(0, count).SequenceEqual(observed.AsSpan(0, count)))
+                            throw new InvalidDataException("El archivo parcial no es un prefijo del paquete. Se conserva para revisión.");
+                        remaining -= count;
+                    }
+                    if (from.Position < from.Length)
+                    {
+                        int count = from.Read(expected);
+                        to.Write(expected.AsSpan(0, count));
+                        to.Flush(flushToDisk: true);
+                        checkpoint?.Invoke(InstallStep.FilePartial, relative);
+                    }
                     from.CopyTo(to);
                     to.Flush(flushToDisk: true);
                 }
                 using var verified = WindowsProbeNative.OpenPlainFile(destination.Parent(output), output, FileAccess.Read, FileShare.Read);
                 if (!SHA256.HashData(verified).AsSpan().SequenceEqual(hash))
                     throw new InvalidDataException("Un archivo instalado no coincide con el manifiesto. Se conservó para revisión.");
+                checkpoint?.Invoke(InstallStep.FileVerified, relative);
                 return true;
             });
         }
         WriteOrVerify(ManifestName, document);
         WriteOrVerify(MarkerName, fingerprint);
+        checkpoint?.Invoke(InstallStep.Confirmed, MarkerName);
         return Path.Combine(target, "CopyLab.exe");
 
         void WriteOrVerify(string fileName, byte[] expected)
         {
-            if (!WindowsProbeNative.PlainFileExists(directory, fileName))
+            using (var output = WindowsProbeNative.OpenPlainFile(directory, fileName, FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate))
             {
-                using var output = WindowsProbeNative.OpenPlainFile(directory, fileName, FileAccess.Write, FileShare.None, FileMode.CreateNew);
-                output.Write(expected);
+                if (output.Length > expected.Length) throw new InvalidDataException("El registro de instalación tiene un tamaño inesperado.");
+                byte[] prior = new byte[(int)output.Length];
+                output.ReadExactly(prior);
+                if (!expected.AsSpan(0, prior.Length).SequenceEqual(prior))
+                    throw new InvalidDataException("El registro parcial de instalación tiene otro contenido.");
+                int middle = expected.Length / 2;
+                if (output.Length < middle)
+                {
+                    output.Write(expected.AsSpan((int)output.Length, middle - (int)output.Length));
+                    output.Flush(flushToDisk: true);
+                    checkpoint?.Invoke(InstallStep.RecordPartial, fileName);
+                }
+                output.Write(expected.AsSpan((int)output.Length));
                 output.Flush(flushToDisk: true);
             }
             using var input = WindowsProbeNative.OpenPlainFile(directory, fileName, FileAccess.Read, FileShare.Read);
@@ -133,7 +185,7 @@ internal static class LabInstallation
                 if (part is "." or ".." || part.StartsWith(FolderBatch.ControlPrefix, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException("El paquete contiene una ruta reservada.");
             }
-            if (relative.Equals(ManifestName, StringComparison.OrdinalIgnoreCase) ||
+            if (relative.Equals(ManifestName, StringComparison.OrdinalIgnoreCase) || relative.Equals(MarkerName, StringComparison.OrdinalIgnoreCase) ||
                 !files.TryAdd(relative, Convert.FromHexString(line.AsSpan(0, 64))) || files.Count > 4096)
                 throw new InvalidDataException("El paquete contiene entradas repetidas o excesivas.");
         }

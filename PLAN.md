@@ -18,6 +18,8 @@ El acceso **Respaldos de alfa** reutiliza las herramientas compatibles con un pr
 
 El paquete público usa `FolderTwin.exe`, conserva los protocolos internos y abre el panel sin argumentos. La compilación portable local con runtime pasó los recorridos WPF de producto y compatibilidad desde esa entrada. El workflow añade un arranque sin argumentos en un perfil limpio del runner, además de reproducibilidad y los recorridos existentes. Ese criterio sigue pendiente hasta inspeccionar su resultado en CI; no equivale a completar instalación, actualización o desinstalación de la v1.
 
+El instalador del ejecutor ya puede completar prefijos exactos después de una interrupción y comprobarse desde su propia versión instalada. El arnés local interrumpe archivos, manifiesto y marcador, rechaza datos diferentes y comprueba que una actualización crea otra carpeta sin modificar la anterior. La gestión unificada de la instalación y la retirada permanecen pendientes. [Procedimiento y evidencia](INSTALACION.md).
+
 En menos de dos minutos, una persona debe poder elegir una carpeta, elegir el disco de respaldo y entender qué va a ocurrir. Debe poder recuperar un archivo desde la misma app sin saber qué es un manifiesto, un hash o un comando.
 
 FolderTwin protege carpetas mediante copias locales que el usuario puede ejecutar bajo demanda o programar. El nombre evoca una segunda copia; el producto también contempla versiones recuperables y no se limita al espejo. El disco de destino puede estar dentro del equipo o conectado a él. Una copia en el mismo disco físico no protege frente al fallo de ese disco.
