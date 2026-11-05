@@ -2,7 +2,7 @@
 
 *Copias locales. Versiones recuperables.*
 
-App sencilla de respaldo para Windows. La alfa permite elegir carpetas, copiar, verificar y restaurar datos sintéticos en un espacio de pruebas. El uso con datos personales queda para el piloto.
+App sencilla de respaldo para Windows. La alfa permite elegir carpetas, copiar, verificar y restaurar en un espacio de pruebas. La alfa y el piloto controlado usan datos sintéticos.
 
 ## Leer primero
 
@@ -30,7 +30,7 @@ Elige un nombre nuevo para cada compilación. El script guarda los archivos inte
 
 C# + .NET 10 LTS + WPF con tema Fluent, APIs de archivos de Windows y Programador de tareas. Una interfaz y un ejecutor sin ventana comparten la misma lógica. Sin Electron, servicio remoto ni IA necesaria para funcionar. SQLite en disco fijo local solo para índice/estado; objetos, manifiestos JSONL duplicados y diario recuperable en el destino.
 
-Primero comprobar copia y restauración en carpetas desechables. Después versionado con objetos por contenido SHA-256 y programación. El espejo y la limpieza se incorporan cuando sus protecciones hayan pasado pruebas de interrupción. La interfaz sencilla no debe ocultar fallos ni archivos omitidos; los archivos solo disponibles en la nube no se descargan automáticamente.
+El laboratorio incluye copia inicial, restauración, versionado con objetos SHA-256, programación, espejo protegido y retención manual. La interfaz muestra los fallos y archivos omitidos. Los archivos detectados como solo disponibles en la nube quedan para revisión.
 
 Con el SDK de .NET 10, ejecuta `dotnet run --project experiments/CopyProbe` en Windows. El experimento genera sus propios datos temporales y comprueba copia, flush, verificación SHA-256 y restauración. Incluye fallos inyectados, archivos ocupados, corrupción y recuperación de una copia interrumpida a partir de su registro en disco. GitHub Actions ejecuta las mismas comprobaciones. El alcance actual se limita a datos sintéticos en un volumen.
 

@@ -8,7 +8,7 @@ La [guía del piloto](PILOTO.md) incluye el procedimiento de observación y los 
 2. Crea tres subcarpetas directas y usa una como origen. Coloca unos archivos sintéticos y una subcarpeta vacía en ella. Deja vacíos el destino y la carpeta de restauración.
 3. Selecciona origen y destino, pulsa **Analizar carpetas** y revisa el recuento, los bytes y el espacio disponible. Pulsa **Copiar y verificar**.
 4. Cuando confirme el respaldo, usa **Verificar respaldo**. Para recuperar, pulsa **Restaurar y verificar** y elige la subcarpeta vacía. Comprueba que se abren los archivos restaurados y que aparecen las carpetas esperadas.
-5. Cierra la ventana y vuelve a abrirla. En **Abrir espacio**, selecciona la carpeta temporal indicada durante la prueba. Usa **Abrir trabajo** y elige el destino. Comprueba que el historial y el estado del trabajo siguen disponibles.
+5. Cierra la ventana y vuelve a abrirla. En **Abrir espacio**, selecciona el espacio registrado durante la prueba. Usa **Abrir trabajo** y elige el destino. Comprueba que el historial y el estado del trabajo siguen disponibles.
 
 Conserva el espacio si hay un problema y anota el mensaje, la operación y el commit de la compilación. Usa solo archivos de prueba y carpetas desechables. Los nuevos espacios quedan bajo `%LocalAppData%\FolderTwin-Lab\workspaces` y se conservan al cerrar. Las sesiones temporales anteriores también pueden reabrirse.
 

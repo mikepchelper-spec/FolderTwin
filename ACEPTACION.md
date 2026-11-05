@@ -59,7 +59,7 @@ Estado revisado desde `718391c`. Esta matriz distingue pruebas de software con d
 
 | Requisito | Evidencia actual | Pendiente |
 |---|---|---|
-| Distribución portable reproducible y runtime incluido | Workflow `copy-probe.yml`: dos árboles limpios, SHA256SUMS idénticos, WPF y Programador desde paquete | Repetir para el estado final, conservar artefacto y commit. |
+| Distribución portable reproducible y runtime incluido | Workflow `copy-probe.yml`: dos árboles limpios, SHA256SUMS idénticos, WPF y Programador desde paquete | GitHub publica el artefacto del commit de `main` cuando termina la aceptación completa. Para iniciar el piloto, guarda el identificador y el manifiesto SHA-256 del artefacto de ese commit. [Resultados de Windows](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml). |
 | Disco lleno, reconexión y sustitución | Laboratorio de volumen desechable en Windows | Validado con VHDX, aparte de las comprobaciones pendientes en USB físico. [Ejecución](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41958969957). |
 | Instalación, configuración, copia, recuperación e incidencias | PILOTO, ALFA, ESPEJO, VERSIONES y RETENCION | Guía incluida en el paquete. Define 7–14 días de observación, restauraciones, diagnóstico y detención. [Compilación portable](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41957255606). |
 | Limpieza de repo, privacidad y conservación de cambios del usuario | Estado inicial limpio; AGENTS exige revisión previa a publicar | Revisar en cada hito y al cierre. Artefactos fuera del repositorio. |
