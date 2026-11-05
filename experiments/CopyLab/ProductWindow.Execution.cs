@@ -34,6 +34,8 @@ public partial class ProductWindow
         var job = (JobList.SelectedItem as JobRow)?.Job;
         bool executing = job is not null && IsJobRunning(job.Id);
         bool available = !busy && job is not null && !executing;
+        SelectedJobTitle.Text = job?.Options.Name ?? "Selecciona un trabajo";
+        SelectedJobDetails.Visibility = job is null ? Visibility.Collapsed : Visibility.Visible;
         RecoverJobButton.IsEnabled = available;
         BackupJobButton.IsEnabled = available && job is { Enabled: true, Retired: false };
         SaveSettingsButton.IsEnabled = available;

@@ -102,6 +102,9 @@ public partial class ProductWindow
             (run.Restore is { } restore ? "\nCarpeta revisada · " + Path.Combine(restore.Target.Parent.VolumePath, restore.Target.FolderName) : "") +
             (run.Result?.RelativePath is { } path ? "\n" + path : "")).ToArray();
         PauseRunButton.IsEnabled = CancelRunButton.IsEnabled = !busy && active is not null;
+        RunControlsPanel.Visibility = active is null ? Visibility.Collapsed : Visibility.Visible;
+        OperationStatusText.Text = active?.Progress is { } current ?
+            Phase(current.Work.Phase) + $" · {current.Work.Processed:N0}/{current.Work.Total:N0}" + (current.Paused ? " · Pausado" : "") : "";
         PauseRunButton.Content = active?.Progress?.Paused == true ? "_Continuar" : "_Pausar";
         RunProgress.Visibility = active is null ? Visibility.Collapsed : Visibility.Visible;
         RunProgress.IsIndeterminate = active?.Progress?.Paused != true && active?.Progress?.Work.Total is not > 0;

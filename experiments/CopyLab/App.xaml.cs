@@ -11,6 +11,7 @@ public partial class App : Application
         bool indexScale = e.Args is ["--index-scale"];
         bool scheduleSmoke = e.Args is ["--schedule-smoke"];
         bool productPreview = e.Args is ["--product-preview"];
+        bool productSyntheticPreview = e.Args is ["--product-synthetic-preview"] or ["--product-synthetic-preview", "compact"] or ["--product-synthetic-preview", "light"];
         bool productSmoke = e.Args is ["--product-smoke"];
         bool productScheduleSmoke = e.Args is ["--product-schedule-smoke"];
         bool heldProductChild = e.Args is ["--held-product-child", _, _];
@@ -22,7 +23,7 @@ public partial class App : Application
         bool productScheduled = e.Args is ["--run-scheduled-product-job", _, _];
         bool productWorker = productScheduled || e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _] or ["--restore-product-job", _, _, _] or ["--review-product-mirror", _, _] or ["--review-product-pending", _, _] or ["--abandon-product-version", _, _, _];
         bool worker = productWorker || scheduled || e.Args is ["--run-version-job", _, _];
-        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !heldMirrorChild && !heldAbandonChild && !productScheduleSmoke)
+        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !productSyntheticPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !heldMirrorChild && !heldAbandonChild && !productScheduleSmoke)
         {
             Shutdown(2);
             return;
@@ -77,6 +78,11 @@ public partial class App : Application
                 ShutdownMode = ShutdownMode.OnMainWindowClose;
                 product.Show();
                 await product.InitializeAsync();
+                return;
+            }
+            if (productSyntheticPreview)
+            {
+                await ProductWindow.OpenSyntheticPreviewAsync(e.Args.Length == 2 ? e.Args[1] : null);
                 return;
             }
             if (scheduleSmoke)

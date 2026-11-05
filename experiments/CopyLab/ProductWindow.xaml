@@ -3,8 +3,13 @@
 <Window x:Class="CopyLab.ProductWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="FolderTwin · Trabajos" Width="760" Height="620" MinWidth="440" MinHeight="420"
+        Title="FolderTwin · Trabajos" Width="1040" Height="740" MinWidth="600" MinHeight="500"
         WindowStartupLocation="CenterScreen" Language="es-CO">
+    <Window.Resources>
+        <Style x:Key="NamedDateChoice" TargetType="ComboBoxItem">
+            <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />
+        </Style>
+    </Window.Resources>
     <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -21,8 +26,13 @@
         </StackPanel>
 
         <Grid Grid.Row="1">
-            <DockPanel x:Name="JobListPanel">
-                <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+            <Grid x:Name="JobListPanel">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <WrapPanel Margin="0,0,0,12">
                     <Button x:Name="NewJobButton" Content="_Nuevo trabajo" Click="NewJobClick" Margin="0,0,8,4" />
                     <Button x:Name="RefreshJobsButton" Content="Act_ualizar" Click="RefreshJobsClick" Margin="0,0,8,4" />
                     <Button x:Name="ImportConfigurationButton" Content="_Importar configuración" Click="ImportConfigurationClick" Margin="0,0,8,4" />
@@ -30,19 +40,51 @@
                     <Button x:Name="ResumeRegistrationButton" Content="_Reanudar registro" Click="ResumeRegistrationClick"
                             IsEnabled="False" Margin="0,0,8,4" />
                 </WrapPanel>
-                <TextBlock x:Name="EmptyJobsText" DockPanel.Dock="Top" Text="Crea un trabajo para guardar su origen, destino y modo."
+                <TextBlock x:Name="EmptyJobsText" Grid.Row="1" Text="Crea un trabajo para guardar su origen, destino y modo."
                            TextWrapping="Wrap" Margin="0,4,0,12" />
-                <ScrollViewer DockPanel.Dock="Bottom" MaxHeight="270" VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled" Margin="0,12,0,0">
+                <Grid x:Name="JobWorkspace" Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="280" />
+                        <ColumnDefinition Width="20" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="0" />
+                        <RowDefinition Height="0" />
+                    </Grid.RowDefinitions>
+                <ListBox x:Name="JobList" SelectionChanged="JobSelected"
+                         AutomationProperties.Name="Trabajos guardados y registros pendientes"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />
+                            <Setter Property="AutomationProperties.HelpText" Value="{Binding Detail}" />
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="4">
+                                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <ScrollViewer x:Name="JobDetailsScroll" Grid.Column="2" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
-                        <TextBlock x:Name="SelectedJobText" TextWrapping="Wrap" />
-                        <TextBlock x:Name="ScheduleStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
-                        <TextBlock x:Name="SpaceStatusText" TextWrapping="Wrap" Margin="0,4,0,0" />
+                        <TextBlock x:Name="SelectedJobTitle" Text="Selecciona un trabajo" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap" AutomationProperties.HeadingLevel="Level2" />
+                        <StackPanel x:Name="SelectedJobDetails" Visibility="Collapsed">
                         <WrapPanel Margin="0,8,0,0">
                             <Button x:Name="BackupJobButton" Content="_Respaldar ahora" Click="BackupJobClick" IsEnabled="False" Margin="0,0,8,4" />
                             <Button x:Name="RecoverJobButton" Content="Re_cuperar archivos" Click="RecoverJobClick" IsEnabled="False" Margin="0,0,8,4" />
                             <Button x:Name="ExportConfigurationButton" Content="_Exportar configuración" Click="ExportConfigurationClick" IsEnabled="False" Margin="0,0,8,4" />
                         </WrapPanel>
+                        <TextBlock x:Name="RuntimeStatusText" TextWrapping="Wrap" Margin="0,12,0,0" />
+                        <TextBlock x:Name="ScheduleStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        <TextBlock x:Name="SpaceStatusText" TextWrapping="Wrap" Margin="0,4,0,8" />
+                        <Expander Header="Carpetas del trabajo" Margin="0,4,0,4"><TextBlock x:Name="SelectedJobText" TextWrapping="Wrap" /></Expander>
                         <TextBlock Text="La pausa y la cancelación se atienden entre archivos o pasos recuperables. Puedes cerrar la ventana mientras el ejecutor sigue trabajando."
                                    TextWrapping="Wrap" Margin="0,4,0,4" />
                         <Expander Header="Historial e incidencias" Margin="0,4,0,4">
@@ -91,7 +133,7 @@
                                 <TextBlock x:Name="ProductRetentionText" TextWrapping="Wrap" Margin="0,8,0,8" AutomationProperties.LiveSetting="Polite" />
                                 <CheckBox x:Name="AcceptProductRetention" Content="He revisado las fechas que expirarán" Checked="ProductRetentionChoiceChanged" Unchecked="ProductRetentionChoiceChanged" Margin="0,0,0,8" />
                                 <Button x:Name="ApplyProductRetentionButton" Content="Mover a _cuarentena" Click="ApplyProductRetentionClick" IsEnabled="False" HorizontalAlignment="Left" />
-                                <ComboBox x:Name="ProductRetentionChoice" DisplayMemberPath="Label" SelectionChanged="ProductRetentionChoiceChanged" AutomationProperties.Name="Historial de cuarentenas del trabajo" Margin="0,8,0,8" />
+                                <ComboBox x:Name="ProductRetentionChoice" DisplayMemberPath="Label" ItemContainerStyle="{StaticResource NamedDateChoice}" SelectionChanged="ProductRetentionChoiceChanged" AutomationProperties.Name="Historial de cuarentenas del trabajo" Margin="0,8,0,8" />
                                 <WrapPanel>
                                     <Button x:Name="ResumeProductRetentionButton" Content="Reanudar movimientos" Click="ResumeProductRetentionClick" IsEnabled="False" Margin="0,0,8,4" />
                                     <Button x:Name="UndoProductRetentionButton" Content="Deshacer cuarentena" Click="UndoProductRetentionClick" IsEnabled="False" Margin="0,0,8,4" />
@@ -107,21 +149,11 @@
                             <Button x:Name="ApplyMirrorButton" Content="Aplicar _espejo revisado" Click="ApplyMirrorClick"
                                     HorizontalAlignment="Left" Margin="0,8,0,0" />
                         </StackPanel>
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
-                <ListBox x:Name="JobList" SelectionChanged="JobSelected"
-                         AutomationProperties.Name="Trabajos guardados y registros pendientes"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Margin="4" AutomationProperties.Name="{Binding Label}">
-                                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" Margin="0,4,0,0" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-            </DockPanel>
+                </Grid>
+            </Grid>
 
             <ScrollViewer x:Name="ImportPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
@@ -150,7 +182,7 @@
                     <TextBlock Text="Recuperar archivos" FontSize="20" FontWeight="SemiBold"
                                AutomationProperties.HeadingLevel="Level2" />
                     <Label Content="_Fecha del respaldo" Target="{Binding ElementName=RecoveryDates}" />
-                    <ComboBox x:Name="RecoveryDates" DisplayMemberPath="Label" SelectionChanged="RecoveryDateChanged"
+                    <ComboBox x:Name="RecoveryDates" DisplayMemberPath="Label" ItemContainerStyle="{StaticResource NamedDateChoice}" SelectionChanged="RecoveryDateChanged"
                               AutomationProperties.Name="Fecha del respaldo" />
                     <TextBlock x:Name="RecoverySummary" TextWrapping="Wrap" Margin="0,8,0,8" />
                     <TextBlock x:Name="RecoveryComparison" TextWrapping="Wrap" Margin="0,0,0,8" />
@@ -170,6 +202,11 @@
                              AutomationProperties.Name="Carpetas y archivos recuperables"
                              SelectionChanged="RecoveryFileSelected" MouseDoubleClick="OpenRecoveryFolderClick"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding FullLabel}" />
+                            </Style>
+                        </ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding FullLabel}" TextWrapping="Wrap" />
@@ -242,17 +279,17 @@
             </DockPanel>
         </Grid>
 
-        <ScrollViewer Grid.Row="2" MaxHeight="180" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,12,0,0">
-            <StackPanel>
-                <TextBlock x:Name="RuntimeStatusText" TextWrapping="Wrap" />
+        <StackPanel Grid.Row="2" Margin="0,12,0,0">
+                <TextBlock x:Name="OperationStatusText" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
                 <ProgressBar x:Name="RunProgress" Height="4" Margin="0,8,0,0" Visibility="Collapsed"
                              AutomationProperties.Name="Progreso de la operación activa" />
-                <WrapPanel Margin="0,8,0,0">
+                <WrapPanel x:Name="RunControlsPanel" Visibility="Collapsed" Margin="0,8,0,0">
                     <Button x:Name="PauseRunButton" Content="_Pausar" Click="PauseRunClick" IsEnabled="False" Margin="0,0,8,4" />
                     <Button x:Name="CancelRunButton" Content="_Cancelar ejecución" Click="CancelRunClick" IsEnabled="False" Margin="0,0,8,4" />
                 </WrapPanel>
-                <TextBlock x:Name="StatusText" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
-            </StackPanel>
-        </ScrollViewer>
+                <ScrollViewer MaxHeight="64" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <TextBlock x:Name="StatusText" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                </ScrollViewer>
+        </StackPanel>
     </Grid>
 </Window>

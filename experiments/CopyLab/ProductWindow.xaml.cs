@@ -66,6 +66,8 @@ public partial class ProductWindow : Window
             return registry.OpenIndexScope();
         });
         InitializeComponent();
+        SizeChanged += (_, _) => UpdateWorkspaceLayout();
+        UpdateWorkspaceLayout();
         runtimeTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background,
             async (_, _) => await PollRuntimeAsync(), Dispatcher);
         runtimeTimer.Stop();
@@ -76,6 +78,19 @@ public partial class ProductWindow : Window
     {
         await RunAsync(async () => { await LoadListAsync(); await RefreshRuntimeAsync(); });
         runtimeTimer.Start();
+    }
+
+    private void UpdateWorkspaceLayout()
+    {
+        bool wide = (ActualWidth > 0 ? ActualWidth : Width) >= 900;
+        JobWorkspace.ColumnDefinitions[0].Width = wide ? new GridLength(280) : new GridLength(1, GridUnitType.Star);
+        JobWorkspace.ColumnDefinitions[1].Width = new GridLength(wide ? 20 : 0);
+        JobWorkspace.ColumnDefinitions[2].Width = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        JobWorkspace.RowDefinitions[1].Height = new GridLength(wide ? 0 : 12);
+        JobWorkspace.RowDefinitions[0].MinHeight = wide ? 0 : 80;
+        JobWorkspace.RowDefinitions[2].Height = wide ? new GridLength(0) : new GridLength(2, GridUnitType.Star);
+        Grid.SetColumn(JobDetailsScroll, wide ? 2 : 0);
+        Grid.SetRow(JobDetailsScroll, wide ? 0 : 2);
     }
 
     private void NewJobClick(object sender, RoutedEventArgs e)
@@ -235,6 +250,7 @@ public partial class ProductWindow : Window
 
     private async Task LoadListAsync()
     {
+        Guid? previous = (JobList.SelectedItem as JobRow)?.Id;
         var list = await Task.Run(() =>
         {
             using var registry = openRegistry();
@@ -246,6 +262,7 @@ public partial class ProductWindow : Window
             .. list.Pending.Select(id => new JobRow(id, "Registro pendiente",
                 $"Selecciona Reanudar registro para continuar · {id.ToString("N")[..8]}", true))];
         JobList.ItemsSource = rows;
+        JobList.SelectedItem = rows.FirstOrDefault(row => row.Id == previous) ?? rows.FirstOrDefault();
         EmptyJobsText.Visibility = rows.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         SetStatus(list.Unreadable > 0 ? $"{list.Unreadable} registros necesitan revisión." : "");
     }

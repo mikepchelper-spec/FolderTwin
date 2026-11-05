@@ -232,6 +232,7 @@ public partial class ProductWindow
                 await reopened.InitializeAsync();
                 Check(reopened.JobList.Items.Count == 3 && reopened.EmptyJobsText.Visibility == Visibility.Collapsed,
                     "The reopened window lost jobs when the source was unavailable.");
+                await reopened.CheckDesktopLayoutAsync();
             }
             finally { reopened.Close(); }
             Console.Error.WriteLine("PASS WPF executes and recovers all three modes, preserves cumulative extras, retries busy files and reviews mass mirror changes.");

@@ -19,6 +19,8 @@ La vista previa de la v1 registra y ejecuta los tres modos desde WPF, verifica e
 
 La vista previa permite revisar y conservar un plan completo de versionado que ya no coincida con el origen, sin presentarlo como respaldo correcto ni borrar datos. Sus trabajadores y pruebas WPF locales cubren pausa, cancelación, cierre de interfaz y reanudación sin origen. La retención revisa los objetos parciales con cuarentena. Los casos de acumulativo, espejo y borradores todavía faltan. [Recorrido y límites](experiments/CopyProbe/PENDIENTES.md).
 
+El panel de producto separa lista y detalles, y los apila en ventanas estrechas. Hay una sesión sintética reproducible para revisar el escritorio sin abrir la configuración habitual. La observación local cubrió los temas y parte de la navegación; el lector de pantalla, el escalado y el recorrido del paquete final siguen pendientes. [Prueba de interfaz](experiments/CopyLab/INTERFAZ.md).
+
 ## Alfa portable de Windows
 
 Abre un resultado de [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml) para `main` y descarga el artefacto `FolderTwin-alpha-win-x64-…`. Extrae todo el contenido y abre `CopyLab.exe`. El paquete incluye .NET, el código fuente del commit y la [guía de la alfa](ALFA.md) para trabajar con datos sintéticos.
