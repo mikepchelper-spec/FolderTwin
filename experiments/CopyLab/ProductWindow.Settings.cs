@@ -18,6 +18,7 @@ public partial class ProductWindow
         scheduleObserved = 0;
         ScheduleStatusText.Text = "";
         SpaceStatusText.Text = "";
+        ResetProductRetention();
     }
 
     private void ConfigureSchedule(string location, Guid id, bool remove = false)

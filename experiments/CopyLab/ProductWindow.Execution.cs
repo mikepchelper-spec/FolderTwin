@@ -39,6 +39,7 @@ public partial class ProductWindow
         SelectedJobText.Text = job is null ? "" : $"Origen\n{job.Source.VolumePath}\nDestino\n{job.Destination.LastVolumePath}";
         if (mirrorJobId != job?.Id) ResetProductActions();
         RefreshRuntimeDisplay();
+        RefreshProductRetentionActions();
     }
 
     private void BackupJobClick(object sender, RoutedEventArgs e)
@@ -178,19 +179,21 @@ public partial class ProductWindow
         recoveryComparisonId = loaded.previousId;
         recoveryIndexKey = loaded.Key;
         recoveryBrowser = loaded.Fallback;
-        VerifyPointButton.IsEnabled = ReviewRestoreButton.IsEnabled = SearchRecoveryButton.IsEnabled = true;
+        SearchRecoveryButton.IsEnabled = true;
+        VerifyPointButton.IsEnabled = ReviewRestoreButton.IsEnabled = !row.Point.Expired;
         RecoveryOnlyChanges.IsEnabled = loaded.previousId is not null;
         RecoveryComparison.Text = loaded.previousId is null ? "Sin un punto anterior disponible para comparar." :
             $"Comparando {row.Label} con {previous!.Label}. Los eliminados se recuperan desde el punto anterior.";
         RecoverySummary.Text = $"{loaded.current.Files.Length:N0} archivos · {loaded.current.Directories.Length:N0} carpetas. " +
-            "La recuperación crea una carpeta nueva." + (loaded.current.Degraded ? " Solo una réplica del catálogo está íntegra." : "");
+            (row.Point.Expired ? "Punto expirado. Deshaz su cuarentena antes de recuperarlo." : "La recuperación crea una carpeta nueva.") +
+            (loaded.current.Degraded ? " Solo una réplica del catálogo está íntegra." : "");
         await LoadRecoveryPageAsync();
         SetStatus("Busca un archivo o abre una carpeta para revisar su contenido." + IndexNote());
     }
 
     private void VerifyPointClick(object sender, RoutedEventArgs e)
     {
-        if (busy || recoveryJob is not { } job || RecoveryDates.SelectedItem is not RecoveryDate row) return;
+        if (busy || recoveryJob is not { } job || RecoveryDates.SelectedItem is not RecoveryDate { Point.Expired: false } row) return;
         Start(async () =>
         {
             await StartWorkerAsync(job, location => ProductWorker.StartVerification(location, job.Id, row.Point.Id));
@@ -201,7 +204,7 @@ public partial class ProductWindow
 
     private void ReviewRestore(string? relativeFile, bool fromPrevious)
     {
-        if (busy || recoveryJob is not { } job || RecoveryDates.SelectedItem is not RecoveryDate row ||
+        if (busy || recoveryJob is not { } job || RecoveryDates.SelectedItem is not RecoveryDate row || row.Point.Expired && !fromPrevious ||
             ChooseFolder("Elige dónde crear la carpeta recuperada") is not { } parentPath) return;
         Start(async () =>
         {

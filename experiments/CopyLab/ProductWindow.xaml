@@ -71,6 +71,28 @@
                                 </WrapPanel>
                             </StackPanel>
                         </Expander>
+                        <Expander x:Name="ProductRetentionPanel" Header="Retención manual y cuarentena" Expanded="ProductRetentionExpanded" IsEnabled="False" Margin="0,4,0,4">
+                            <StackPanel>
+                                <TextBlock Text="Revisa qué fechas expirarán antes de mover objetos. La cuarentena conserva los datos y todavía no libera espacio. La política usa calendario UTC." TextWrapping="Wrap" />
+                                <WrapPanel Margin="0,8,0,8">
+                                    <StackPanel Margin="0,0,8,4"><Label Content="Días" Target="{Binding ElementName=ProductRetentionDays}" /><TextBox x:Name="ProductRetentionDays" Text="30" Width="60" TextChanged="ProductRetentionPolicyChanged" AutomationProperties.Name="Días de retención diaria" /></StackPanel>
+                                    <StackPanel Margin="0,0,8,4"><Label Content="Semanas" Target="{Binding ElementName=ProductRetentionWeeks}" /><TextBox x:Name="ProductRetentionWeeks" Text="8" Width="60" TextChanged="ProductRetentionPolicyChanged" AutomationProperties.Name="Semanas de retención semanal" /></StackPanel>
+                                    <StackPanel Margin="0,0,8,4"><Label Content="Meses" Target="{Binding ElementName=ProductRetentionMonths}" /><TextBox x:Name="ProductRetentionMonths" Text="12" Width="60" TextChanged="ProductRetentionPolicyChanged" AutomationProperties.Name="Meses de retención mensual" /></StackPanel>
+                                    <StackPanel Margin="0,0,8,4"><Label Content="Gracia (días)" Target="{Binding ElementName=ProductRetentionGrace}" /><TextBox x:Name="ProductRetentionGrace" Text="7" Width="60" TextChanged="ProductRetentionPolicyChanged" AutomationProperties.Name="Días de gracia antes de purgar" /></StackPanel>
+                                </WrapPanel>
+                                <Button x:Name="PreviewProductRetentionButton" Content="Revisar _retención" Click="PreviewProductRetentionClick" HorizontalAlignment="Left" />
+                                <TextBlock x:Name="ProductRetentionText" TextWrapping="Wrap" Margin="0,8,0,8" AutomationProperties.LiveSetting="Polite" />
+                                <CheckBox x:Name="AcceptProductRetention" Content="He revisado las fechas que expirarán" Checked="ProductRetentionChoiceChanged" Unchecked="ProductRetentionChoiceChanged" Margin="0,0,0,8" />
+                                <Button x:Name="ApplyProductRetentionButton" Content="Mover a _cuarentena" Click="ApplyProductRetentionClick" IsEnabled="False" HorizontalAlignment="Left" />
+                                <ComboBox x:Name="ProductRetentionChoice" DisplayMemberPath="Label" SelectionChanged="ProductRetentionChoiceChanged" AutomationProperties.Name="Historial de cuarentenas del trabajo" Margin="0,8,0,8" />
+                                <WrapPanel>
+                                    <Button x:Name="ResumeProductRetentionButton" Content="Reanudar movimientos" Click="ResumeProductRetentionClick" IsEnabled="False" Margin="0,0,8,4" />
+                                    <Button x:Name="UndoProductRetentionButton" Content="Deshacer cuarentena" Click="UndoProductRetentionClick" IsEnabled="False" Margin="0,0,8,4" />
+                                </WrapPanel>
+                                <CheckBox x:Name="AcceptProductPurge" Content="Entiendo que la purga borra datos y no se puede deshacer" Checked="ProductRetentionChoiceChanged" Unchecked="ProductRetentionChoiceChanged" Margin="0,8,0,8" />
+                                <Button x:Name="PurgeProductRetentionButton" Content="Purgar tras el plazo de gracia" Click="PurgeProductRetentionClick" IsEnabled="False" HorizontalAlignment="Left" />
+                            </StackPanel>
+                        </Expander>
                         <StackPanel x:Name="MirrorReviewPanel" Visibility="Collapsed" Margin="0,8,0,0">
                             <TextBlock x:Name="MirrorReviewText" TextWrapping="Wrap" />
                             <CheckBox x:Name="AcceptEmptySource" Content="He revisado que el origen esté vacío" Margin="0,8,0,0" />

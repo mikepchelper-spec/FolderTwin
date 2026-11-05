@@ -108,7 +108,8 @@ public partial class ProductWindow
         if (OpenRecoveryFolderButton is null || ReviewFileRestoreButton is null) return;
         OpenRecoveryFolderButton.IsEnabled = recoveryCatalogs is not null && RecoveryFiles.SelectedItem is VersionEntry { IsDirectory: true };
         ReviewFileRestoreButton.IsEnabled = recoveryCatalogs is not null && RecoveryFiles.SelectedItem is VersionEntry { IsDirectory: false } entry &&
-            (entry.Change != VersionChange.Removed || recoveryComparisonId is not null);
+            (entry.Change == VersionChange.Removed ? recoveryComparisonId is not null :
+                RecoveryDates.SelectedItem is RecoveryDate { Point.Expired: false });
     }
 
     private void ReviewFileRestoreClick(object sender, RoutedEventArgs e)

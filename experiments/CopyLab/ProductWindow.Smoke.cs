@@ -239,6 +239,7 @@ public partial class ProductWindow
             Console.Error.WriteLine("PASS WPF edits name and hour, rejects invalid time, disables, retires and reactivates while keeping recovery and data identity; native schedule operations are injected separately.");
             await RunWorkerSmokeAsync();
             await ProductTrayProbe.RunAsync();
+            await RunProductRetentionSmokeAsync();
         }
         finally
         {
