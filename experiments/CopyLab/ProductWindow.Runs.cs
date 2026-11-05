@@ -109,8 +109,8 @@ public partial class ProductWindow
         RunHistoryList.ItemsSource = history.Runs.Take(30).Select(run =>
             $"Intento {run.Intent.Sequence} · {run.Intent.StartedUtc.ToLocalTime():g} · " +
             (run.Result is { } result ? ResultText(run, result) : run.Running ? "En ejecución" : "Interrumpido") +
-            (run.Restore is { } restore ? "\nCarpeta revisada · " + Path.Combine(restore.Target.Parent.VolumePath, restore.Target.FolderName) : "") +
-            (run.Result?.RelativePath is { } path ? "\n" + path : "")).ToArray();
+            (run.Restore is { } restore && run.Result?.State != ProductRunState.Confirmed ?
+                "\nCarpeta revisada · " + Path.Combine(restore.Target.Parent.VolumePath, restore.Target.FolderName) : "")).ToArray();
         PauseRunButton.IsEnabled = CancelRunButton.IsEnabled = !busy && active is not null;
         RunControlsPanel.Visibility = active is null ? Visibility.Collapsed : Visibility.Visible;
         OperationStatusText.Text = active?.Progress is { } current ?
@@ -150,7 +150,7 @@ public partial class ProductWindow
         WorkPhase.Publishing => "Publicando", WorkPhase.Preparing => "Preparando trabajo", _ => "Recuperando"
     };
 
-    private static string ResultText(ProductRunView run, ProductRunResult result) => result.State switch
+    private static string ResultText(ProductRunView run, ProductRunResult result) => (result.State switch
     {
         ProductRunState.Confirmed when run.Intent.Operation == ProductRunOperation.ReviewAbandon =>
             "Revisión terminada. Decide si conservar el plan incompleto y permitir uno nuevo; no se creó un respaldo.",
@@ -171,11 +171,9 @@ public partial class ProductWindow
         ProductRunState.Cancelled => "Operación cancelada en un límite recuperable. Reintenta para continuar el trabajo pendiente.",
         ProductRunState.WaitingForSource => "El origen no está disponible. Reconéctalo y reintenta.",
         ProductRunState.WaitingForDestination => "El destino no está disponible. Reconéctalo y reintenta.",
-        ProductRunState.Busy => "Un archivo o el destino está en uso. Cierra la aplicación que lo usa o espera a que termine la otra operación. Luego reintenta." +
-            (result.RelativePath is { } busyPath ? "\n" + busyPath : ""),
-        _ => (result.Detail ?? "La operación necesita revisión antes de continuar.") +
-            (result.RelativePath is { } path ? "\n" + path : "")
-    };
+        ProductRunState.Busy => "Un archivo o el destino está en uso. Cierra la aplicación que lo usa o espera a que termine la otra operación. Luego reintenta.",
+        _ => result.Detail ?? "La operación necesita revisión antes de continuar."
+    }) + (result.RelativePath is { } path ? "\n" + path : "");
 
     private void PauseRunClick(object sender, RoutedEventArgs e) => SendRunAction(cancel: false);
     private void CancelRunClick(object sender, RoutedEventArgs e) => SendRunAction(cancel: true);

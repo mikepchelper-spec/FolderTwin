@@ -1,6 +1,6 @@
 # Revisión del escritorio de producto
 
-La ventana de producto sigue siendo una vista previa. Esta evidencia cubre la distribución del panel y algunos controles de accesibilidad; no aprueba por sí sola V1-10 ni EXT-05.
+La ventana de producto sigue siendo una vista previa. Esta evidencia cubre la distribución del panel y parte del recorrido de escritorio. V1-10 y las comprobaciones de accesibilidad EXT-05A, EXT-05B y EXT-05C conservan sus propios criterios.
 
 El paquete ofrece `FolderTwin.exe` como entrada pública. Sin argumentos abre los trabajos de producto; el ejecutable interno `CopyLab.exe` conserva sus protocolos y también abre producto sin argumentos. **Respaldos de alfa** y el argumento de desarrollo `--lab` dan acceso explícito al laboratorio. `--product-startup-smoke` está restringido al runner Windows hospedado: abre el ejecutable público sin argumentos con un perfil vacío, comprueba el título de trabajos y su cierre sin crear trabajos. Este ensayo comprueba el arranque, no todo el recorrido de instalación.
 
@@ -18,7 +18,7 @@ En Windows 11, el paquete local de desarrollo abrió vacío en tema oscuro. Se c
 
 Una segunda sesión vacía del paquete local con el código de `3128747` creó acumulativo y espejo desde los mismos selectores. Enter y Tab recorrieron el asistente y las flechas cambiaron el modo. En acumulativo se completaron copia, verificación y restauración. En espejo se observó la revisión de un archivo y una carpeta nuevos antes de aplicar, luego se verificó y restauró el punto. Cada modo creó una salida distinta con el mismo SHA-256 y la carpeta vacía. Las acciones de recuperación se mantuvieron visibles durante la revisión. El SHA-256 del manifiesto de ese paquete local fue `a12a6e2670d31bd63e56795774cfe2c4262aaa14ee9efa5331aba67aaf93b291`. Este recorrido usó configuración aislada y horarios a demanda.
 
-La revisión del espejo inicialmente aparecía después de retención y ajustes. Ahora está junto a las acciones del trabajo. El arnés verifica que el resumen y **Aplicar espejo revisado** aparezcan dentro del área visible al reabrir un análisis típico con el tamaño normal.
+La revisión del espejo inicialmente aparecía después de retención y ajustes. Ahora está junto a las acciones del trabajo. En el paquete local de `050da68` se observaron el resumen y **Aplicar espejo revisado** sin desplazar el panel. Se repitió además el bloqueo de `Notas.txt`, el aviso en español, **Reintentar respaldo** y la conservación del intento fallido en el historial. La ruta aparecía dos veces en la entrada del historial. La presentación usa ahora el mismo formato de resultado para el pie y el historial, con una sola línea para la ruta.
 
 En ese recorrido se corrigieron dos problemas de presentación. El aviso de archivo en uso mostraba el error interno en inglés y ahora indica en español cómo reintentar. Las acciones de recuperación quedaban debajo de la lista y se desplazaban al revisar una salida. Ahora la lista se desplaza por separado y las acciones permanecen en el pie del panel. Los arneses cubren el aviso y el pie a tamaño normal y mínimo. La navegación con lector, el escalado de Windows y el recorrido desde un perfil real limpio siguen abiertos.
 

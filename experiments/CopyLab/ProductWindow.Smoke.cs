@@ -114,6 +114,9 @@ public partial class ProductWindow
                     File.WriteAllText(Path.Combine(source, $"archivo {number:D3}.txt"), "datos de página");
                 await Click(window, window.BackupJobButton);
                 Check(store.ListPoints().Length == 2, "Retry did not create the second version.");
+                string busyHistory = window.RunHistoryList.Items.OfType<string>().Single(row => row.Contains("está en uso", StringComparison.Ordinal));
+                Check(busyHistory.Split("datos.txt", StringSplitOptions.None).Length == 2,
+                    "Retry did not retain a single copy of the busy-file path in history.");
                 string beforeDeletion = store.RegisteredGenerations().RegistrationOrder[^1];
                 File.Delete(Path.Combine(source, deleted));
                 await Click(window, window.BackupJobButton);
