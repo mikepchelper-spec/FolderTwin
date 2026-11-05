@@ -63,6 +63,50 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
         return new(status, age, jobs.Jobs.Select(job => job.Id).ToArray(), attention.Distinct().ToArray());
     }
 
+    internal static TraySnapshot ReadProduct(ProductJobRegistry registry)
+    {
+        var list = registry.List();
+        var jobs = list.Jobs.Where(job => job.Enabled && !job.Retired).ToArray();
+        var attention = new List<string>();
+        var dates = new List<DateTimeOffset>();
+        var runnable = new List<Guid>();
+        int busy = 0, pending = 0;
+        if (list.Unreadable != 0 || list.Pending.Length != 0) attention.Add("job-definitions");
+        foreach (var job in jobs)
+        {
+            var history = registry.RunHistory(job.Id);
+            if (history.Unreadable != 0) attention.Add($"{job.Id:N}-history");
+            bool running = history.Runs.Any(run => run.Running);
+            if (running) busy++; else runnable.Add(job.Id);
+            var latest = history.Runs.FirstOrDefault();
+            var result = history.Runs.FirstOrDefault(run => run.Result is not null)?.Result;
+            if (latest is null) pending++;
+            else if (result is not null && result.State != ProductRunState.Confirmed)
+                attention.Add($"{job.Id:N}-{result.State}");
+            else if (latest.Result is null && !running) attention.Add($"{job.Id:N}-interrupted");
+            var confirmed = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Backup &&
+                run.Result?.State == ProductRunState.Confirmed);
+            if (confirmed is null) continue;
+            try
+            {
+                var store = VersionStore.OpenProduct(job);
+                if (store.RegisteredGenerations().Expired.Contains(confirmed.Generation!))
+                { attention.Add($"{job.Id:N}-expired"); continue; }
+                if (store.ReadCatalogs(confirmed.Generation!, null).Current.Degraded)
+                    attention.Add($"{job.Id:N}-replica");
+                dates.Add(confirmed.Result!.FinishedUtc);
+            }
+            catch (Exception error) when (VersionJob.SharingViolation(error)) { if (!running) busy++; }
+            catch (Exception error) when (VersionJob.Expected(error)) { attention.Add($"{job.Id:N}-unavailable"); }
+        }
+        if (dates.Any(date => date > DateTimeOffset.UtcNow.AddMinutes(1))) attention.Add("clock");
+        string status = attention.Count != 0 ? "Hay trabajos o registros que requieren atención." :
+            busy > 0 ? $"{busy} trabajos en curso u ocupados." : pending > 0 ? $"{pending} trabajos aún sin un punto confirmado." :
+            jobs.Length == 0 ? "Sin trabajos habilitados." : $"{jobs.Length} trabajos con su último intento confirmado.";
+        return new(status, dates.Count == 0 ? "Sin respaldo completo consultable." : AgeText(dates.Min()),
+            runnable.ToArray(), attention.Distinct().ToArray());
+    }
+
     private static string AgeText(DateTimeOffset date)
     {
         var age = DateTimeOffset.UtcNow - date;

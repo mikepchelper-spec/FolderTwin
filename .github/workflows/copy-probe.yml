@@ -109,10 +109,10 @@ jobs:
           $schedule.WaitForExit()
           $productSchedule.WaitForExit()
           Get-Content -LiteralPath $scheduleLog
+          Get-Content -LiteralPath $productScheduleLog
           if ($schedule.ExitCode -ne 0) {
             throw "The packaged Windows schedule test exited with $($schedule.ExitCode)."
           }
-          Get-Content -LiteralPath $productScheduleLog
           if ($productSchedule.ExitCode -ne 0) { throw "The packaged product schedule test exited with $($productSchedule.ExitCode)." }
       - name: Upload the verified alpha
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

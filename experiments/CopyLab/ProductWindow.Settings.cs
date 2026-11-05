@@ -15,8 +15,9 @@ public partial class ProductWindow
         EditDailyTime.Text = job?.Options.DailyAt?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "";
         EditEnabled.IsChecked = job?.Enabled == true;
         EditRetired.IsChecked = job?.Retired == true;
-        scheduleObserved = DateTimeOffset.MinValue;
+        scheduleObserved = 0;
         ScheduleStatusText.Text = "";
+        SpaceStatusText.Text = "";
     }
 
     private void ConfigureSchedule(string location, Guid id, bool remove = false)
@@ -37,7 +38,7 @@ public partial class ProductWindow
         {
             SetStatus("Configuración guardada; el horario requiere atención. Usa Reparar horario. " + error.Message);
         }
-        scheduleObserved = DateTimeOffset.MinValue;
+        scheduleObserved = 0;
         await RefreshScheduleAsync();
     }
 
@@ -84,14 +85,31 @@ public partial class ProductWindow
         });
     }
 
-    private DateTimeOffset scheduleObserved;
+    private long scheduleObserved;
     private async Task RefreshScheduleAsync()
     {
-        if (closed || DateTimeOffset.UtcNow - scheduleObserved < TimeSpan.FromSeconds(5)) return;
+        if (closed || scheduleObserved != 0 && Environment.TickCount64 - scheduleObserved < 5000) return;
         var job = (JobList.SelectedItem as JobRow)?.Job;
         if (job is null) return;
-        scheduleObserved = DateTimeOffset.UtcNow;
-        string text = await Task.Run(() =>
+        scheduleObserved = Environment.TickCount64;
+        var observed = await Task.Run(() =>
+        {
+            string space;
+            try
+            {
+                using var target = new VersionScope(job).OpenRegisteredRoot();
+                space = $"Espacio disponible en el destino comprobado · {LabWorkspace.AvailableSpace(target.Root) / (1024d * 1024 * 1024):N1} GiB";
+            }
+            catch (Exception error) when (VersionJob.Expected(error)) { space = "Destino no consultable · " + error.Message; }
+            return (Space: space, Schedule: ReadSchedule());
+        });
+        if (!closed && (JobList.SelectedItem as JobRow)?.Id == job.Id)
+        {
+            ScheduleStatusText.Text = observed.Schedule;
+            SpaceStatusText.Text = observed.Space;
+        }
+
+        string ReadSchedule()
         {
             if (!job.Enabled || job.Retired) return "Horario desactivado · Respaldos conservados";
             if (job.Options.DailyAt is null) return "Ejecución a demanda";
@@ -105,7 +123,6 @@ public partial class ProductWindow
                     "Horario pendiente o modificado · Usa Reparar horario";
             }
             catch (Exception error) when (ProductAutomation.Expected(error)) { return "Revisa el horario · " + error.Message; }
-        });
-        if (!closed && (JobList.SelectedItem as JobRow)?.Id == job.Id) ScheduleStatusText.Text = text;
+        }
     }
 }

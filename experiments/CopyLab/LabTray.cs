@@ -9,7 +9,8 @@ namespace CopyLab;
 
 internal sealed class LabTray : IDisposable
 {
-    private readonly LabWorkspace workspace;
+    private readonly Func<TraySnapshot> read;
+    private readonly Action<Guid> start;
     private readonly Forms.NotifyIcon icon;
     private readonly Forms.ContextMenuStrip menu = new();
     private readonly Forms.ToolStripItem menuRun;
@@ -29,8 +30,23 @@ internal sealed class LabTray : IDisposable
     internal int NotificationCount { get; private set; }
 
     internal LabTray(LabWorkspace workspace, Action openMain, Action exit, bool notifications = true)
+        : this(() => TraySnapshot.Read(workspace), id => LabWorker.Start(workspace, id), openMain, exit, notifications,
+            "FolderTwin · espacio de pruebas") { }
+
+    internal LabTray(Func<ProductJobRegistry> openRegistry, Action openMain, Action exit, bool notifications = true)
+        : this(() => { using var registry = openRegistry(); return TraySnapshot.ReadProduct(registry); },
+            id =>
+            {
+                using var registry = openRegistry();
+                var job = registry.Get(id);
+                if (!job.Enabled || job.Retired || registry.RunHistory(id).Runs.Any(run => run.Running)) return;
+                using var worker = ProductWorker.Start(registry.Location, id);
+            }, openMain, exit, notifications, "FolderTwin") { }
+
+    private LabTray(Func<TraySnapshot> read, Action<Guid> start, Action openMain, Action exit, bool notifications, string iconText)
     {
-        this.workspace = workspace;
+        this.read = read;
+        this.start = start;
         this.notifications = notifications;
         var panel = new StackPanel { Margin = new(20) };
         panel.Children.Add(new TextBlock { Text = "FolderTwin", FontSize = 22, FontWeight = FontWeights.SemiBold, Margin = new(0, 0, 0, 12) });
@@ -58,10 +74,11 @@ internal sealed class LabTray : IDisposable
         menu.Items.Add("Salir", null, (_, _) => exit());
         icon = new Forms.NotifyIcon
         {
-            Text = "FolderTwin · espacio de pruebas", Icon = System.Drawing.SystemIcons.Application,
+            Text = iconText, Icon = System.Drawing.SystemIcons.Application,
             ContextMenuStrip = menu, Visible = true
         };
         icon.MouseClick += async (_, e) => { if (e.Button == Forms.MouseButtons.Left) await ShowAsync(); };
+        icon.BalloonTipClicked += (_, _) => openMain();
         timer.Tick += async (_, _) => await RefreshAsync();
         timer.Start();
     }
@@ -85,10 +102,10 @@ internal sealed class LabTray : IDisposable
         try
         {
             TraySnapshot current;
-            try { current = await Task.Run(() => TraySnapshot.Read(workspace)); }
+            try { current = await Task.Run(read); }
             catch (Exception error) when (VersionJob.Expected(error))
             {
-                current = new("El espacio de pruebas requiere revisión.", "No se pudo consultar el último punto.", [], ["workspace"]);
+                current = new("La configuración requiere revisión.", "No se pudo consultar el último punto.", [], ["workspace"]);
             }
             if (disposed)
                 return;
@@ -123,7 +140,7 @@ internal sealed class LabTray : IDisposable
         try
         {
             foreach (Guid id in snapshot.Jobs)
-                LabWorker.Start(workspace, id);
+                start(id);
             status.Text = "Se solicitó la copia de los trabajos guardados. Consulta su resultado al terminar.";
         }
         catch (Exception error) when (VersionJob.Expected(error))

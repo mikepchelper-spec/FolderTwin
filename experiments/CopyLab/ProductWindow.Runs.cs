@@ -162,6 +162,7 @@ public partial class ProductWindow
     {
         closed = true;
         runtimeTimer.Stop();
+        productTray?.Dispose();
         foreach (var worker in workerProcesses.Values) worker.Dispose();
         workerProcesses.Clear();
         base.OnClosed(e);

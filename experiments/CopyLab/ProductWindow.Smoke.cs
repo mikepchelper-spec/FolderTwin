@@ -218,6 +218,10 @@ public partial class ProductWindow
                 await Click(window, window.SaveSettingsButton);
                 Check(window.BackupJobButton.IsEnabled && ((JobRow)window.JobList.SelectedItem).Job!.Destination.Marker == edited.Destination.Marker,
                     "Reactivation changed the job identity or failed to enable manual backup.");
+                await window.RefreshScheduleAsync();
+                Check(window.SpaceStatusText.Text.Contains("destino comprobado", StringComparison.Ordinal), "The dashboard did not check destination space.");
+                await Click(window, window.ProductTrayButton);
+                Check(window.productTray is not null && !window.IsVisible, "The product window did not create its optional tray.");
             }
             finally { window.Close(); }
 
@@ -234,6 +238,7 @@ public partial class ProductWindow
             Console.Error.WriteLine("PASS product recovery pages files, browses folders, searches Unicode, restores a deleted file and tolerates a corrupt local index.");
             Console.Error.WriteLine("PASS WPF edits name and hour, rejects invalid time, disables, retires and reactivates while keeping recovery and data identity; native schedule operations are injected separately.");
             await RunWorkerSmokeAsync();
+            await ProductTrayProbe.RunAsync();
         }
         finally
         {

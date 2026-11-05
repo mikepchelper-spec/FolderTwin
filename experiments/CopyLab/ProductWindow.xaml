@@ -25,6 +25,7 @@
                 <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,12">
                     <Button x:Name="NewJobButton" Content="_Nuevo trabajo" Click="NewJobClick" Margin="0,0,8,4" />
                     <Button x:Name="RefreshJobsButton" Content="Act_ualizar" Click="RefreshJobsClick" Margin="0,0,8,4" />
+                    <Button x:Name="ProductTrayButton" Content="Minimizar a _bandeja" Click="ProductTrayClick" Margin="0,0,8,4" />
                     <Button x:Name="ResumeRegistrationButton" Content="_Reanudar registro" Click="ResumeRegistrationClick"
                             IsEnabled="False" Margin="0,0,8,4" />
                 </WrapPanel>
@@ -36,6 +37,7 @@
                         <TextBlock x:Name="SelectedJobText" TextWrapping="Wrap" />
                         <TextBlock x:Name="RuntimeStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
                         <TextBlock x:Name="ScheduleStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        <TextBlock x:Name="SpaceStatusText" TextWrapping="Wrap" Margin="0,4,0,0" />
                         <ProgressBar x:Name="RunProgress" Height="4" Margin="0,8,0,0" Visibility="Collapsed"
                                      AutomationProperties.Name="Progreso de la operación activa" />
                         <WrapPanel Margin="0,8,0,0">

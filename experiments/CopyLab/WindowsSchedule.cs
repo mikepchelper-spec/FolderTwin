@@ -40,7 +40,7 @@ internal sealed class WindowsSchedule : IDisposable
         {
             string executable = VerifyOwnership((string)task.Xml, owner);
             return new((bool)task.Enabled, (DateTime)task.NextRunTime, (DateTime)task.LastRunTime,
-                unchecked((uint)(int)task.LastTaskResult), executable, PolicyProblem((string)task.Xml, owner) is null, (int)task.State == 4);
+                unchecked((uint)(int)task.LastTaskResult), executable, PolicyProblem((string)task.Xml, owner, ReadRunLevel(task)) is null, (int)task.State == 4);
         }
         finally { Marshal.FinalReleaseComObject(task); }
     }
@@ -78,7 +78,7 @@ internal sealed class WindowsSchedule : IDisposable
         try
         {
             _ = VerifyOwnership((string)registered.Xml, owner);
-            if (PolicyProblem((string)registered.Xml, owner) is { } problem)
+            if (PolicyProblem((string)registered.Xml, owner, ReadRunLevel(registered)) is { } problem)
                 throw new IOException("La tarea registrada requiere revisión de la opción " + problem + ".");
             registered.Enabled = true;
             if (!(bool)registered.Enabled) throw new IOException("El horario no pudo habilitarse.");
@@ -101,7 +101,7 @@ internal sealed class WindowsSchedule : IDisposable
         try
         {
             _ = VerifyOwnership((string)task.Xml, owner);
-            if (!(bool)task.Enabled || PolicyProblem((string)task.Xml, owner) is not null)
+            if (!(bool)task.Enabled || PolicyProblem((string)task.Xml, owner, ReadRunLevel(task)) is not null)
                 throw new InvalidDataException("El horario necesita revisión antes de ejecutarse.");
             try
             {
@@ -144,7 +144,19 @@ internal sealed class WindowsSchedule : IDisposable
         return executable;
     }
 
-    private string? PolicyProblem(string xml, Owner owner)
+    private static int ReadRunLevel(dynamic task)
+    {
+        dynamic definition = task.Definition;
+        try
+        {
+            dynamic principal = definition.Principal;
+            try { return (int)principal.RunLevel; }
+            finally { Marshal.FinalReleaseComObject(principal); }
+        }
+        finally { Marshal.FinalReleaseComObject(definition); }
+    }
+
+    private string? PolicyProblem(string xml, Owner owner, int runLevel)
     {
         var root = XDocument.Parse(xml).Root;
         var settings = root?.Element(Schema + "Settings");
@@ -163,7 +175,8 @@ internal sealed class WindowsSchedule : IDisposable
         if (!owner.Tray && settings?.Element(Schema + "RestartOnFailure") is not null) return "RestartOnFailure";
         if (!owner.Tray && (string?)root?.Element(Schema + "Actions")?.Element(Schema + "Exec")?.Element(Schema + "Arguments") != owner.Arguments)
             return "Actions.Exec.Arguments";
-        if ((string?)root?.Element(Schema + "Principals")?.Element(Schema + "Principal")?.Element(Schema + "RunLevel") != "LeastPrivilege")
+        // Windows can omit the default from exported XML. Verify the effective COM value.
+        if (runLevel != 0)
             return "RunLevel";
         if ((string?)settings?.Element(Schema + "AllowHardTerminate") != "false") return "AllowHardTerminate";
         return null;
