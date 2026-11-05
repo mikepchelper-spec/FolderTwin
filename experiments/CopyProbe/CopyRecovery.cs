@@ -28,7 +28,7 @@ internal static class CopyRecovery
     public static string ReceiptDraftPath(string temporary) => ReceiptPath(temporary) + ".tmp";
     public static string LockPath(string temporary) => temporary + ".lock";
 
-    public static FileStream Begin(SafeFileHandle directory, string temporary, string destination)
+    public static FileStream Begin(SafeFileHandle directory, string temporary, string destination, bool allowTemporary = false)
     {
         CheckParents(temporary, destination);
         var operation = WindowsProbeNative.OpenPlainFile(directory, LockPath(temporary), FileAccess.ReadWrite, FileShare.None,
@@ -37,7 +37,7 @@ internal static class CopyRecovery
         {
             if (WindowsProbeNative.PlainFileExists(directory, ReceiptPath(temporary)) ||
                 WindowsProbeNative.PlainFileExists(directory, ReceiptDraftPath(temporary)) ||
-                WindowsProbeNative.PlainFileExists(directory, temporary) || WindowsProbeNative.PlainFileExists(directory, destination))
+                (!allowTemporary && WindowsProbeNative.PlainFileExists(directory, temporary)) || WindowsProbeNative.PlainFileExists(directory, destination))
                 throw new IOException("This operation already has files. Inspect recovery first.");
             return operation;
         }

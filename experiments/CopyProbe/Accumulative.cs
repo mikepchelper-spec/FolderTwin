@@ -93,7 +93,8 @@ internal sealed partial class VersionStore
                     using var current = WindowsProbeNative.OpenPlainFile(fence.Parent(input), input, FileAccess.Read, FileShare.Read);
                     RequireObject(current, file.RelativePath, file);
                     file.Metadata?.RequireMatch(current.SafeFileHandle);
-                    VerifiedCopy.Run(input, final, temporary, expectedHash: file.Hash, recoveryRoot: workspace.Root);
+                    VerifiedCopy.Run(input, final, temporary, expectedHash: file.Hash, recoveryRoot: workspace.Root,
+                        resumeUnverifiedPrefix: true);
                 }
                 else if (recovered is not (RecoveryResult.Published or RecoveryResult.AlreadyPublished))
                     throw new InvalidDataException("Un archivo exclusivo del destino necesita revisión: " + recovered);

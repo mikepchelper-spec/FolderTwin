@@ -16,6 +16,8 @@ Cada operación guarda `source.jsonl` y `source.location.json` para el origen, y
 
 Después de comprobar de nuevo origen y destino, publica `ready`. A partir de ahí puede completar los movimientos con el origen ausente. Un árbol parcial sigue pendiente hasta verificar el resultado y registrar su generación. Los archivos reemplazados se conservan de forma recuperable antes de publicar los nuevos. Los temporales sin recibo válido y los documentos parciales o contradictorios se preservan para revisión. Una interrupción no autoriza a descartarlos.
 
+La importación de objetos del origen o de exclusivos del destino puede continuar un temporal sin recibo cuando se comprueban el SHA-256 del origen completo y todos los bytes del prefijo, sin truncarlo ni reemplazarlo. Conserva los conflictos y borradores de recibo para revisión. El preparado del espejo mantiene su propia conservación de temporales sin verificar. [Protocolo de continuación](VERSIONES.md).
+
 El modo acumulativo presenta el estado actual en recuperación. Las generaciones internas sostienen la publicación, la recuperación y la retención manual. El historial por fechas es una función del modo Versionado. La verificación del estado actual revisa tanto los objetos recuperables como la carpeta navegable. Una edición de esta última impide informar una verificación completa, aunque el contenido guardado en los objetos siga intacto.
 
 ## Evidencia

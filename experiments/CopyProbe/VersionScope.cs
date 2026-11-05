@@ -85,7 +85,8 @@ internal sealed class VersionScope
     {
         if (lab is not null)
         {
-            VerifiedCopy.Run(input, final, temporary, checkpoint, expectedHash: hash, recoveryRoot: Root, metadata: metadata);
+            VerifiedCopy.Run(input, final, temporary, checkpoint, expectedHash: hash, recoveryRoot: Root, metadata: metadata,
+                resumeUnverifiedPrefix: true);
             return;
         }
         using var roots = new LocalJobRoots(sourceRoot, destinationRoot);
@@ -93,7 +94,7 @@ internal sealed class VersionScope
         else job.Destination.RequireDirectoryIdentity(roots.SourceHandle);
         VerifiedCopy.RunBound(roots, target, Path.GetRelativePath(sourceRoot, input),
             Path.GetRelativePath(destinationRoot, final), Path.GetRelativePath(destinationRoot, temporary),
-            hash, checkpoint, metadata: metadata);
+            hash, checkpoint, metadata: metadata, resumeUnverifiedPrefix: true);
     }
 
     private static bool Same(string first, string second) => first.Equals(second, StringComparison.OrdinalIgnoreCase);

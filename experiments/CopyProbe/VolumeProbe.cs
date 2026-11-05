@@ -116,6 +116,7 @@ internal static class VolumeProbe
         binding.SaveNew(configuration);
         VerifyProductTransfer(state, root, binding);
         VerifyProductModes(state, root);
+        VerifyProductDiskFull(state, root, drive, content);
         WriteNew(source, content);
         WriteNew(previous, Previous);
 
@@ -260,6 +261,57 @@ internal static class VolumeProbe
                 "The unavailable product destination lost its incident or prior confirmed result.");
         }
         Console.WriteLine("PASS all three product runners report the absent registered volume and preserve their prior confirmed result and incidents.");
+    }
+
+    private static void VerifyProductDiskFull(string state, string parent, DriveInfo drive, byte[] content)
+    {
+        WriteNew(Path.Combine(state, "product-source", "large.bin"), content);
+        using var registry = new ProductJobRegistry(Path.Combine(state, "product-settings"));
+        foreach (var job in registry.List().Jobs)
+        {
+            var store = VersionStore.OpenProduct(job);
+            var prior = registry.RunHistory(job.Id).Runs.First(run => run.Intent.Operation == ProductRunOperation.Backup &&
+                run.Result?.State == ProductRunState.Confirmed).Result!;
+            int points = store.ListPoints().Length;
+            string padding = Path.Combine(parent, "product-padding.bin");
+            bool created = false;
+            ProductRunResult failed;
+            try
+            {
+                failed = ProductRunner.Run(registry, job.Id, checkpoint: work =>
+                {
+                    // Fill only after the ordinary space checks and durable intent,
+                    // simulating another writer consuming capacity during the copy.
+                    if (created || work.Phase != WorkPhase.Copying) return;
+                    using var filler = new FileStream(padding, FileMode.CreateNew, FileAccess.Write, FileShare.None, 64 * 1024);
+                    created = true;
+                    byte[] block = new byte[64 * 1024];
+                    for (int i = 0; i < (128 * MiB) / block.Length && drive.AvailableFreeSpace > 2 * MiB; i++)
+                        filler.Write(block);
+                    filler.Flush(flushToDisk: true);
+                });
+                Check(created && failed.State == ProductRunState.Review && failed.ErrorCode is
+                    (112 or 39 or unchecked((int)0x80070070) or unchecked((int)0x80070027)),
+                    failed.Detail ?? "The product runner did not report a real disk-full error.");
+                Check(store.ListPoints().Length == points && !store.Verify(prior.Generation!),
+                    "Disk full published a partial product point or damaged the prior confirmed backup.");
+                Console.WriteLine($"PASS {job.Options.Mode} reports actual disk full ({failed.ErrorCode}), preserves its pending generation and verifies the prior point.");
+            }
+            finally { if (created) File.Delete(padding); }
+            var resumed = ProductRunner.Run(registry, job.Id);
+            Check(resumed.State == ProductRunState.Confirmed && resumed.Generation == failed.Generation &&
+                ProductRunner.Verify(registry, job.Id, resumed.Generation!).State == ProductRunState.Confirmed,
+                resumed.Detail ?? "The product runner did not resume its exact generation after capacity returned.");
+            var review = LocalJobRoots.ReviewDedicatedDestination(job.Destination.LastVolumePath, Path.Combine(state, "product-recovery"));
+            var request = registry.ApproveRestore(job.Id, resumed.Generation!, review, "large.bin");
+            Check(ProductRunner.Restore(registry, job.Id, request).State == ProductRunState.Confirmed,
+                "The disk-full product retry could not restore the large file.");
+            CheckHash(Path.Combine(review.Parent.VolumePath, review.FolderName, "large.bin"), SHA256.HashData(content));
+            Check(registry.RunHistory(job.Id).Runs.Any(run => run.Result is { } saved &&
+                saved.IntentHash.AsSpan().SequenceEqual(failed.IntentHash) && saved.ErrorCode == failed.ErrorCode),
+                "Successful retry erased the product disk-full incident.");
+        }
+        Console.WriteLine("PASS all three packaged product modes preserve prior data during real capacity exhaustion, resume the same pending generation, verify, restore and retain the incident.");
     }
 
     private static void VerifyProductReturn(string state)

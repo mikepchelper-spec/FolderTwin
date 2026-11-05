@@ -25,6 +25,8 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --compare
       - name: Compare buffered and unbuffered verification
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --uncached
+      - name: Verify explicit append-only continuation of matching partial copies
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --prefix-resume
       - name: Verify directory rename and junction behavior
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --paths
       - name: Verify read-only inspection and reopening of product roots

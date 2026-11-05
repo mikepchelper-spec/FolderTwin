@@ -15,6 +15,8 @@ if (args is ["--compare"])
     return TransportProbe.Run();
 if (args is ["--uncached"])
     return UncachedProbe.Run();
+if (args is ["--prefix-resume"])
+    return PrefixResumeProbe.Run();
 if (args is ["--paths"])
     return PathProbe.Run();
 if (args is ["--product-roots"])
