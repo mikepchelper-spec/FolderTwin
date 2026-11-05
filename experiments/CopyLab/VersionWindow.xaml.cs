@@ -233,6 +233,7 @@ public partial class VersionWindow : Window
                 null => "Este trabajo no tiene horario.",
                 { MeetsPolicy: false } => "El horario requiere revisión de sus opciones en Windows.",
                 { Enabled: false } => "Horario deshabilitado en Windows.",
+                { Running: true } => "Ejecución programada en curso.",
                 { LastResult: not (0 or 0x41303) } => "El último intento programado requiere revisión. Puedes consultar el Programador de tareas.",
                 { } task => $"Próxima ejecución · {task.NextRun:g}, con tu sesión iniciada."
             };

@@ -43,6 +43,14 @@ internal static class ScheduleProbe
                 throw new InvalidOperationException("The Windows time trigger did not produce a verified recovery point.");
             using (var scheduler = new WindowsSchedule())
             {
+                var exitDeadline = DateTime.UtcNow.AddSeconds(20);
+                while (scheduler.Read(workspace, id) is { Running: true } && DateTime.UtcNow < exitDeadline)
+                    await Task.Delay(250);
+                if (scheduler.Read(workspace, id) is { Running: true })
+                    throw new InvalidOperationException("The scheduled worker did not exit after confirming its point.");
+            }
+            using (var scheduler = new WindowsSchedule())
+            {
                 scheduler.Register(workspace, id, executable, DateTime.Today.AddDays(1).AddHours(20));
                 if (scheduler.Read(workspace, id) is not { Enabled: true, MeetsPolicy: true })
                     throw new InvalidOperationException("The daily schedule update did not verify.");

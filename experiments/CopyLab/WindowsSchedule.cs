@@ -8,7 +8,7 @@ using System.Xml.Linq;
 namespace CopyLab;
 
 internal sealed record ScheduleInfo(bool Enabled, DateTime NextRun, DateTime LastRun, uint LastResult,
-    string Executable, bool MeetsPolicy);
+    string Executable, bool MeetsPolicy, bool Running);
 
 internal sealed class WindowsSchedule : IDisposable
 {
@@ -47,7 +47,7 @@ internal sealed class WindowsSchedule : IDisposable
         {
             string executable = VerifyOwnership((string)task.Xml, workspace, id, tray);
             return new((bool)task.Enabled, (DateTime)task.NextRunTime, (DateTime)task.LastRunTime,
-                unchecked((uint)(int)task.LastTaskResult), executable, MeetsPolicy((string)task.Xml, tray));
+                unchecked((uint)(int)task.LastTaskResult), executable, MeetsPolicy((string)task.Xml, tray), (int)task.State == 4);
         }
         finally { Marshal.FinalReleaseComObject(task); }
     }
@@ -77,7 +77,7 @@ internal sealed class WindowsSchedule : IDisposable
             Element("Settings",
                 Element("MultipleInstancesPolicy", "IgnoreNew"), Element("DisallowStartIfOnBatteries", false),
                 Element("StopIfGoingOnBatteries", false), Element("AllowHardTerminate", false),
-                Element("StartWhenAvailable", true), Element("AllowStartOnDemand", true),
+                Element("StartWhenAvailable", !tray), Element("AllowStartOnDemand", true),
                 Element("Enabled", false), Element("ExecutionTimeLimit", "PT0S"),
                 Element("RestartOnFailure", Element("Interval", "PT5M"), Element("Count", 3))),
             new XElement(Schema + "Actions", new XAttribute("Context", "Author"),
@@ -87,8 +87,8 @@ internal sealed class WindowsSchedule : IDisposable
         try
         {
             _ = VerifyOwnership((string)registered.Xml, workspace, id, tray);
-            if (!MeetsPolicy((string)registered.Xml, tray))
-                throw new IOException("El horario registrado no conserva las opciones de ejecución previstas.");
+            if (PolicyProblem((string)registered.Xml, tray) is { } problem)
+                throw new IOException("La tarea registrada requiere revisión de la opción " + problem + ".");
             registered.Enabled = true;
             if (!(bool)registered.Enabled)
                 throw new IOException("El horario no pudo habilitarse.");
@@ -127,8 +127,7 @@ internal sealed class WindowsSchedule : IDisposable
         var actions = root.Element(Schema + "Actions")?.Elements().ToArray() ?? [];
         string? account = (string?)principal?.Element(Schema + "UserId");
         string? executable = actions.Length == 1 ? (string?)actions[0].Element(Schema + "Command") : null;
-        string? sid = account is null ? null : account.StartsWith("S-1-", StringComparison.Ordinal) ? account :
-            ((SecurityIdentifier)new NTAccount(account).Translate(typeof(SecurityIdentifier))).Value;
+        string? sid = NormalizeSid(account);
         if ((string?)root.Element(Schema + "RegistrationInfo")?.Element(Schema + "Description") != Description(id, tray) ||
             sid != user || (string?)principal?.Element(Schema + "LogonType") != "InteractiveToken" ||
             actions.Length != 1 || actions[0].Name != Schema + "Exec" ||
@@ -139,17 +138,42 @@ internal sealed class WindowsSchedule : IDisposable
     }
 
     private bool MeetsPolicy(string xml, bool tray)
+        => PolicyProblem(xml, tray) is null;
+
+    private string? PolicyProblem(string xml, bool tray)
     {
         var root = XDocument.Parse(xml).Root;
         var settings = root?.Element(Schema + "Settings");
         var triggers = root?.Element(Schema + "Triggers")?.Elements().ToArray() ?? [];
-        return triggers.Length == 1 &&
-            (!tray || triggers[0].Name == Schema + "LogonTrigger" &&
-                (string?)triggers[0].Element(Schema + "UserId") == user) &&
-            (string?)settings?.Element(Schema + "MultipleInstancesPolicy") == "IgnoreNew" &&
-            (string?)settings?.Element(Schema + "StartWhenAvailable") == "true" &&
-            (string?)settings?.Element(Schema + "ExecutionTimeLimit") == "PT0S" &&
-            (string?)settings?.Element(Schema + "RestartOnFailure")?.Element(Schema + "Count") == "3";
+        if (triggers.Length != 1)
+            return "Triggers";
+        if (tray && (triggers[0].Name != Schema + "LogonTrigger" ||
+            NormalizeSid((string?)triggers[0].Element(Schema + "UserId")) != user))
+            return "LogonTrigger.UserId";
+        if ((string?)settings?.Element(Schema + "MultipleInstancesPolicy") != "IgnoreNew")
+            return "MultipleInstancesPolicy";
+        if (!tray && (string?)settings?.Element(Schema + "StartWhenAvailable") != "true")
+            return "StartWhenAvailable";
+        if ((string?)settings?.Element(Schema + "ExecutionTimeLimit") != "PT0S")
+            return "ExecutionTimeLimit";
+        if ((string?)settings?.Element(Schema + "RestartOnFailure")?.Element(Schema + "Count") != "3")
+            return "RestartOnFailure.Count";
+        return null;
+    }
+
+    private static string? NormalizeSid(string? account)
+    {
+        if (account is null)
+            return null;
+        try
+        {
+            return account.StartsWith("S-1-", StringComparison.Ordinal) ? new SecurityIdentifier(account).Value :
+                ((SecurityIdentifier)new NTAccount(account).Translate(typeof(SecurityIdentifier))).Value;
+        }
+        catch (IdentityNotMappedException error)
+        {
+            throw new InvalidDataException("No se pudo comprobar la identidad de la tarea.", error);
+        }
     }
 
     private static void ValidateJob(LabWorkspace workspace, Guid id)
