@@ -2,7 +2,7 @@
 
 *Copias locales. Versiones recuperables.*
 
-App de respaldo para Windows 11 x64. El candidato `76b7eed` permite crear trabajos, copiar, verificar y recuperar desde WPF, e incorpora la corrección de foco en recuperación y búsqueda. Pasaron la CI de Windows, el laboratorio VHDX, cuatro compilaciones limpias y el recorrido normal de los tres modos. El piloto y las validaciones externas siguen pendientes: todavía no se declara v1 final. [Artefacto, resultados y reanudación](ENTREGA.md).
+App de respaldo para Windows 11 x64. El candidato de software **e4e87b8** está cerrado: tres modos desde WPF, revisión de interfaz, corrección del foco del historial y paquete reproducible con guías e identidad coherentes. Pasó la aceptación Windows desde el paquete y se comprobaron los 499 archivos del ZIP descargado. El piloto y las validaciones externas siguen pendientes; no se declara v1 definitiva. [Artefacto, resultados y límites](ENTREGA.md).
 
 ## Leer primero
 
@@ -24,11 +24,11 @@ La v1 registra y ejecuta los tres modos desde WPF, verifica el contenido y lo re
 
 La vista previa permite revisar y conservar un plan completo de versionado que ya no coincida con el origen, sin presentarlo como respaldo correcto ni borrar datos. Sus trabajadores y pruebas WPF locales cubren pausa, cancelación, cierre de interfaz y reanudación sin origen. La retención revisa los objetos parciales con cuarentena. Para borradores y diarios de acumulativo o espejo, la v1 conserva el trabajo retirado y continúa en otro destino dedicado; el anterior conserva su espacio, datos e incidencias. [Recorrido y límites](experiments/CopyProbe/PENDIENTES.md).
 
-El panel de producto separa lista y detalles, y los apila en ventanas estrechas. Hay una sesión sintética reproducible para revisar el escritorio sin abrir la configuración habitual. El artefacto descargado completó también el recorrido normal de los tres modos, verificación, incidencia y recuperación. El recorrido completo de accesibilidad, lector y escalado sigue pendiente. [Prueba de interfaz](experiments/CopyLab/INTERFAZ.md).
+El panel de producto separa lista y detalles, y los apila en ventanas estrechas. Hay una sesión sintética reproducible para revisar el escritorio sin abrir la configuración habitual. La aceptación automatizada del paquete actual cubre los tres modos, verificación, incidencias y recuperación. El recorrido normal de escritorio previo corresponde a 76b7eed; no se atribuye al candidato nuevo. El recorrido completo de accesibilidad, lector y escalado sigue pendiente. [Prueba de interfaz](experiments/CopyLab/INTERFAZ.md).
 
 ## Paquete portable de Windows
 
-El candidato comprobado está en el [resultado de Windows de 76b7eed](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42104199340), artefacto `FolderTwin-win-x64-76b7eed6981381bb7242853f29f64768d4576b11`. ENTREGA fija su ZIP y hashes. La entrada de producto es `FolderTwin.exe`, sin argumentos, después de extraer todo el contenido. El paquete incluye .NET, código fuente, licencias y documentación. El borrador se gestiona en [Releases](https://github.com/mikepchelper-spec/FolderTwin/releases). Las compilaciones posteriores de desarrollo no sustituyen automáticamente al candidato. [Guía de uso](GUIA.md) · [Notas](NOTAS.md) · [Matriz de v1](V1.md).
+El candidato comprobado está en el [resultado de Windows de e4e87b8](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42124550998), artefacto `FolderTwin-win-x64-e4e87b840eedc8139fd49e389f2cd143cd6ef61c`. ENTREGA fija su ZIP y hashes. La entrada de producto es `FolderTwin.exe`, sin argumentos, después de extraer todo el contenido. El paquete incluye .NET, código fuente, licencias y documentación. El borrador se gestiona en [Releases](https://github.com/mikepchelper-spec/FolderTwin/releases). Las compilaciones posteriores de desarrollo no sustituyen automáticamente al candidato. [Guía de uso](GUIA.md) · [Notas](NOTAS.md) · [Matriz de v1](V1.md).
 
 Para producir el paquete desde el código, instala el SDK indicado en [global.json](global.json) y ejecuta en PowerShell 7 para Windows:
 

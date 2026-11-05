@@ -8,15 +8,21 @@ Fecha de inicio 2026-10-29. Revisión del plan y los ensayos 2026-11-05, incluid
 
 ### Cierre independiente del candidato de software
 
+**Cerrado el alcance de software con e4e87b8.** La [aceptación Windows 42124550998](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42124550998) aprobó dos compilaciones limpias idénticas, revisión WPF del paquete y ensayos nativos de instalación, actualización, retirada y recuperación de los tres modos. Se descargó el artefacto y se comprobaron sus 499 archivos y el inventario exacto. [ENTREGA.md](ENTREGA.md) registra ZIP, hashes y límites. Los informes posteriores se adjuntan aparte y el ZIP no se reconstruye para incorporarlos.
+
+La auditoría corrigió una pérdida real de selección/foco causada por recrear el historial cada segundo y amplió las comprobaciones WPF de estados, foco, temas y navegación. También corrigió documentación técnica que todavía marcaba la resolución de planes como pendiente y confundía la retención del lote inicial con la del almacén. No cambió el motor: su SHA-256 coincide con el probado en VHDX. El nuevo ZIP contiene guías, runtime, licencias, fuentes y su propia identidad de compilación. La observación adicional del escritorio se detuvo al perder una captura fiable del objetivo; no se da por aprobada.
+
 El goal de cierre de software no espera el entorno externo del piloto. Su salida exige auditar el alcance implementado, revisar la interfaz y entregar un paquete reproducible con guías coherentes, aceptación desde ese paquete y borrador revisado. USB físico, piloto, ciclos de Windows, otra cuenta/equipo, nube y accesibilidad que necesite otro entorno conservan sus pendientes y no se convierten en aprobaciones.
 
 La auditoría encontró que el ZIP congelado de `76b7eed` incluía informes anteriores que todavía presentaban `8bde43f` como candidato actual. La nueva distribución separa guías e informes: README específico del paquete, notas sin un candidato antiguo, COMPILACION.json con commit/runtime/hash de fuentes y SHA256SUMS.txt para el contenido. ENTREGA, V1 y los informes de desarrollo quedan en el repositorio y el archivo de fuentes como antecedentes; el informe posterior se adjunta por separado al ZIP. No se reconstruye un paquete para incluir su propia aceptación o hash.
 
-La revisión WPF adicional cubre ambos temas, tamaño mínimo, pasos del asistente, hora inválida, cancelación, trabajo sin puntos, recuperación vacía, retorno entre paneles y Tab en configuración/retención. Las pruebas existentes conservan trabajadores, historial, bandeja, importación, cuarentena, instalación y retirada. La aceptación y la identidad final del nuevo paquete se registrarán en ENTREGA después de compilar y probarlo.
+La revisión WPF adicional cubre ambos temas, tamaño mínimo, pasos del asistente, hora inválida, cancelación, trabajo sin puntos, recuperación vacía, retorno entre paneles y Tab en configuración/retención. Las pruebas existentes conservan trabajadores, historial, bandeja, importación, cuarentena, instalación y retirada. La aceptación y la identidad final del paquete se registran en ENTREGA después de compilar y probarlo.
 
 La inspección posterior del escritorio detectó recreación del historial en cada consulta de estado, aunque sus etiquetas no cambiasen. El arnés nuevo reprodujo la pérdida de la fila seleccionada y enfocada; falló antes del arreglo. La actualización ahora solo reemplaza las filas cuando cambia su contenido. Pasó la regresión acotada en claro y oscuro. `--product-surface-smoke` permite repetirla sin ejecutar de nuevo todos los motores. Esto justifica un candidato nuevo después del primer paquete de revisión `586aa58`.
 
-La [matriz de la v1](V1.md) registra el paso de la alfa de laboratorio a la aplicación distribuible. Conserva por separado la aceptación ya realizada y las validaciones externas del producto.
+### Antecedentes del cierre
+
+La [matriz de la v1](V1.md) registra el paso de la alfa de laboratorio a la aplicación distribuible. Conserva por separado la aceptación ya realizada y las validaciones externas del producto. Los párrafos siguientes conservan los candidatos y observaciones anteriores; el paquete actual es e4e87b8, fijado arriba y en ENTREGA.
 
 La revisión adicional de teclado retuvo `8bde43f`: abrir recuperación y buscar podían perder el foco al deshabilitar temporalmente el panel. El candidato corregido `76b7eed` pasó la regresión WPF con ventana visible, consultas consecutivas con Enter en los temas claro y oscuro y el recorrido normal de los tres modos. Pasaron también Windows CI y el laboratorio VHDX del mismo commit. [Incidencia, paquete y reanudación](ENTREGA.md).
 
@@ -46,7 +52,7 @@ Primera pantalla: **¿Qué quieres proteger? → ¿Dónde guardarlo? → ¿Cómo
 
 | Modo | Comportamiento | Texto al usuario |
 |---|---|---|
-| Copia acumulativa | Agrega archivos nuevos y actualiza los modificados; no elimina exclusivos del destino. Conflictos con archivos editados en destino se detienen para revisión. No tiene historial por definición. | «Conservar lo que ya existe en el destino» |
+| Copia acumulativa | Agrega archivos nuevos y actualiza los modificados; no elimina exclusivos del destino. Conflictos con archivos editados en destino se detienen para revisión. Presenta el estado acumulado actual para recuperar; el selector de fechas es propio de Versionado. | «Conservar lo que ya existe en el destino» |
 | Versionado, recomendado | Conserva estados recuperables por fecha, incluidos archivos luego borrados del origen, hasta que expire la retención. | «Poder volver a una versión anterior» |
 | Espejo protegido | La carpeta actual refleja el origen. Antes de retirar o reemplazar contenido, conserva lo anterior en un área de recuperación separada. | «Mantener una copia igual; guardar lo retirado durante un tiempo» |
 
