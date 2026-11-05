@@ -33,6 +33,8 @@ if (args is ["--mirror"])
     return MirrorProbe.Run();
 if (args is ["--retention-scale"])
     return RetentionScaleProbe.Run();
+if (args is ["--retention-scale", "329000"])
+    return RetentionScaleProbe.Run(large: true);
 if (args is ["--interrupt-retention-child", var retentionRoot])
     return RetentionProbe.InterruptChild(retentionRoot);
 if (args is ["--version-scale", var fileCount, var objectCount] &&
