@@ -354,10 +354,10 @@ internal sealed partial class VersionStore
     private static PendingFiles IntentFiles(SafeFileHandle pending, string generation) =>
         new(pending, generation + ".jsonl", generation + LocationSuffix, generation);
 
-    private static CatalogSnapshot ReadPoint(SafeFileHandle store, string generation)
+    private static CatalogSnapshot ReadPoint(SafeFileHandle store, string generation, bool requireBoth = false)
     {
         _ = GenerationTime(generation);
-        return WithCatalogFiles(store, generation, files => BatchCatalog.ReadLocked(store, files, generation));
+        return WithCatalogFiles(store, generation, files => BatchCatalog.ReadLocked(store, files, generation, requireBoth));
     }
 
     private static T WithCatalogFiles<T>(SafeFileHandle store, string generation, Func<CatalogFiles, T> action)

@@ -52,6 +52,8 @@ Usa `-- --retention` para probar la selección diaria/semanal/mensual por origen
 
 Usa `-- --retention-scale` para medir revisión, cuarentena y purga con ocho generaciones sintéticas de 4.096 archivos, contenidos compartidos y el origen ausente. Registra tiempo, CPU, E/S del proceso y máximo de memoria residente.
 
+El workflow **Synthetic retention scale** ejecuta la variante de tres generaciones de 329.000 archivos en un runner desechable. [Mediciones y límites](experiments/CopyProbe/RETENCION.md#evidencia-y-límites).
+
 Usa `-- --mirror` para probar el espejo protegido con datos sintéticos. En **Versiones → Espejo protegido**, prepara el espejo y revisa los cambios antes de aplicarlos. La carpeta actual es navegable y los puntos anteriores se recuperan desde Versiones. [Procedimiento y límites](experiments/CopyProbe/ESPEJO.md).
 
 El comando `--recover-version` permite recuperar un punto del laboratorio desde otro proceso, con el origen ausente y sin índice local. Sus cuatro argumentos y comprobaciones están en la [guía del almacén](experiments/CopyProbe/VERSIONES.md).

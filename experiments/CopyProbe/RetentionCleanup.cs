@@ -66,10 +66,8 @@ internal sealed partial class VersionStore
                 checkpoint?.Invoke(RetentionStep.Returned);
             }
             RetentionJournal.SetState(directory, plan, "returned");
-            foreach (string generation in plan.Review.Expire)
-            {
-                VerifyObjects(root, inventory.Catalogs[generation].Files);
-            }
+            VerifyObjects(root, plan.Review.Expire.SelectMany(generation => inventory.References[generation])
+                .Distinct(StringComparer.Ordinal).Select(digest => inventory.Objects[digest]).ToArray());
             ApplyRetentionTransitions(root, plan, expired: false);
             checkpoint?.Invoke(RetentionStep.Retained);
             RetentionJournal.SetState(directory, plan, "undone");
@@ -218,8 +216,8 @@ internal sealed partial class VersionStore
         first.Expire.SequenceEqual(second.Expire) && first.Objects.SequenceEqual(second.Objects);
 
     private static HashSet<string> ActiveReferences(RetentionInventory inventory) =>
-        inventory.Catalogs.Where(pair => !inventory.Registry.Expired.Contains(pair.Key))
-            .SelectMany(pair => pair.Value.Files.Select(Digest)).ToHashSet(StringComparer.Ordinal);
+        inventory.References.Where(pair => !inventory.Registry.Expired.Contains(pair.Key))
+            .SelectMany(pair => pair.Value).ToHashSet(StringComparer.Ordinal);
 
     private static void ValidatePlanReferences(RetentionPlan plan, RetentionInventory inventory)
     {

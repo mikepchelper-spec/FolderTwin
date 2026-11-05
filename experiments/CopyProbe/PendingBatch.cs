@@ -120,6 +120,32 @@ internal static class PendingBatch
     internal static BatchPlan ReadLocked(string fixtureRoot, string destination, SafeFileHandle fixture, SafeFileHandle root,
         PendingFiles files)
     {
+        var (location, source) = ReadLocation(fixtureRoot, destination, fixture, files);
+        CatalogSnapshot metadata;
+        using (var file = WindowsProbeNative.OpenPlainFile(files.Parent, files.Metadata, FileAccess.Read, FileShare.Read))
+            metadata = BatchCatalog.Parse(file, files.Generation);
+        if (!metadata.DocumentHash.AsSpan().SequenceEqual(location.MetadataHash))
+            throw new InvalidDataException("El descriptor y la lista de archivos no coinciden.");
+        var target = new DestinationBinding { Version = 1, Marker = metadata.Binding.Marker, Identity = metadata.Binding.Identity,
+            LastVolumePath = WindowsProbeNative.VolumePath(root) };
+        using var marker = target.OpenVerifiedMarker(root);
+        return new(fixtureRoot, source, destination, location.SourceIdentity, target, metadata.Directories, metadata.Files);
+    }
+
+    internal static (string Source, byte[] Identity) ReadRegisteredSource(string fixtureRoot, string destination, SafeFileHandle fixture,
+        PendingFiles files, byte[] documentHash)
+    {
+        var (location, source) = ReadLocation(fixtureRoot, destination, fixture, files);
+        using var metadata = WindowsProbeNative.OpenPlainFile(files.Parent, files.Metadata, FileAccess.Read, FileShare.Read);
+        if (!location.MetadataHash.AsSpan().SequenceEqual(documentHash) || metadata.Length is < 1 or > BatchCatalog.VersionMaximumBytes ||
+            !SHA256.HashData(metadata).AsSpan().SequenceEqual(documentHash))
+            throw new InvalidDataException("El descriptor de origen no coincide con el catálogo esperado.");
+        return (source, location.SourceIdentity);
+    }
+
+    private static (Location Location, string Source) ReadLocation(string fixtureRoot, string destination, SafeFileHandle fixture,
+        PendingFiles files)
+    {
         Envelope envelope;
         using (var file = WindowsProbeNative.OpenPlainFile(files.Parent, files.Location, FileAccess.Read, FileShare.Read))
             envelope = JsonSerializer.Deserialize<Envelope>(ReadLocationBytes(file), Json)
@@ -135,15 +161,7 @@ internal static class PendingBatch
             throw new InvalidDataException("El origen del descriptor no puede ser una ruta absoluta.");
         string source = Path.Combine(fixtureRoot, location.SourceRelative);
         FolderBatch.ValidateRoots(fixtureRoot, source, destination);
-        CatalogSnapshot metadata;
-        using (var file = WindowsProbeNative.OpenPlainFile(files.Parent, files.Metadata, FileAccess.Read, FileShare.Read))
-            metadata = BatchCatalog.Parse(file, files.Generation);
-        if (!metadata.DocumentHash.AsSpan().SequenceEqual(location.MetadataHash))
-            throw new InvalidDataException("El descriptor y la lista de archivos no coinciden.");
-        var target = new DestinationBinding { Version = 1, Marker = metadata.Binding.Marker, Identity = metadata.Binding.Identity,
-            LastVolumePath = WindowsProbeNative.VolumePath(root) };
-        using var marker = target.OpenVerifiedMarker(root);
-        return new(fixtureRoot, source, destination, location.SourceIdentity, target, metadata.Directories, metadata.Files);
+        return (location, source);
     }
 
     internal static BatchResult Resume(string fixtureRoot, string destination, CancellationToken cancellationToken = default,

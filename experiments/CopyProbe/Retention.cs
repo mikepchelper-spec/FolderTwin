@@ -50,7 +50,7 @@ internal sealed record RetentionPreview(RetentionPolicy Policy, DateTimeOffset R
 
 internal sealed partial class VersionStore
 {
-    private sealed record RetentionInventory(RegistryState Registry, Dictionary<string, CatalogSnapshot> Catalogs,
+    private sealed record RetentionInventory(RegistryState Registry, Dictionary<string, HashSet<string>> References,
         Dictionary<string, BatchFile> Objects, Dictionary<string, string> Sources);
 
     internal RetentionPreview PreviewRetention(RetentionPolicy policy, DateTimeOffset? clock = null)
@@ -73,14 +73,14 @@ internal sealed partial class VersionStore
         if (inventory.Registry.MirrorGeneration is { } current)
             keep.Add(current);
         string[] expire = active.Where(id => !keep.Contains(id)).ToArray();
-        var referenced = new HashSet<string>(keep.SelectMany(id => inventory.Catalogs[id].Files.Select(Digest)), StringComparer.Ordinal);
-        string[] candidates = expire.SelectMany(id => inventory.Catalogs[id].Files.Select(Digest))
+        var referenced = new HashSet<string>(keep.SelectMany(id => inventory.References[id]), StringComparer.Ordinal);
+        string[] candidates = expire.SelectMany(id => inventory.References[id])
             .Distinct(StringComparer.Ordinal).Where(digest => !referenced.Contains(digest)).Order(StringComparer.Ordinal).ToArray();
         return new(policy, now, inventory.Registry.LastHash, active.Where(keep.Contains).ToArray(), expire,
             candidates, candidates.Sum(digest => inventory.Objects[digest].Length));
     }
 
-    private RetentionInventory AuditRetention(SafeFileHandle root, bool verifyObjects = true)
+    private RetentionInventory AuditRetention(SafeFileHandle root)
     {
         if (!registeredGenerations)
             throw new InvalidDataException("El almacén anterior no tiene registro durable para retención.");
@@ -113,35 +113,32 @@ internal sealed partial class VersionStore
             if (!names.SetEquals(registry.Generations.Keys.Select(id => id + ".jsonl")))
                 throw new InvalidDataException("El conjunto de manifiestos no coincide con las generaciones esperadas.");
         }
-        var catalogs = new Dictionary<string, CatalogSnapshot>(StringComparer.Ordinal);
+        var references = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         var sources = new Dictionary<string, string>(StringComparer.Ordinal);
         var objects = new Dictionary<string, BatchFile>(StringComparer.Ordinal);
-        var activeObjects = new Dictionary<string, BatchFile>(StringComparer.Ordinal);
+        using var scope = workspace.OpenRegisteredRoot();
         foreach (var (id, hash) in registry.Generations)
         {
-            var catalog = ReadPoint(root, id);
-            if (catalog.Degraded || !catalog.DocumentHash.AsSpan().SequenceEqual(hash))
+            var catalog = ReadPoint(root, id, requireBoth: true);
+            if (!catalog.DocumentHash.AsSpan().SequenceEqual(hash))
                 throw new InvalidDataException("Un catálogo esperado falta, difiere o está dañado. La limpieza queda suspendida.");
-            catalogs.Add(id, catalog);
-            using (var scope = workspace.OpenRegisteredRoot())
-            {
-                var intent = ReadIntent(scope.Root, root, pending, id);
-                if (!BatchCatalog.WriteMetadata(Stream.Null, intent, id).AsSpan().SequenceEqual(hash))
-                    throw new InvalidDataException("La identidad de origen no corresponde al catálogo esperado.");
-                sources.Add(id, Convert.ToHexStringLower(intent.SourceIdentity));
-            }
+            var source = PendingBatch.ReadRegisteredSource(workspace.Root, Destination, scope.Root, IntentFiles(pending, id), hash);
+            workspace.CheckRoots(source.Source, Destination);
+            if (source.Identity.AsSpan().SequenceEqual(binding.Identity))
+                throw new InvalidDataException("La identidad de origen no corresponde al catálogo esperado.");
+            sources.Add(id, Convert.ToHexStringLower(source.Identity));
+            var point = new HashSet<string>(StringComparer.Ordinal);
             foreach (var file in catalog.Files)
             {
                 string digest = Digest(file);
-                if (objects.TryGetValue(digest, out var previous) && previous.Length != file.Length)
+                if (!objects.TryAdd(digest, file) && objects[digest].Length != file.Length)
                     throw new InvalidDataException("Un objeto compartido tiene tamaños contradictorios.");
-                objects[digest] = file;
-                if (!registry.Expired.Contains(id))
-                    activeObjects[digest] = file;
+                point.Add(digest);
             }
+            references.Add(id, point);
         }
-        if (verifyObjects)
-            VerifyObjects(root, activeObjects.Values.ToArray());
-        return new(registry, catalogs, objects, sources);
+        var inventory = new RetentionInventory(registry, references, objects, sources);
+        VerifyObjects(root, ActiveReferences(inventory).Select(digest => objects[digest]).ToArray());
+        return inventory;
     }
 }

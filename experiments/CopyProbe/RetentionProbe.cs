@@ -233,7 +233,7 @@ internal static class RetentionProbe
 
     private static void CheckFailures()
     {
-        foreach (string scenario in new[] { "primary", "both", "commit", "corrupt", "pending", "stale", "journal", "object" })
+        foreach (string scenario in new[] { "primary", "both", "commit", "corrupt", "descriptor", "pending", "stale", "journal", "object" })
         {
             using var fixture = new Fixture();
             var preview = fixture.Store.PreviewRetention(fixture.Policy);
@@ -246,6 +246,11 @@ internal static class RetentionProbe
                     File.Delete(Path.Combine(fixture.Destination, "manifests_backup", fixture.Points[0] + ".jsonl")); break;
                 case "commit": File.Delete(Path.Combine(fixture.Destination, "commits", fixture.Points[0] + ".commit")); break;
                 case "corrupt": File.WriteAllText(Path.Combine(fixture.Destination, "manifests_backup", fixture.Points[0] + ".jsonl"), "bad"); break;
+                case "descriptor":
+                    File.Copy(Path.Combine(fixture.Destination, "pending", fixture.Points[1] + ".jsonl"),
+                        Path.Combine(fixture.Destination, "pending", fixture.Points[0] + ".jsonl"), overwrite: true);
+                    Check(!fixture.Store.Verify(fixture.Points[0]), "Descriptor damage blocked independent verification.");
+                    break;
                 case "pending":
                     fixture.Seed("unfinished");
                     Reject(() => fixture.Store.CreatePoint(fixture.Source, VersionStore.NewGenerationId(), objectCheckpoint: (step, _) =>

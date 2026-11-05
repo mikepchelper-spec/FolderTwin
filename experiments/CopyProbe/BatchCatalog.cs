@@ -173,7 +173,7 @@ internal static class BatchCatalog
     private static CatalogFiles InitialFiles(SafeFileHandle root) =>
         new(new(root, PrimaryName), new(root, BackupName), new(root, CommitName));
 
-    internal static CatalogSnapshot ReadLocked(SafeFileHandle root, CatalogFiles files, string generation)
+    internal static CatalogSnapshot ReadLocked(SafeFileHandle root, CatalogFiles files, string generation, bool requireBoth = false)
     {
         byte[] commit;
         using (var file = WindowsProbeNative.OpenPlainFile(files.Commit.Parent, files.Commit.Name, FileAccess.Read, FileShare.Read))
@@ -185,7 +185,9 @@ internal static class BatchCatalog
         };
         using var marker = binding.OpenVerifiedMarker(root);
         var primary = TryRead(files.Primary);
-        var secondary = TryRead(files.Backup);
+        // Cleanup requires identical replicas. Hash the second against the
+        // already parsed document to avoid retaining another tree of entries.
+        var secondary = requireBoth ? ReadIdenticalReplica() : TryRead(files.Backup);
         if (primary is not null && secondary is not null && !primary.DocumentHash.AsSpan().SequenceEqual(secondary.DocumentHash))
             throw new InvalidDataException("Ambas copias del catálogo son válidas pero diferentes.");
         var selected = primary ?? secondary ?? throw new InvalidDataException("Ninguna copia del catálogo es válida.");
@@ -193,6 +195,17 @@ internal static class BatchCatalog
             !selected.Binding.Identity.AsSpan().SequenceEqual(binding.Identity))
             throw new InvalidDataException("El catálogo no corresponde a la confirmación o al destino.");
         return selected with { Binding = binding, Degraded = primary is null || secondary is null };
+
+        CatalogSnapshot ReadIdenticalReplica()
+        {
+            if (primary is null)
+                throw new InvalidDataException("El catálogo primario no es válido para retención.");
+            using var replica = WindowsProbeNative.OpenPlainFile(files.Backup.Parent, files.Backup.Name, FileAccess.Read, FileShare.Read);
+            if (replica.Length < 1 || replica.Length > ByteLimit(generation) ||
+                !SHA256.HashData(replica).AsSpan().SequenceEqual(primary.DocumentHash))
+                throw new InvalidDataException("Las dos réplicas del catálogo deben coincidir para retención.");
+            return primary;
+        }
 
         CatalogSnapshot? TryRead(CatalogFile candidate)
         {
