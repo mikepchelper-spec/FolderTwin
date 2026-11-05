@@ -11,12 +11,11 @@ Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 - [Plan de trabajo](PLAN.md): experiencia, arquitectura, prioridades, pruebas y límites.
 - [Matriz de aceptación](ACEPTACION.md): requisitos de las etapas 2 a 5, evidencia y validaciones pendientes del piloto.
 - [Alcance y aceptación de la v1](V1.md): trabajo de producto, criterios de salida y comprobaciones externas.
-
 - [Guía del piloto](PILOTO.md): preparación, observación, recuperación y criterios de detención.
 - [Investigación](INVESTIGACION.md): necesidades observadas, documentación técnica y fuentes.
 - [Nombres](NOMBRES.md): elección, alternativas anteriores y estado de la comprobación de disponibilidad.
 
-La vista previa de la v1 registra y ejecuta los tres modos desde WPF, verifica el contenido y lo recupera en una carpeta nueva. El acumulativo conserva los exclusivos del destino y detiene conflictos externos. Versionado y espejo permiten seleccionar una fecha recuperable. Los controles de ejecución, horarios y el resto de la integración de producto siguen pendientes. Usa solo carpetas desechables con datos sintéticos. [Estado y recorrido de prueba](V1.md).
+La vista previa de la v1 registra y ejecuta los tres modos desde WPF, verifica el contenido y lo recupera en una carpeta nueva. El acumulativo conserva los exclusivos del destino y detiene conflictos externos. La recuperación permite elegir fecha, buscar, navegar por carpetas, revisar cambios y recuperar un archivo eliminado desde el punto anterior disponible. Los controles de ejecución, horarios y el resto de la integración de producto siguen pendientes. Usa solo carpetas desechables con datos sintéticos. [Estado y recorrido de prueba](V1.md).
 
 ## Alfa portable de Windows
 

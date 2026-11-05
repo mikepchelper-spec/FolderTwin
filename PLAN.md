@@ -2,13 +2,13 @@
 
 *Copias locales. Versiones recuperables.*
 
-Fecha de inicio 2026-10-29. Revisión del plan y los ensayos 2026-11-04, incluidas dos opiniones externas. El plan distingue las decisiones de diseño, las capacidades verificadas del laboratorio y las validaciones externas pendientes. Fundamento, evaluación de propuestas y enlaces en [INVESTIGACION.md](INVESTIGACION.md).
+Fecha de inicio 2026-10-29. Revisión del plan y los ensayos 2026-11-05, incluidas dos opiniones externas. El plan distingue las decisiones de diseño, las capacidades verificadas del laboratorio y las validaciones externas pendientes. Fundamento, evaluación de propuestas y enlaces en [INVESTIGACION.md](INVESTIGACION.md).
 
 ## 1. Resultado que buscamos
 
 La [matriz de la v1](V1.md) registra el paso de la alfa de laboratorio a la aplicación distribuible. Conserva por separado la aceptación ya realizada y las validaciones externas del producto.
 
-El asistente WPF de producto ya revisa origen, carpeta de destino, modo y horario propuesto, guarda identidades y permite reabrir trabajos sin los discos presentes. El registro se reanuda tras interrupciones comprobadas con datos sintéticos. Versionado, espejo, acumulativo y retención admiten el contexto de trabajo de producto en pruebas del motor. La vista previa WPF ejecuta los tres modos, verifica y recupera en carpeta nueva. El acumulativo conserva exclusivos y bloquea conflictos externos, con publicación recuperable probada en cada transición aplicable. Faltan el resto de los controles de producto y los horarios. La apertura habitual sigue en el laboratorio hasta completar esa integración.
+El asistente WPF de producto ya revisa origen, carpeta de destino, modo y horario propuesto, guarda identidades y permite reabrir trabajos sin los discos presentes. El registro se reanuda tras interrupciones comprobadas con datos sintéticos. Versionado, espejo, acumulativo y retención admiten el contexto de trabajo de producto en pruebas del motor. La vista previa WPF ejecuta los tres modos, verifica y recupera en carpeta nueva. Su explorador busca y navega por carpetas, pagina rutas y recupera archivos eliminados desde una fecha anterior. El acumulativo conserva exclusivos y bloquea conflictos externos, con publicación recuperable probada en cada transición aplicable. El VHDX verificó copia y restauración entre volúmenes con los tres modos. Faltan el resto de los controles de producto y los horarios. La apertura habitual sigue en el laboratorio hasta completar esa integración.
 
 En menos de dos minutos, una persona debe poder elegir una carpeta, elegir el disco de respaldo y entender qué va a ocurrir. Debe poder recuperar un archivo desde la misma app sin saber qué es un manifiesto, un hash o un comando.
 

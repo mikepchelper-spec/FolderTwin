@@ -6,7 +6,9 @@ internal enum VersionChange { None, Added, Modified, Removed }
 
 internal sealed record VersionEntry(string Path, bool IsDirectory, VersionChange Change)
 {
-    public string Label => System.IO.Path.GetFileName(Path) + (IsDirectory ? " · Carpeta" : "") + (Change switch
+    public string Label => System.IO.Path.GetFileName(Path) + Suffix;
+    public string FullLabel => Path + Suffix;
+    private string Suffix => (IsDirectory ? " · Carpeta" : "") + (Change switch
     {
         VersionChange.Added => " · Añadido",
         VersionChange.Modified => " · Modificado",
@@ -14,6 +16,8 @@ internal sealed record VersionEntry(string Path, bool IsDirectory, VersionChange
         _ => ""
     });
 }
+
+internal sealed record VersionPage(VersionEntry[] Entries, bool HasMore);
 
 internal sealed class VersionBrowser
 {
@@ -52,6 +56,17 @@ internal sealed class VersionBrowser
 
     internal IEnumerable<(VersionEntry Entry, bool ShowChange)> CacheRows() =>
         children.SelectMany(folder => folder).Select(entry => (entry, ShowChange(entry)));
+
+    internal VersionPage Page(string folder, bool onlyChanges, string query, int offset, int count)
+    {
+        VersionIndex.CheckPage(offset, count);
+        var entries = (query.Length == 0 ? children[folder] : children.SelectMany(group => group))
+            .Where(entry => (onlyChanges ? ShowChange(entry) : query.Length != 0 || entry.Change != VersionChange.Removed) &&
+                entry.Path.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(entry => entry.IsDirectory).ThenBy(entry => entry.Path, StringComparer.Ordinal)
+            .Skip(offset).Take(count + 1).ToArray();
+        return new(entries.Take(count).ToArray(), entries.Length > count);
+    }
 
     private bool ShowChange(VersionEntry entry) =>
         entry.Change != VersionChange.None || entry.IsDirectory && changedFolders.Contains(entry.Path);

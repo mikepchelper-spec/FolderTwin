@@ -5,8 +5,9 @@ using Microsoft.Win32.SafeHandles;
 
 namespace CopyLab;
 
-internal sealed class VersionIndex(LabWorkspace workspace)
+internal sealed class VersionIndex(Func<DirectoryFence> openScope)
 {
+    internal VersionIndex(LabWorkspace workspace) : this(workspace.OpenRegisteredRoot) { }
     internal const string CacheDirectory = ".foldertwin-index";
     internal const string DatabaseName = "index.db";
     private const string OwnerName = "owner";
@@ -85,6 +86,47 @@ internal sealed class VersionIndex(LabWorkspace workspace)
         return results.OrderByDescending(entry => entry.IsDirectory).ThenBy(entry => entry.Path, StringComparer.Ordinal).ToArray();
     });
 
+    internal VersionPage Page(string key, string folder, bool onlyChanges, string search, int offset, int count)
+    {
+        CheckPage(offset, count);
+        return Use(create: false, db =>
+        {
+            db.Execute("BEGIN");
+            if (!HasView(db, key)) throw new InvalidDataException("La vista del catálogo falta en el índice.");
+            using var query = db.Prepare("""
+                SELECT path, directory, change FROM entries
+                WHERE view_key=?1 AND (?2=1 OR parent=?3) AND
+                    ((?4=1 AND visible_change=1) OR (?4=0 AND (?2=1 OR change<>?5)))
+                ORDER BY directory DESC, path COLLATE BINARY
+                """);
+            query.Bind(1, key);
+            query.Bind(2, search.Length == 0 ? 0 : 1);
+            query.Bind(3, folder);
+            query.Bind(4, onlyChanges ? 1 : 0);
+            query.Bind(5, (int)VersionChange.Removed);
+            var entries = new List<VersionEntry>();
+            int matched = 0;
+            while (query.Step())
+            {
+                string path = query.Text(0);
+                int directory = query.Int(1);
+                var change = (VersionChange)query.Int(2);
+                if (directory is not (0 or 1) || !Enum.IsDefined(change) ||
+                    search.Length == 0 && VersionBrowser.Parent(path) != folder)
+                    throw new InvalidDataException("El índice contiene una ruta o un estado inválido.");
+                if (!path.Contains(search, StringComparison.OrdinalIgnoreCase) || matched++ < offset) continue;
+                if (entries.Count == count) return new VersionPage(entries.ToArray(), true);
+                entries.Add(new(path, directory == 1, change));
+            }
+            return new VersionPage(entries.ToArray(), false);
+        });
+    }
+
+    internal static void CheckPage(int offset, int count)
+    {
+        if (offset < 0 || count is < 1 or > 250) throw new ArgumentOutOfRangeException(nameof(count));
+    }
+
     private static bool HasView(LocalSqlite db, string key)
     {
         using var query = db.Prepare("SELECT 1 FROM views WHERE key=?1");
@@ -94,7 +136,7 @@ internal sealed class VersionIndex(LabWorkspace workspace)
 
     private T Use<T>(bool create, Func<LocalSqlite, T> action)
     {
-        using var scope = workspace.OpenRegisteredRoot();
+        using var scope = openScope();
         string volume = Path.GetPathRoot(WindowsProbeNative.VolumePath(scope.Root))!;
         if (GetDriveType(volume) != 3) // DRIVE_FIXED.
             throw new IOException("El índice requiere un volumen fijo local.");

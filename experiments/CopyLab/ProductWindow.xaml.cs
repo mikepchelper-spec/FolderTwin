@@ -15,6 +15,7 @@ public partial class ProductWindow : Window
     private sealed record JobRow(Guid Id, string Label, string Detail, bool Pending, ProductJob? Job = null);
     private readonly Func<ProductJobRegistry> openRegistry;
     private readonly Func<string, string?>? testPicker;
+    private readonly VersionIndex productIndex;
     private string? origin;
     private string? parent;
     private Choice? selection;
@@ -26,6 +27,11 @@ public partial class ProductWindow : Window
     {
         this.openRegistry = openRegistry ?? ProductJobRegistry.OpenLocal;
         this.testPicker = testPicker;
+        productIndex = new(() =>
+        {
+            using var registry = this.openRegistry();
+            return registry.OpenIndexScope();
+        });
         InitializeComponent();
         ModeChanged(this, new RoutedEventArgs());
     }

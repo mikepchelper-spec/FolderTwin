@@ -51,6 +51,17 @@ internal static class IndexScaleProbe
                 if (observed != count)
                     throw new InvalidOperationException("The indexed view lost files.");
             });
+            Measure("index_pages_and_search", () =>
+            {
+                var first = index.Page(key, directories[0], false, "", 0, 250);
+                var last = index.Page(key, directories[0], false, "", 250, 250);
+                var unicode = index.Page(key, "", false, "DATO Ñ 00000", 0, 250);
+                var removed = index.Page(key, "", false, files[^1].RelativePath, 0, 250);
+                if (first.Entries.Length != 250 || !first.HasMore || last.Entries.Length != 6 || last.HasMore ||
+                    first.Entries.Concat(last.Entries).Distinct().Count() != perDirectory || unicode.Entries.Length != 10 ||
+                    removed.Entries is not [{ Change: VersionChange.Removed }])
+                    throw new InvalidOperationException("Paging, Unicode search or deleted-file search lost indexed entries.");
+            });
             string path = Path.Combine(workspace.Root, VersionIndex.CacheDirectory, VersionIndex.DatabaseName);
             Console.Error.WriteLine($"PASS indexed_files={count}; directories={directories.Length}; database_bytes={new FileInfo(path).Length}.");
 

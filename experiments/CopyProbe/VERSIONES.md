@@ -2,6 +2,8 @@
 
 El almacén ocupa una subcarpeta dedicada de un espacio desechable registrado. Se inicializa en una carpeta vacía y usa el marcador de destino y un registro de identidad propio. Todas las operaciones mantienen un bloqueo exclusivo del almacén. Los datos de otras carpetas y los respaldos de copia plana quedan fuera de este formato.
 
+El contexto de producto usa `FTVERS03` en una carpeta dedicada NTFS vinculada a un trabajo, con origen independiente por identidad y ruta de volumen. Comparte objetos, catálogos y registro, y guarda la ubicación pendiente con su descriptor v2. El lector del espacio de laboratorio conserva su ámbito relativo y sus formatos anteriores. Consulta [V1.md](../../V1.md) para el flujo WPF y [ACUMULATIVA.md](ACUMULATIVA.md) para la publicación de la carpeta acumulada.
+
 | Ubicación | Contenido |
 |---|---|
 | `.foldertwin-version-store` | 48 bytes. ASCII `FTVERS02`, identidad de directorio de 24 bytes y GUID del marcador en el orden de `Guid.ToByteArray()`. El lector también admite `FTVERS01`. |

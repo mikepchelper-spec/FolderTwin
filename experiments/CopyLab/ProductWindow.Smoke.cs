@@ -103,10 +103,64 @@ public partial class ProductWindow
                         "A busy file was reported as a complete product backup.");
                 }
                 File.WriteAllText(Path.Combine(source, "datos.txt"), "actualizado");
+                string documents = Directory.CreateDirectory(Path.Combine(source, "Documentos")).FullName;
+                string deleted = Path.Combine("Documentos", "Recuperar.txt");
+                File.WriteAllText(Path.Combine(source, deleted), "archivo eliminado recuperable");
+                File.WriteAllText(Path.Combine(documents, "Informe ÁRBOL.txt"), "contenido Unicode");
+                for (int number = 0; number < 301; number++)
+                    File.WriteAllText(Path.Combine(source, $"archivo {number:D3}.txt"), "datos de página");
                 await Click(window, window.BackupJobButton);
                 Check(store.ListPoints().Length == 2, "Retry did not create the second version.");
+                string beforeDeletion = store.RegisteredGenerations().RegistrationOrder[^1];
+                File.Delete(Path.Combine(source, deleted));
+                await Click(window, window.BackupJobButton);
                 await Click(window, window.RecoverJobButton);
-                window.RecoveryDates.SelectedIndex = 1;
+                Check(window.recoveryIndexKey is not null && window.RecoveryFiles.Items.Count == 250 && window.NextRecoveryPageButton.IsEnabled,
+                    "The product view did not page its local index.");
+                var firstPage = window.RecoveryFiles.Items.OfType<VersionEntry>().ToArray();
+                await Click(window, window.NextRecoveryPageButton);
+                Check(window.RecoveryFiles.Items.Count > 0 && !window.NextRecoveryPageButton.IsEnabled &&
+                    !window.RecoveryFiles.Items.OfType<VersionEntry>().Intersect(firstPage).Any(), "Product pagination repeated entries.");
+                await Click(window, window.PreviousRecoveryPageButton);
+                window.RecoveryFiles.SelectedItem = window.RecoveryFiles.Items.OfType<VersionEntry>().Single(entry => entry.IsDirectory);
+                await Click(window, window.OpenRecoveryFolderButton);
+                Check(window.RecoveryFiles.Items.OfType<VersionEntry>().Any(entry => entry.Path.EndsWith("Informe ÁRBOL.txt", StringComparison.Ordinal)),
+                    "The product browser did not open a nested folder.");
+                window.RecoveryOnlyChanges.IsChecked = true;
+                await window.activeTask;
+                Check(window.RecoveryFiles.Items.OfType<VersionEntry>().Single().Change == VersionChange.Removed &&
+                    window.RecoveryComparison.Text.Contains("Comparando", StringComparison.Ordinal),
+                    "The change filter did not isolate the deletion and identify the compared dates.");
+                window.RecoveryOnlyChanges.IsChecked = false;
+                await window.activeTask;
+                await Click(window, window.RecoveryParentButton);
+                window.RecoverySearch.Text = "árbol";
+                await Click(window, window.SearchRecoveryButton);
+                Check(window.RecoveryFiles.Items.OfType<VersionEntry>().Single().Path == Path.Combine("Documentos", "Informe ÁRBOL.txt"),
+                    "Unicode search did not match case-insensitively across folders.");
+                window.RecoverySearch.Text = "Recuperar.txt";
+                await Click(window, window.SearchRecoveryButton);
+                var removed = window.RecoveryFiles.Items.OfType<VersionEntry>().Single();
+                Check(removed.Change == VersionChange.Removed, "Search did not show the recoverable deleted file.");
+                window.RecoveryFiles.SelectedItem = removed;
+                string recoveredFileParent = Folder("Recuperación de archivo eliminado");
+                picks.Enqueue(recoveredFileParent);
+                await Click(window, window.ReviewFileRestoreButton);
+                Check(window.restoreChoice is { RelativeFile: not null } fileChoice && fileChoice.RelativeFile == deleted &&
+                    fileChoice.Generation == beforeDeletion && !Directory.EnumerateFileSystemEntries(recoveredFileParent).Any(),
+                    "Deleted-file review did not select the earlier point without writing data.");
+                await Click(window, window.RestorePointButton);
+                string recoveredFile = Directory.EnumerateDirectories(recoveredFileParent).Single();
+                Check(File.ReadAllText(Path.Combine(recoveredFile, deleted)) == "archivo eliminado recuperable" &&
+                    !File.Exists(Path.Combine(recoveredFile, "datos.txt")), "Single-file recovery restored the wrong scope.");
+                string database = Path.Combine(settings, VersionIndex.CacheDirectory, VersionIndex.DatabaseName);
+                File.WriteAllText(database, "synthetic invalid SQLite");
+                window.RecoverySearch.Text = "árbol";
+                await Click(window, window.SearchRecoveryButton);
+                Check(window.recoveryIndexKey is null && window.RecoveryFiles.Items.Count == 1 &&
+                    window.StatusText.Text.Contains("Índice local no disponible", StringComparison.Ordinal),
+                    "An unavailable index stopped catalog browsing or hid its warning.");
+                window.RecoveryDates.SelectedIndex = 2;
                 await window.activeTask;
                 await Click(window, window.VerifyPointButton);
                 Check(window.StatusText.Text.StartsWith("Verificación completa", StringComparison.Ordinal), window.StatusText.Text);
@@ -123,6 +177,8 @@ public partial class ProductWindow
                     window.StatusText.Text.StartsWith("Recuperación completa", StringComparison.Ordinal), window.StatusText.Text);
                 Directory.Move(absent, source);
                 await Click(window, window.ReturnToJobsButton);
+                Directory.Delete(documents, recursive: true);
+                for (int number = 0; number < 301; number++) File.Delete(Path.Combine(source, $"archivo {number:D3}.txt"));
 
                 var mirror = jobs.Single(job => job.Options.Mode == ProductBackupMode.ProtectedMirror);
                 window.SelectJob(mirror.Id);
@@ -154,6 +210,7 @@ public partial class ProductWindow
             }
             finally { reopened.Close(); }
             Console.Error.WriteLine("PASS WPF executes and recovers all three modes, preserves cumulative extras, retries busy files and reviews mass mirror changes.");
+            Console.Error.WriteLine("PASS product recovery pages files, browses folders, searches Unicode, restores a deleted file and tolerates a corrupt local index.");
         }
         finally
         {

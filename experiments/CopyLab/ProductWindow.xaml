@@ -61,28 +61,54 @@
                 </ListBox>
             </DockPanel>
 
-            <DockPanel x:Name="RecoveryPanel" Visibility="Collapsed">
-                <StackPanel DockPanel.Dock="Top">
+            <ScrollViewer x:Name="RecoveryPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
                     <TextBlock Text="Recuperar archivos" FontSize="20" FontWeight="SemiBold"
                                AutomationProperties.HeadingLevel="Level2" />
                     <Label Content="_Fecha del respaldo" Target="{Binding ElementName=RecoveryDates}" />
                     <ComboBox x:Name="RecoveryDates" DisplayMemberPath="Label" SelectionChanged="RecoveryDateChanged"
                               AutomationProperties.Name="Fecha del respaldo" />
                     <TextBlock x:Name="RecoverySummary" TextWrapping="Wrap" Margin="0,8,0,8" />
-                </StackPanel>
-                <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                    <TextBlock x:Name="RecoveryComparison" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <DockPanel Margin="0,0,0,8">
+                        <Button x:Name="SearchRecoveryButton" DockPanel.Dock="Right" Content="_Buscar" Click="SearchRecoveryClick" Margin="8,0,0,0" />
+                        <TextBox x:Name="RecoverySearch" MaxLength="256" KeyDown="RecoverySearchKeyDown"
+                                 AutomationProperties.Name="Buscar por nombre o ruta en este respaldo" />
+                    </DockPanel>
+                    <CheckBox x:Name="RecoveryOnlyChanges" Content="Mostrar solo _cambios respecto al punto anterior"
+                              Checked="RecoveryChangesClick" Unchecked="RecoveryChangesClick" Margin="0,0,0,8" />
+                    <WrapPanel>
+                        <Button x:Name="RecoveryParentButton" Content="Carpeta _superior" Click="RecoveryParentClick" Margin="0,0,8,4" />
+                        <Button x:Name="OpenRecoveryFolderButton" Content="_Abrir carpeta" Click="OpenRecoveryFolderClick" IsEnabled="False" Margin="0,0,8,4" />
+                    </WrapPanel>
+                    <TextBlock x:Name="RecoveryPath" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <ListBox x:Name="RecoveryFiles" MinHeight="160" MaxHeight="260"
+                             AutomationProperties.Name="Carpetas y archivos recuperables"
+                             SelectionChanged="RecoveryFileSelected" MouseDoubleClick="OpenRecoveryFolderClick"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding FullLabel}" TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <WrapPanel Margin="0,8,0,8">
+                        <Button x:Name="PreviousRecoveryPageButton" Content="Página _anterior" Click="PreviousRecoveryPageClick" Margin="0,0,8,4" />
+                        <Button x:Name="NextRecoveryPageButton" Content="Página s_iguiente" Click="NextRecoveryPageClick" Margin="0,0,8,4" />
+                        <TextBlock x:Name="RecoveryPageText" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    </WrapPanel>
                     <TextBlock x:Name="RestoreReviewText" TextWrapping="Wrap" Margin="0,0,0,8" />
                     <WrapPanel>
                         <Button x:Name="VerifyPointButton" Content="_Verificar respaldo" Click="VerifyPointClick" Margin="0,0,8,4" />
-                        <Button x:Name="ReviewRestoreButton" Content="Elegir dónde _recuperar" Click="ReviewRestoreClick" Margin="0,0,8,4" />
+                        <Button x:Name="ReviewRestoreButton" Content="Recuperar _punto completo" Click="ReviewRestoreClick" Margin="0,0,8,4" />
+                        <Button x:Name="ReviewFileRestoreButton" Content="Recuperar _archivo elegido" Click="ReviewFileRestoreClick" IsEnabled="False" Margin="0,0,8,4" />
                         <Button x:Name="RestorePointButton" Content="Recuperar en carpeta _nueva" Click="RestorePointClick"
                                 IsEnabled="False" Margin="0,0,8,4" />
                         <Button x:Name="ReturnToJobsButton" Content="Volver a _trabajos" Click="ReturnToJobsClick" Margin="0,0,8,4" />
                     </WrapPanel>
                 </StackPanel>
-                <ListBox x:Name="RecoveryFiles" AutomationProperties.Name="Archivos del punto seleccionado"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
-            </DockPanel>
+            </ScrollViewer>
 
             <DockPanel x:Name="Wizard" Visibility="Collapsed" KeyboardNavigation.TabNavigation="Cycle">
                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">

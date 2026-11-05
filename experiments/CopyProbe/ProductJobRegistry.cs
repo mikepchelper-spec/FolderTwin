@@ -92,6 +92,14 @@ internal sealed class ProductJobRegistry : IDisposable
         return ReadList();
     }
 
+    internal DirectoryFence OpenIndexScope()
+    {
+        var scope = new DirectoryFence(volumePath);
+        if (WindowsProbeNative.DirectoryIdentity(scope.Root).AsSpan().SequenceEqual(identity)) return scope;
+        scope.Dispose();
+        throw new InvalidDataException("La carpeta de configuración cambió de identidad.");
+    }
+
     private ProductJob Finish(SafeFileHandle job, Intent intent, Action<ProductRegistrationStep>? checkpoint)
     {
         string destinationPath = TargetPath(intent);

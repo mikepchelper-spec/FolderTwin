@@ -13,7 +13,7 @@ public partial class ProductWindow
             $" · {Point.FileCount:N0} archivos" + (Point.Problem is not null ? " · Requiere revisión" :
                 Point.Expired ? " · Expirado" : Point.Degraded ? " · Una réplica íntegra" : "");
     }
-    private sealed record RestoreChoice(string Generation, DedicatedDestinationReview Destination);
+    private sealed record RestoreChoice(string Generation, DedicatedDestinationReview Destination, string? RelativeFile = null);
     private MirrorPreview? mirrorReview;
     private Guid? mirrorJobId;
     private ProductJob? recoveryJob;
@@ -160,13 +160,52 @@ public partial class ProductWindow
         if (recoveryJob is not { } job || RecoveryDates.SelectedItem is not RecoveryDate row) return;
         RecoveryFiles.ItemsSource = null;
         RecoverySummary.Text = "";
+        RecoveryComparison.Text = "";
+        VerifyPointButton.IsEnabled = ReviewRestoreButton.IsEnabled = SearchRecoveryButton.IsEnabled = false;
+        PreviousRecoveryPageButton.IsEnabled = NextRecoveryPageButton.IsEnabled = RecoveryParentButton.IsEnabled = false;
+        RecoveryOnlyChanges.IsEnabled = false;
+        recoveryCatalogs = null;
+        recoveryBrowser = null;
+        recoveryIndexKey = null;
+        recoveryComparisonId = null;
+        recoveryDirectory = "";
+        recoveryQuery = "";
+        recoveryOffset = 0;
+        RecoverySearch.Text = "";
+        RecoveryOnlyChanges.IsChecked = false;
         if (row.Point.Problem is { } problem) throw new InvalidDataException(problem);
-        var catalog = await Task.Run(() => VersionStore.OpenProduct(job).ReadCatalogs(row.Point.Id, null).Current);
-        RecoveryFiles.ItemsSource = catalog.Files.Take(250).Select(file => file.RelativePath).ToArray();
-        RecoverySummary.Text = $"{catalog.Files.Length:N0} archivos · {catalog.Directories.Length:N0} carpetas. " +
-            "La recuperación de este punto crea una carpeta nueva." + (catalog.Files.Length > 250 ? " Vista previa de las primeras 250 rutas." : "") +
-            (catalog.Degraded ? " Solo una réplica del catálogo está íntegra." : "");
-        SetStatus("Elige una fecha para revisar o recuperar el respaldo completo.");
+        var previous = RecoveryDates.Items.OfType<RecoveryDate>().SkipWhile(candidate => candidate.Point.Id != row.Point.Id)
+            .Skip(1).FirstOrDefault(candidate => candidate.Point is { Problem: null, Expired: false });
+        var loaded = await Task.Run(() =>
+        {
+            var store = VersionStore.OpenProduct(job);
+            CatalogSnapshot current;
+            CatalogSnapshot? before;
+            string? previousId = previous?.Point.Id;
+            try { (current, before) = store.ReadCatalogs(row.Point.Id, previousId); }
+            catch (Exception error) when (previousId is not null && VersionJob.Expected(error))
+            {
+                (current, before) = store.ReadCatalogs(row.Point.Id, null);
+                previousId = null;
+            }
+            string key = VersionIndex.Key(current, before);
+            VersionBrowser Build() => new(current, before);
+            try { productIndex.Ensure(key, Build); return (current, before, previousId, Key: (string?)key, Fallback: (VersionBrowser?)null); }
+            catch (Exception error) when (VersionIndex.IsUnavailable(error))
+            { return (current, before, previousId, Key: (string?)null, Fallback: (VersionBrowser?)Build()); }
+        });
+        recoveryCatalogs = (loaded.current, loaded.before);
+        recoveryComparisonId = loaded.previousId;
+        recoveryIndexKey = loaded.Key;
+        recoveryBrowser = loaded.Fallback;
+        VerifyPointButton.IsEnabled = ReviewRestoreButton.IsEnabled = SearchRecoveryButton.IsEnabled = true;
+        RecoveryOnlyChanges.IsEnabled = loaded.previousId is not null;
+        RecoveryComparison.Text = loaded.previousId is null ? "Sin un punto anterior disponible para comparar." :
+            $"Comparando {row.Label} con {previous!.Label}. Los eliminados se recuperan desde el punto anterior.";
+        RecoverySummary.Text = $"{loaded.current.Files.Length:N0} archivos · {loaded.current.Directories.Length:N0} carpetas. " +
+            "La recuperación crea una carpeta nueva." + (loaded.current.Degraded ? " Solo una réplica del catálogo está íntegra." : "");
+        await LoadRecoveryPageAsync();
+        SetStatus("Busca un archivo o abre una carpeta para revisar su contenido." + IndexNote());
     }
 
     private void VerifyPointClick(object sender, RoutedEventArgs e)
@@ -185,7 +224,9 @@ public partial class ProductWindow
         });
     }
 
-    private void ReviewRestoreClick(object sender, RoutedEventArgs e)
+    private void ReviewRestoreClick(object sender, RoutedEventArgs e) => ReviewRestore(relativeFile: null, fromPrevious: false);
+
+    private void ReviewRestore(string? relativeFile, bool fromPrevious)
     {
         if (busy || recoveryJob is not { } job || RecoveryDates.SelectedItem is not RecoveryDate row ||
             ChooseFolder("Elige dónde crear la carpeta recuperada") is not { } parentPath) return;
@@ -195,8 +236,11 @@ public partial class ProductWindow
             string target = Path.Combine(destination.Parent.VolumePath, destination.FolderName);
             if (LocalJobRoots.Overlap(target, job.Source.VolumePath))
                 throw new InvalidDataException("Elige una carpeta separada del origen para recuperar los archivos.");
-            restoreChoice = new(row.Point.Id, destination);
-            RestoreReviewText.Text = $"Se recuperará el punto del {row.Point.CreatedUtc.ToLocalTime():g} en una carpeta nueva\n{target}";
+            string generation = fromPrevious ? recoveryComparisonId ??
+                throw new InvalidDataException("El punto anterior no está disponible para este archivo.") : row.Point.Id;
+            restoreChoice = new(generation, destination, relativeFile);
+            RestoreReviewText.Text = $"Se recuperará {(relativeFile ?? "el punto completo")} del {VersionStore.GenerationTime(generation).ToLocalTime():g} " +
+                $"en una carpeta nueva\n{target}";
             RestorePointButton.IsEnabled = true;
             SetStatus("Revisa dónde se recuperarán los archivos antes de continuar.");
         });
@@ -211,7 +255,7 @@ public partial class ProductWindow
             {
                 using var roots = LocalJobRoots.CreateDedicatedDestination(choice.Destination);
                 string target = roots.Review.Destination.VolumePath;
-                VersionStore.OpenProduct(job).Restore(choice.Generation, target);
+                VersionStore.OpenProduct(job).Restore(choice.Generation, target, choice.RelativeFile);
                 return target;
             });
             ClearRestoreReview();
