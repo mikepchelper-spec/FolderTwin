@@ -29,6 +29,8 @@ if (args is ["--registry"])
     return RegistryProbe.Run();
 if (args is ["--retention"])
     return RetentionProbe.Run();
+if (args is ["--retention-scale"])
+    return RetentionScaleProbe.Run();
 if (args is ["--interrupt-retention-child", var retentionRoot])
     return RetentionProbe.InterruptChild(retentionRoot);
 if (args is ["--version-scale", var fileCount, var objectCount] &&

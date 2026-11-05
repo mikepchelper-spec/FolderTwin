@@ -98,11 +98,11 @@ internal static class VersionScaleProbe
     private static string DirectoryName(int index) => FormattableString.Invariant($"grupo {index / FilesPerDirectory:D4}");
     private static string FileName(int index) => FormattableString.Invariant($"dato ñ {index:D6}.bin");
 
-    private static IoCounters ReadCounters(Process process) =>
+    internal static IoCounters ReadCounters(Process process) =>
         GetProcessIoCounters(process.Handle, out var counters) ? counters : throw new Win32Exception(Marshal.GetLastPInvokeError());
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct IoCounters
+    internal struct IoCounters
     {
         public ulong ReadOperations, WriteOperations, OtherOperations, ReadBytes, WriteBytes, OtherBytes;
     }
