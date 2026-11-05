@@ -238,6 +238,7 @@ public partial class ProductWindow
             Console.Error.WriteLine("PASS product recovery pages files, browses folders, searches Unicode, restores a deleted file and tolerates a corrupt local index.");
             Console.Error.WriteLine("PASS WPF edits name and hour, rejects invalid time, disables, retires and reactivates while keeping recovery and data identity; native schedule operations are injected separately.");
             await RunWorkerSmokeAsync();
+            await RunRestoreWorkerSmokeAsync();
             await ProductTrayProbe.RunAsync();
             await RunProductRetentionSmokeAsync();
         }
@@ -255,7 +256,7 @@ public partial class ProductWindow
         Check(button.IsEnabled, "A wizard action was unexpectedly disabled.");
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         await window.activeTask;
-        if (button == window.BackupJobButton || button == window.ApplyMirrorButton || button == window.VerifyPointButton)
+        if (button == window.BackupJobButton || button == window.ApplyMirrorButton || button == window.VerifyPointButton || button == window.RestorePointButton)
             await window.WaitForWorkersAsync();
     }
 

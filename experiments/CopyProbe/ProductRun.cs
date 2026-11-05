@@ -5,18 +5,20 @@ using Microsoft.Win32.SafeHandles;
 
 internal enum ProductRunState { Confirmed, Cancelled, WaitingForSource, WaitingForDestination, Busy, Review }
 internal enum ProductRunAction { Pause, Resume, Cancel }
-internal enum ProductRunOperation { Backup, Verify }
+internal enum ProductRunOperation { Backup, Verify, Restore }
 internal enum WorkPhase { Analyzing, Copying, Verifying, Publishing, Restoring }
 internal sealed record WorkProgress(WorkPhase Phase, int Processed, int Total, string? RelativePath = null);
 internal sealed record ProductRunIntent(int Version, Guid Job, Guid Id, long Sequence, byte[] JobStamp, DateTimeOffset StartedUtc,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] ProductRunOperation Operation = ProductRunOperation.Backup);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] ProductRunOperation Operation = ProductRunOperation.Backup,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? RestoreRequest = null);
 internal sealed record ProductRunResult(int Version, byte[] IntentHash, ProductRunState State, DateTimeOffset FinishedUtc,
     string? Generation, string? RelativePath, int? ErrorCode, string? Detail = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Degraded = false);
 internal sealed record ProductRunProgress(int Version, byte[] IntentHash, long Revision, WorkProgress Work, bool Paused);
 internal sealed record ProductRunCommand(int Version, byte[] IntentHash, long Number, ProductRunAction Action);
 internal sealed record ProductRunView(ProductRunIntent Intent, ProductRunResult? Result, string? Generation,
-    ProductRunProgress? Progress, bool Running, ProductRetry? Retry = null, bool RetryRunning = false);
+    ProductRunProgress? Progress, bool Running, ProductRetry? Retry = null, bool RetryRunning = false,
+    ProductRestoreRequest? Restore = null);
 internal sealed record ProductRetry(int Version, byte[] IntentHash, int Number, DateTimeOffset NextUtc);
 internal sealed record ProductRunHistory(ProductRunView[] Runs, int Unreadable);
 
@@ -29,9 +31,11 @@ internal sealed partial class ProductJobRegistry
         return ReadConfirmed(job, ReadIntent(job, id));
     }
 
-    internal ProductRunLease StartRun(Guid id, Func<DateTimeOffset>? clock = null, ProductRunOperation operation = ProductRunOperation.Backup)
+    internal ProductRunLease StartRun(Guid id, Func<DateTimeOffset>? clock = null, ProductRunOperation operation = ProductRunOperation.Backup,
+        Guid? restoreRequest = null)
     {
-        if (!Enum.IsDefined(operation)) throw new ArgumentOutOfRangeException(nameof(operation));
+        if (!Enum.IsDefined(operation) || !ValidRestoreReference(operation, restoreRequest))
+            throw new ArgumentOutOfRangeException(nameof(operation));
         var job = OpenJob(id);
         FileStream? execution = null;
         try
@@ -46,7 +50,7 @@ internal sealed partial class ProductJobRegistry
             // the number, so a torn history write cannot cause sequence reuse.
             long sequence = checked(WindowsProbeNative.ReadDirectory(runs).Select(entry => DirectorySequence(entry.Name)).DefaultIfEmpty(0).Max() + 1);
             Guid runId = Guid.NewGuid();
-            var intent = new ProductRunIntent(1, id, runId, sequence, JobStamp(job), (clock?.Invoke() ?? DateTimeOffset.UtcNow).ToUniversalTime(), operation);
+            var intent = new ProductRunIntent(1, id, runId, sequence, JobStamp(job), (clock?.Invoke() ?? DateTimeOffset.UtcNow).ToUniversalTime(), operation, restoreRequest);
             var directory = WindowsProbeNative.CreatePlainDirectory(runs, RunName(intent));
             try
             {
@@ -86,7 +90,7 @@ internal sealed partial class ProductJobRegistry
         RetentionJournal.WriteFile(run, CommandName(number), Encode(new ProductRunCommand(1, IntentHash(selected.Intent), number, action)));
     }
 
-    private static ProductRunHistory ReadRuns(SafeFileHandle job, SafeFileHandle runs, Guid id)
+    private ProductRunHistory ReadRuns(SafeFileHandle job, SafeFileHandle runs, Guid id)
     {
         var found = new List<ProductRunView>();
         int unreadable = 0;
@@ -99,7 +103,8 @@ internal sealed partial class ProductJobRegistry
                 var intent = Decode<ProductRunIntent>(run, "intent");
                 if (intent.Version != 1 || intent.Job != id || intent.Id == Guid.Empty || intent.Sequence < 1 ||
                     entry.Name != RunName(intent) || !intent.JobStamp.AsSpan().SequenceEqual(JobStamp(job)) ||
-                    intent.StartedUtc.Offset != TimeSpan.Zero || !Enum.IsDefined(intent.Operation) || !sequences.Add(intent.Sequence))
+                    intent.StartedUtc.Offset != TimeSpan.Zero || !Enum.IsDefined(intent.Operation) ||
+                    !ValidRestoreReference(intent.Operation, intent.RestoreRequest) || !sequences.Add(intent.Sequence))
                     throw new InvalidDataException("El intento pertenece a otro trabajo o tiene una secuencia inválida.");
                 string? generation = ReadGeneration(run, intent);
                 ProductRunResult? result = ReadResult(run, intent, generation);
@@ -126,6 +131,9 @@ internal sealed partial class ProductJobRegistry
                 // release of the worker's lock. Observe it before declaring an interruption.
                 if (result is null && !running) result = ReadResult(run, intent, generation);
                 if (result is not null) generation = result.Generation;
+                var restore = intent.RestoreRequest is { } request ? ReadRestoreRequest(job, id, request) : null;
+                if (restore is not null && generation is not null && generation != restore.Generation)
+                    throw new InvalidDataException("La recuperación no corresponde a la fecha revisada.");
                 ProductRetry? retry = null;
                 bool retryRunning = false;
                 if (WindowsProbeNative.PlainFileExists(run, "retry"))
@@ -137,7 +145,7 @@ internal sealed partial class ProductJobRegistry
                         throw new InvalidDataException("El reintento no corresponde al resultado registrado.");
                     retryRunning = IsLocked(run, "retry.active");
                 }
-                found.Add(new(intent, result, generation, progress, running, retry, retryRunning));
+                found.Add(new(intent, result, generation, progress, running, retry, retryRunning, restore));
             }
             catch (Exception error) when (VersionJob.Expected(error)) { unreadable++; }
         }
@@ -145,6 +153,8 @@ internal sealed partial class ProductJobRegistry
     }
 
     private sealed record RunGeneration(byte[] IntentHash, string Generation);
+    private static bool ValidRestoreReference(ProductRunOperation operation, Guid? request) =>
+        operation == ProductRunOperation.Restore ? request is { } id && id != Guid.Empty : request is null;
     private static bool IsLocked(SafeFileHandle directory, string name)
     {
         try { using var probe = WindowsProbeNative.OpenPlainFile(directory, name, FileAccess.ReadWrite, FileShare.None); return false; }

@@ -12,6 +12,9 @@ internal static class ProductWorker
     internal static Process StartVerification(string registry, Guid id, string generation) =>
         Launch(["--verify-product-job", registry, id.ToString("N"), generation]);
 
+    internal static Process StartRestoration(string registry, Guid id, Guid request) =>
+        Launch(["--restore-product-job", registry, id.ToString("N"), request.ToString("N")]);
+
     private static Process Launch(string[] arguments)
     {
         string executable = Environment.ProcessPath ?? throw new IOException("No se pudo localizar el ejecutor.");

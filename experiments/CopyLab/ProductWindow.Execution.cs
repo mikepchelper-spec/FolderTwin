@@ -40,6 +40,14 @@ public partial class ProductWindow
         if (mirrorJobId != job?.Id) ResetProductActions();
         RefreshRuntimeDisplay();
         RefreshProductRetentionActions();
+        if (RecoveryPanel.Visibility == Visibility.Visible && recoveryJob?.Id == job?.Id)
+        {
+            bool ready = available && RecoveryDates.SelectedItem is RecoveryDate { Point.Expired: false, Point.Problem: null };
+            RecoveryDates.IsEnabled = !busy && !executing;
+            VerifyPointButton.IsEnabled = ReviewRestoreButton.IsEnabled = ready;
+            RestorePointButton.IsEnabled = ready && restoreChoice is not null;
+            RefreshRecoverySelection();
+        }
     }
 
     private void BackupJobClick(object sender, RoutedEventArgs e)
@@ -227,15 +235,13 @@ public partial class ProductWindow
         if (busy || recoveryJob is not { } job || restoreChoice is not { } choice) return;
         Start(async () =>
         {
-            string output = await Task.Run(() =>
+            Guid request = await Task.Run(() =>
             {
-                using var roots = LocalJobRoots.CreateDedicatedDestination(choice.Destination);
-                string target = roots.Review.Destination.VolumePath;
-                VersionStore.OpenProduct(job).Restore(choice.Generation, target, choice.RelativeFile);
-                return target;
+                using var registry = openRegistry();
+                return registry.ApproveRestore(job.Id, choice.Generation, choice.Destination, choice.RelativeFile);
             });
+            await StartWorkerAsync(job, location => StartRestoreProcess(location, job.Id, request));
             ClearRestoreReview();
-            SetStatus($"Recuperación completa y verificada.\n{output}");
         });
     }
 

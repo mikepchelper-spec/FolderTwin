@@ -28,6 +28,14 @@ if (args is ["--run-product-job", var approvedRegistry, var approvedJob, var app
     return ProductRunner.RunCommand(approvedRegistry, approvedJobId, approvalId);
 if (args is ["--product-runs"])
     return ProductRunProbe.Run();
+if (args is ["--product-restore"])
+    return ProductRestoreProbe.Run();
+if (args is ["--restore-product-job", var restoreRegistry, var restoreJob, var restoreRequest] &&
+    Guid.TryParseExact(restoreJob, "N", out var restoreJobId) && Guid.TryParseExact(restoreRequest, "N", out var restoreRequestId))
+    return ProductRunner.RestoreCommand(restoreRegistry, restoreJobId, restoreRequestId);
+if (args is ["--held-restore-child", var restoreFixture, var heldRestoreJob, var heldRestoreRequest] &&
+    Guid.TryParseExact(heldRestoreJob, "N", out var heldRestoreId) && Guid.TryParseExact(heldRestoreRequest, "N", out var heldRequestId))
+    return ProductRestoreProbe.HeldChild(restoreFixture, heldRestoreId, heldRequestId);
 if (args is ["--held-product-child", var productFixture, var heldId] && Guid.TryParseExact(heldId, "N", out var heldJobId))
     return ProductRunProbe.HeldChild(productFixture, heldJobId);
 if (args is ["--product-store"])

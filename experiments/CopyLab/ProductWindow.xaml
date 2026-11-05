@@ -35,16 +35,11 @@
                               HorizontalScrollBarVisibility="Disabled" Margin="0,12,0,0">
                     <StackPanel>
                         <TextBlock x:Name="SelectedJobText" TextWrapping="Wrap" />
-                        <TextBlock x:Name="RuntimeStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
                         <TextBlock x:Name="ScheduleStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
                         <TextBlock x:Name="SpaceStatusText" TextWrapping="Wrap" Margin="0,4,0,0" />
-                        <ProgressBar x:Name="RunProgress" Height="4" Margin="0,8,0,0" Visibility="Collapsed"
-                                     AutomationProperties.Name="Progreso de la operación activa" />
                         <WrapPanel Margin="0,8,0,0">
                             <Button x:Name="BackupJobButton" Content="_Respaldar ahora" Click="BackupJobClick" IsEnabled="False" Margin="0,0,8,4" />
                             <Button x:Name="RecoverJobButton" Content="Re_cuperar archivos" Click="RecoverJobClick" IsEnabled="False" Margin="0,0,8,4" />
-                            <Button x:Name="PauseRunButton" Content="_Pausar" Click="PauseRunClick" IsEnabled="False" Margin="0,0,8,4" />
-                            <Button x:Name="CancelRunButton" Content="_Cancelar ejecución" Click="CancelRunClick" IsEnabled="False" Margin="0,0,8,4" />
                         </WrapPanel>
                         <TextBlock Text="La pausa y la cancelación se atienden entre archivos o pasos recuperables. Puedes cerrar la ventana mientras el ejecutor sigue trabajando."
                                    TextWrapping="Wrap" Margin="0,4,0,4" />
@@ -214,7 +209,17 @@
             </DockPanel>
         </Grid>
 
-        <TextBlock x:Name="StatusText" Grid.Row="2" TextWrapping="Wrap" Margin="0,12,0,0"
-                   AutomationProperties.LiveSetting="Polite" />
+        <ScrollViewer Grid.Row="2" MaxHeight="180" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,12,0,0">
+            <StackPanel>
+                <TextBlock x:Name="RuntimeStatusText" TextWrapping="Wrap" />
+                <ProgressBar x:Name="RunProgress" Height="4" Margin="0,8,0,0" Visibility="Collapsed"
+                             AutomationProperties.Name="Progreso de la operación activa" />
+                <WrapPanel Margin="0,8,0,0">
+                    <Button x:Name="PauseRunButton" Content="_Pausar" Click="PauseRunClick" IsEnabled="False" Margin="0,0,8,4" />
+                    <Button x:Name="CancelRunButton" Content="_Cancelar ejecución" Click="CancelRunClick" IsEnabled="False" Margin="0,0,8,4" />
+                </WrapPanel>
+                <TextBlock x:Name="StatusText" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+            </StackPanel>
+        </ScrollViewer>
     </Grid>
 </Window>

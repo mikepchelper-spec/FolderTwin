@@ -331,20 +331,30 @@ internal sealed partial class VersionStore
             [catalog.Files.SingleOrDefault(file => file.RelativePath == relativeFile)
                 ?? throw new InvalidDataException("El archivo no pertenece a la generación seleccionada.")];
         var directories = relativeFile is null ? catalog.Directories : catalog.Directories.Where(directory =>
-            relativeFile.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal));
+            relativeFile.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal)).ToArray();
         VerifyObjects(store.Root, files);
         LabWorkspace.RequireSpace(files.Sum(file => file.Length), LabWorkspace.AvailableSpace(target.Root));
         var restoreBinding = DestinationBinding.Register(target.Root);
-        foreach (string relative in directories)
-            FolderBatch.WithDirectories(target.Root, relative, () => true);
-        foreach (var file in files)
+        int total = checked(directories.Length + files.Length);
+        for (int index = 0; index < directories.Length; index++)
         {
+            observe?.Invoke(new(WorkPhase.Restoring, index, total, directories[index]));
+            FolderBatch.WithDirectories(target.Root, directories[index], () => true);
+        }
+        for (int index = 0; index < files.Length; index++)
+        {
+            var file = files[index];
+            observe?.Invoke(new(WorkPhase.Restoring, directories.Length + index, total, file.RelativePath));
             string final = Path.Combine(output, file.RelativePath);
             workspace.Copy(Destination, output, ObjectPath(Digest(file)), final, FolderBatch.TemporaryPath(output, file.RelativePath),
                 restoreBinding, file.Hash, metadata: file.Metadata);
         }
-        foreach (var file in files)
-            BatchCatalog.VerifyFile(output, file);
+        for (int index = 0; index < files.Length; index++)
+        {
+            observe?.Invoke(new(WorkPhase.Verifying, index, files.Length, files[index].RelativePath));
+            BatchCatalog.VerifyFile(output, files[index]);
+        }
+        observe?.Invoke(new(WorkPhase.Restoring, total, total));
         return catalog;
     }
 

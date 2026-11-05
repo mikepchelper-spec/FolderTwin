@@ -42,7 +42,7 @@ internal sealed partial class ProductJobRegistry
     }
 }
 
-internal static class ProductRunner
+internal static partial class ProductRunner
 {
     internal static async Task<int> RunScheduledAsync(string registryPath, Guid id, Func<bool> canRun,
         Func<TimeSpan, Task>? delay = null)

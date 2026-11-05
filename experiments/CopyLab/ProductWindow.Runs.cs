@@ -16,6 +16,8 @@ public partial class ProductWindow
 
     private Process StartBackupProcess(string location, Guid id, Guid? approval = null) =>
         testWorker?.Invoke(location, id, approval) ?? ProductWorker.Start(location, id, approval);
+    private Process StartRestoreProcess(string location, Guid id, Guid request) =>
+        testRestoreWorker?.Invoke(location, id, request) ?? ProductWorker.StartRestoration(location, id, request);
 
     private bool IsJobRunning(Guid id) => workerProcesses.TryGetValue(id, out var process) && !process.HasExited ||
         runSnapshots.TryGetValue(id, out var history) && history.Runs.Any(run => run.Running);
@@ -90,11 +92,14 @@ public partial class ProductWindow
             (verified?.Generation is { } verifiedGeneration ? $"\nPunto verificado del {VersionStore.GenerationTime(verifiedGeneration).ToLocalTime():g}" : "") +
             (active?.Progress is { } progress ? $"\n{Phase(progress.Work.Phase)} · {progress.Work.Processed:N0}/{progress.Work.Total:N0}" +
                 (progress.Paused ? " · Pausado" : "") + (progress.Work.RelativePath is { } path ? "\n" + path : "") : "") +
+            (active?.Restore is { } restoring ? "\nCarpeta de recuperación · " +
+                Path.Combine(restoring.Target.Parent.VolumePath, restoring.Target.FolderName) : "") +
             (history.Runs.FirstOrDefault(run => run.RetryRunning)?.Retry is { } retry ? $"\nPróximo reintento · {retry.NextUtc.ToLocalTime():g}" : "") +
             (history.Unreadable > 0 ? $"\n{history.Unreadable} registros ilegibles conservados para revisión." : "");
         RunHistoryList.ItemsSource = history.Runs.Take(30).Select(run =>
             $"Intento {run.Intent.Sequence} · {run.Intent.StartedUtc.ToLocalTime():g} · " +
             (run.Result is { } result ? ResultText(run, result) : run.Running ? "En ejecución" : "Interrumpido") +
+            (run.Restore is { } restore ? "\nCarpeta revisada · " + Path.Combine(restore.Target.Parent.VolumePath, restore.Target.FolderName) : "") +
             (run.Result?.RelativePath is { } path ? "\n" + path : "")).ToArray();
         PauseRunButton.IsEnabled = CancelRunButton.IsEnabled = !busy && active is not null;
         PauseRunButton.Content = active?.Progress?.Paused == true ? "_Continuar" : "_Pausar";
@@ -111,6 +116,7 @@ public partial class ProductWindow
         last.Result is { } result ? result.State switch
         {
             ProductRunState.Confirmed => result.Degraded ? "Verificado; catálogo requiere atención" :
+                last.Intent.Operation == ProductRunOperation.Restore ? "Recuperación completa" :
                 last.Intent.Operation == ProductRunOperation.Verify ? "Verificación completa" : "Respaldo completo",
             ProductRunState.Cancelled => "Cancelado; puede haber trabajo pendiente",
             ProductRunState.WaitingForSource => "Esperando origen",
@@ -127,8 +133,13 @@ public partial class ProductWindow
 
     private static string ResultText(ProductRunView run, ProductRunResult result) => result.State switch
     {
+        ProductRunState.Confirmed when run.Restore is { } restore => "Recuperación completa y verificada.\n" +
+            Path.Combine(restore.Target.Parent.VolumePath, restore.Target.FolderName) +
+            (result.Degraded ? "\nUna réplica del catálogo necesita revisión." : ""),
         ProductRunState.Confirmed => run.Intent.Operation == ProductRunOperation.Verify ? "Verificación completa del contenido." +
             (result.Degraded ? " Una réplica del catálogo necesita revisión." : "") : "Respaldo completo y verificado.",
+        ProductRunState.Cancelled when run.Intent.Operation == ProductRunOperation.Restore =>
+            "Recuperación cancelada. Revisa una carpeta nueva para reintentar; los archivos ya recuperados se conservan.",
         ProductRunState.Cancelled => "Operación cancelada en un límite recuperable. Reintenta para continuar el trabajo pendiente.",
         ProductRunState.WaitingForSource => "El origen no está disponible. Reconéctalo y reintenta.",
         ProductRunState.WaitingForDestination => "El destino no está disponible. Reconéctalo y reintenta.",

@@ -181,6 +181,7 @@ internal sealed partial class ProductJobRegistry : IDisposable
             if (!Guid.TryParseExact(entry.Name, "N", out Guid other) || other == intent.Id)
                 continue;
             using var job = OpenJob(other);
+            RequireDisjointFromActiveRestores(job, other, intent.Source.VolumePath, destination);
             var existing = ReadIntent(job, other, allowDraft: !WindowsProbeNative.PlainFileExists(job, CommitName));
             string existingTarget = TargetPath(existing);
             if (LocalJobRoots.Overlap(destination, existingTarget) ||

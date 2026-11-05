@@ -38,6 +38,14 @@ internal static class ProductTrayProbe
                 await tray.RefreshAsync();
                 Check(tray.NotificationCount == 1 && tray.StatusText.Contains("requieren atención", StringComparison.Ordinal),
                     "Healthy jobs hid an incident or the same retry repeated its notification.");
+                string output = Directory.CreateDirectory(Path.Combine(fixture.Root, "recovered")).FullName;
+                string generation = registry.RunHistory(versioned.Id).Runs.First(run => run.Result?.State == ProductRunState.Confirmed).Generation!;
+                Guid request = registry.ApproveRestore(versioned.Id, generation,
+                    LocalJobRoots.ReviewDedicatedDestination(versioned.Destination.LastVolumePath, output));
+                Check(ProductRunner.Restore(registry, versioned.Id, request).State == ProductRunState.Confirmed, "Tray fixture could not restore.");
+                await tray.RefreshAsync();
+                Check(tray.NotificationCount == 1 && tray.StatusText.Contains("requieren atención", StringComparison.Ordinal),
+                    "A successful restoration hid an unresolved backup incident.");
             }
             finally { Directory.Move(detached, source); }
             _ = ProductRunner.Run(registry, versioned.Id);

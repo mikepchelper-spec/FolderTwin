@@ -37,6 +37,8 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --accumulative
       - name: Verify persistent product workers, pause, cancellation and process termination
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-runs
+      - name: Verify reviewed restoration workers, cancellation, interruption and route exclusion
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-restore
       - name: Verify bounded metadata inventory and partial results
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --inventory
       - name: Verify synthetic batches, partial results, and retry

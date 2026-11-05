@@ -78,8 +78,9 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
             if (history.Unreadable != 0) attention.Add($"{job.Id:N}-history");
             bool running = history.Runs.Any(run => run.Running);
             if (running) busy++; else runnable.Add(job.Id);
-            var latest = history.Runs.FirstOrDefault();
-            var result = history.Runs.FirstOrDefault(run => run.Result is not null)?.Result;
+            var protection = history.Runs.Where(run => run.Intent.Operation != ProductRunOperation.Restore).ToArray();
+            var latest = protection.FirstOrDefault();
+            var result = protection.FirstOrDefault(run => run.Result is not null)?.Result;
             if (latest is null) pending++;
             else if (result is not null && result.State != ProductRunState.Confirmed)
                 attention.Add($"{job.Id:N}-{result.State}");

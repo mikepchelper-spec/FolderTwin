@@ -32,6 +32,7 @@ public partial class ProductWindow : Window
     private readonly Func<string, string?>? testPicker;
     private readonly Func<string, Guid, Guid?, System.Diagnostics.Process>? testWorker;
     private readonly Action<string, Guid, bool>? testSchedule;
+    private readonly Func<string, Guid, Guid, System.Diagnostics.Process>? testRestoreWorker;
     private readonly VersionIndex productIndex;
     private string? origin;
     private string? parent;
@@ -42,12 +43,14 @@ public partial class ProductWindow : Window
 
     internal ProductWindow(Func<ProductJobRegistry>? openRegistry = null, Func<string, string?>? testPicker = null,
         Func<string, Guid, Guid?, System.Diagnostics.Process>? testWorker = null,
-        Action<string, Guid, bool>? testSchedule = null)
+        Action<string, Guid, bool>? testSchedule = null,
+        Func<string, Guid, Guid, System.Diagnostics.Process>? testRestoreWorker = null)
     {
         this.openRegistry = openRegistry ?? ProductJobRegistry.OpenLocal;
         this.testPicker = testPicker;
         this.testWorker = testWorker;
         this.testSchedule = testSchedule;
+        this.testRestoreWorker = testRestoreWorker;
         productIndex = new(() =>
         {
             using var registry = this.openRegistry();

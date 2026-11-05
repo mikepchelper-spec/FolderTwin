@@ -24,7 +24,17 @@ La copia y la verificación se ejecutan en otro proceso. Cerrar la ventana detie
 
 Una ejecución sin aprobación deja pendientes las retiradas de archivos o carpetas, los cambios masivos y el origen vacío. La aprobación manual conserva generación, hashes de catálogo y registro, identidades, punto anterior, umbral y aceptaciones. El ejecutor vuelve a revisar y exige que coincidan antes de aplicar. Una actualización ya pendiente se reanuda desde su diario autorizado.
 
-Versionado reintenta la generación pendiente o la generación registrada por el intento interrumpido. Acumulativo y espejo usan su diario de publicación. Reanudar un inventario persistido sigue exigiendo sus datos e identidades; un origen cambiado puede requerir revisión. El flujo de producto para abandonar o sustituir una intención incompatible conservando sus datos sigue pendiente. También siguen pendientes el traslado de la revisión inicial de espejo y de la restauración al flujo controlable, la bandeja y el resto de la gestión descrita en [V1.md](../../V1.md).
+Versionado reintenta la generación pendiente o la generación registrada por el intento interrumpido. Acumulativo y espejo usan su diario de publicación. Reanudar un inventario persistido sigue exigiendo sus datos e identidades; un origen cambiado puede requerir revisión. El flujo de producto para abandonar o sustituir una intención incompatible conservando sus datos sigue pendiente. También siguen pendientes el traslado de la revisión inicial de espejo al flujo controlable y el resto de la integración descrita en [V1.md](../../V1.md).
+
+## Restauración controlada
+
+`--restore-product-job` recibe configuración, trabajo y GUID de revisión. La revisión inmutable en `restores` conserva generación, archivo opcional, origen del respaldo, carpeta padre de recuperación, identidades, carpeta nueva e identidad del registro del trabajo. El intento enlaza esa revisión y registra `Restore` como operación propia; las intenciones anteriores conservan su serialización y hashes. El resultado y el historial incluyen la salida revisada. Ni una restauración correcta ni su verificación final actualizan las fechas de respaldo o verificación explícita.
+
+Antes de escribir se vuelven a comprobar la revisión, las raíces conocidas, el marcador y el estado retenido de la generación. El destino nuevo queda fuera de la configuración y de los orígenes y destinos de todos los trabajos registrados. Durante la recuperación, la reserva del intento impide registrar otro trabajo que use su salida. El bloqueo por trabajo excluye copia y verificación; el bloqueo del almacén coordina también con la limpieza y la recuperación independiente.
+
+El motor informa verificación de objetos, creación de carpetas, copia y verificación final. Pausa y cancelación se atienden entre esos pasos. Cerrar WPF conserva el trabajador. Al reabrir se consulta el mismo intento y su revisión. Cancelar o terminar el proceso no elimina ni adopta la salida parcial: para repetir se revisa una carpeta nueva. Un intento interrumpido no se declara completo por encontrar archivos en ella. La bandeja conserva las incidencias del respaldo aunque una restauración posterior termine correctamente.
+
+`--product-restore` prueba los tres modos con origen ausente, archivo elegido, revisión inválida, carpeta padre sustituida y trabajo retirado. Usa trabajadores reales para pausa, continuación, cancelación y terminación, y prueba el reintento en una carpeta distinta. Durante la pausa rechaza copia, limpieza y registro de un trabajo que use la salida. WPF añade controles visibles en ambas vistas, cierre de ventana y reapertura del resultado; estas comprobaciones no sustituyen la aceptación visual ni las pruebas externas.
 
 ## Configuración y horario
 
