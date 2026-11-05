@@ -93,6 +93,13 @@ jobs:
             throw 'Independent builds produced different file hashes.'
           }
           Write-Host "Matching portable distributions. SHA256SUMS.txt SHA-256 $($first.Hash)"
+          foreach ($guide in @('GUIA.md', 'NOTAS.md', 'INSTALACION.md', 'PILOTO.md', 'V1.md')) {
+            $packaged = Join-Path $outputA $guide
+            if (-not (Test-Path -LiteralPath $packaged) -or
+                (Get-FileHash -LiteralPath $packaged).Hash -ne (Get-FileHash -LiteralPath (Join-Path $sourceA $guide)).Hash) {
+              throw "The portable package is missing its exact guide: $guide."
+            }
+          }
           $runtime = Get-Content -LiteralPath (Join-Path $outputA 'CopyLab.runtimeconfig.json') -Raw | ConvertFrom-Json
           $frameworks = $runtime.runtimeOptions.includedFrameworks.name
           if ($frameworks -notcontains 'Microsoft.NETCore.App' -or $frameworks -notcontains 'Microsoft.WindowsDesktop.App' -or

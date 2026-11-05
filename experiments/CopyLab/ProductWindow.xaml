@@ -4,7 +4,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="FolderTwin · Trabajos" Width="1040" Height="740" MinWidth="600" MinHeight="500"
-        WindowStartupLocation="CenterScreen" Language="es-CO">
+        WindowStartupLocation="CenterScreen" Language="es-CO" Icon="Assets/FolderTwin.ico">
     <Window.Resources>
         <Style x:Key="NamedDateChoice" TargetType="ComboBoxItem">
             <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />

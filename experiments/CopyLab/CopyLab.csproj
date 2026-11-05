@@ -9,10 +9,12 @@
     <Product>FolderTwin</Product>
     <Title>FolderTwin</Title>
     <Description>Copias locales y versiones recuperables para Windows.</Description>
+    <ApplicationIcon>Assets/FolderTwin.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <Using Remove="System.Windows.Forms" />
     <Using Remove="System.Drawing" />
     <ProjectReference Include="../CopyProbe/CopyProbe.csproj" />
+    <Resource Include="Assets/FolderTwin.ico" />
   </ItemGroup>
 </Project>

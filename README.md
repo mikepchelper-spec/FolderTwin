@@ -2,13 +2,15 @@
 
 *Copias locales. Versiones recuperables.*
 
-App sencilla de respaldo para Windows. La alfa permite elegir carpetas, copiar, verificar y restaurar en un espacio de pruebas. La alfa y el piloto controlado usan datos sintéticos.
+App de respaldo para Windows 11 x64. La vista previa de v1 permite crear trabajos, copiar, verificar y recuperar desde una interfaz WPF. El desarrollo y el piloto controlado usan datos sintéticos; la aceptación final sigue abierta.
 
 ## Leer primero
 
 Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 
 - [Plan de trabajo](PLAN.md): experiencia, arquitectura, prioridades, pruebas y límites.
+- [Guía de uso](GUIA.md): crear y operar los tres modos, verificar, resolver incidencias y recuperar desde la interfaz.
+- [Notas de versión](NOTAS.md): funciones de la vista previa, actualización y pendientes antes de cerrar v1.
 - [Matriz de aceptación](ACEPTACION.md): requisitos de las etapas 2 a 5, evidencia y validaciones pendientes del piloto.
 - [Alcance y aceptación de la v1](V1.md): trabajo de producto, criterios de salida y comprobaciones externas.
 - [Guía del piloto](PILOTO.md): preparación, observación, recuperación y criterios de detención.
@@ -25,7 +27,7 @@ El panel de producto separa lista y detalles, y los apila en ventanas estrechas.
 
 ## Alfa portable de Windows
 
-Abre un resultado de [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml) para `main` y descarga el artefacto `FolderTwin-alpha-win-x64-…`. Extrae todo el contenido y abre `FolderTwin.exe`: la entrada habitual muestra los trabajos de producto sin comandos. **Respaldos de alfa** abre las herramientas anteriores. El paquete incluye .NET, el código fuente del commit y la [guía de la alfa](ALFA.md) para trabajar con datos sintéticos. Sigue siendo una vista previa; no es la entrega final de v1.
+Abre un resultado de [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml) para `main` y descarga el artefacto `FolderTwin-alpha-win-x64-…`. Extrae todo el contenido y abre `FolderTwin.exe`: la entrada habitual muestra los trabajos de producto sin comandos. Sigue la [guía de uso](GUIA.md) y consulta las [notas](NOTAS.md). El paquete incluye .NET, el código fuente del commit y la [guía de la alfa](ALFA.md) para las herramientas anteriores de **Respaldos de alfa**. Sigue siendo una vista previa; no es la entrega final de v1.
 
 Para producir el paquete desde el código, instala el SDK indicado en [global.json](global.json) y ejecuta en PowerShell 7 para Windows:
 
@@ -77,7 +79,7 @@ Usa `-- --catalog` para probar los catálogos JSONL duplicados, su confirmación
 
 Usa `-- --resume` para terminar trabajadores de prueba y reabrir sus lotes pendientes desde otros procesos. Reconoce lo ya verificado, recupera temporales con registro válido y deja pendientes los archivos que aún necesitan el origen. Los datos sin verificar quedan para revisión. [Descriptor de ejecución](experiments/CopyProbe/PENDING.md).
 
-Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Pulsa **Nuevo espacio de pruebas** y luego **Ver carpeta de pruebas**. Los nuevos espacios quedan bajo `%LocalAppData%\FolderTwin-Lab\workspaces` y conservan su marcador de identidad. En el Explorador, crea subcarpetas directas para el origen, el destino y la restauración. Coloca únicamente archivos sintéticos en el origen y deja vacías las otras carpetas. También están disponibles las carpetas de demostración **Origen**, **Origen ampliado** y **Destino** al iniciar la ventana.
+Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab -- --lab`, o usa **Respaldos de alfa** desde la ventana de producto. Pulsa **Nuevo espacio de pruebas** y luego **Ver carpeta de pruebas**. Los nuevos espacios quedan bajo `%LocalAppData%\FolderTwin-Lab\workspaces` y conservan su marcador de identidad. En el Explorador, crea subcarpetas directas para el origen, el destino y la restauración. Coloca únicamente archivos sintéticos en el origen y deja vacías las otras carpetas. También están disponibles las carpetas de demostración **Origen**, **Origen ampliado** y **Destino** al iniciar la ventana.
 
 Elige el origen y el destino y pulsa **Analizar carpetas**. La vista previa muestra el recuento, el tamaño de contenido y, para los trabajos configurables, el espacio disponible y la reserva. Elige **Copiar y verificar**. Si el lote queda parcial, revisa las incidencias y usa **Reintentar copia**. Tras la confirmación, puedes usar **Verificar respaldo** o **Restaurar y verificar**. El trabajo configurable permite elegir una subcarpeta vacía distinta para cada restauración.
 

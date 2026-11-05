@@ -12,6 +12,7 @@ internal sealed class LabTray : IDisposable
     private readonly Func<TraySnapshot> read;
     private readonly Action<Guid> start;
     private readonly Forms.NotifyIcon icon;
+    private readonly System.Drawing.Icon trayIcon;
     private readonly Forms.ContextMenuStrip menu = new();
     private readonly Forms.ToolStripItem menuRun;
     private readonly Window flyout;
@@ -72,9 +73,12 @@ internal sealed class LabTray : IDisposable
         menuRun = menu.Items.Add("Respaldar ahora", null, (_, _) => RunNow());
         menuRun.Enabled = false;
         menu.Items.Add("Salir", null, (_, _) => exit());
+        using (var resource = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/FolderTwin.ico")).Stream)
+        using (var original = new System.Drawing.Icon(resource, Forms.SystemInformation.SmallIconSize))
+            trayIcon = (System.Drawing.Icon)original.Clone();
         icon = new Forms.NotifyIcon
         {
-            Text = iconText, Icon = System.Drawing.SystemIcons.Application,
+            Text = iconText, Icon = trayIcon,
             ContextMenuStrip = menu, Visible = true
         };
         icon.MouseClick += async (_, e) => { if (e.Button == Forms.MouseButtons.Left) await ShowAsync(); };
@@ -157,6 +161,7 @@ internal sealed class LabTray : IDisposable
         timer.Stop();
         icon.Visible = false;
         icon.Dispose();
+        trayIcon.Dispose();
         menu.Dispose();
         flyout.Close();
     }

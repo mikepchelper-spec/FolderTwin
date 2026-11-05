@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">FolderTwin: dos carpetas y una comprobación</title>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="#14253c"/>
+  <path d="M22 32h25l9 10h35v43H22z" fill="#47c1bf"/>
+  <path d="M38 52h22l8 9h38v40H38z" fill="#daf4ee"/>
+  <path d="m58 81 9 9 20-21" fill="none" stroke="#14253c" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

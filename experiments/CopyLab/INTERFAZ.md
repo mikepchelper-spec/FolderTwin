@@ -4,6 +4,8 @@ La ventana de producto sigue siendo una vista previa. Esta evidencia cubre la di
 
 El paquete ofrece `FolderTwin.exe` como entrada pública. Sin argumentos abre los trabajos de producto; el ejecutable interno `CopyLab.exe` conserva sus protocolos y también abre producto sin argumentos. **Respaldos de alfa** y el argumento de desarrollo `--lab` dan acceso explícito al laboratorio. `--product-startup-smoke` está restringido al runner Windows hospedado: abre el ejecutable público sin argumentos con un perfil vacío, comprueba el título de trabajos y su cierre sin crear trabajos. Este ensayo comprueba el arranque, no todo el recorrido de instalación.
 
+La ventana de producto, el ejecutable y la bandeja usan `Assets/FolderTwin.ico`, con seis tamaños entre 16 y 256 píxeles. La geometría propia está en `Assets/FolderTwin.svg`; `scripts/New-AppIcon.ps1` exporta el ICO en Windows. La exportación repetida produjo los mismos bytes en el entorno de desarrollo. La distribución usa el recurso versionado, sin generarlo durante la compilación. La bandeja libera su copia del icono al cerrarse. La comprobación de escalado de Windows sigue pendiente.
+
 ## Sesión sintética reproducible
 
 Después de compilar, `CopyLab.exe --product-synthetic-preview` crea una sesión desechable, tres trabajos y sus respaldos sintéticos. No abre el registro habitual del usuario. `--product-synthetic-preview compact` abre con 600 × 500 unidades de WPF y `--product-synthetic-preview light` fuerza el tema claro solo en esa ventana. El tema normal sigue el sistema. No se instalan horarios al crear esta sesión.
