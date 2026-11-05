@@ -32,6 +32,13 @@ public partial class ProductWindow
         Guid selected = ((JobRow)JobList.SelectedItem).Id;
         await LoadListAsync();
         Check((JobList.SelectedItem as JobRow)?.Id == selected, "Refreshing the dashboard lost the selected job.");
+        var compatible = OpenLegacyWindow();
+        try
+        {
+            Check(compatible.Owner == this && compatible.Title.Contains("Compatibilidad", StringComparison.Ordinal),
+                "The product dashboard cannot open the isolated legacy recovery tools.");
+        }
+        finally { compatible.Close(); }
         Console.Error.WriteLine("PASS WPF dashboard keeps a complete job row and reachable details at desktop and minimum sizes, exposes job names to UI Automation and preserves selection on refresh.");
     }
 }

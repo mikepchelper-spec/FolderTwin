@@ -494,7 +494,7 @@ public partial class MainWindow : Window
         tray?.Dispose();
         try
         {
-            if (!copyStarted || workspace is not null || testSelections is not null)
+            if (testSelections is not null || (!restored || previous is null) && (!copyStarted || workspace is not null))
                 session.Dispose();
         }
         catch (Exception error) when (testSelections is null &&
@@ -771,6 +771,7 @@ public partial class MainWindow : Window
 
         await RunWorkspaceSmokeAsync();
         await VersionWindow.RunSmokeAsync();
+        await RunCompatibleDemonstrationSmokeAsync();
         await TrayProbe.RunAsync();
 
         async Task WaitForPauseAsync()

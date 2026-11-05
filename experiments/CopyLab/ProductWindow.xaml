@@ -37,6 +37,8 @@
                     <Button x:Name="RefreshJobsButton" Content="Act_ualizar" Click="RefreshJobsClick" Margin="0,0,8,4" />
                     <Button x:Name="ImportConfigurationButton" Content="_Importar configuración" Click="ImportConfigurationClick" Margin="0,0,8,4" />
                     <Button x:Name="ProductTrayButton" Content="Minimizar a _bandeja" Click="ProductTrayClick" Margin="0,0,8,4" />
+                    <Button x:Name="LegacyRecoveryButton" Content="Respaldos de _alfa" Click="LegacyRecoveryClick" Margin="0,0,8,4"
+                            ToolTip="Abre las herramientas compatibles para recuperar respaldos anteriores de laboratorio. No convierte ni adopta sus datos." />
                     <Button x:Name="ResumeRegistrationButton" Content="_Reanudar registro" Click="ResumeRegistrationClick"
                             IsEnabled="False" Margin="0,0,8,4" />
                 </WrapPanel>

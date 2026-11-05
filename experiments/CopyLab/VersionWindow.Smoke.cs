@@ -129,6 +129,7 @@ public partial class VersionWindow
         await RunBackgroundSmokeAsync();
         await RunRetentionSmokeAsync();
         await RunMirrorSmokeAsync();
+        await RunLegacyFormatsSmokeAsync();
 
         string NewFolder(string name) => Directory.CreateDirectory(Path.Combine(workspace.Root, name)).FullName;
         static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

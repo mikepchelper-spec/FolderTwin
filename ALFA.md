@@ -4,6 +4,8 @@ Extrae todo el artefacto de Windows x64 en una carpeta nueva y abre `CopyLab.exe
 
 La [guía del piloto](PILOTO.md) incluye el procedimiento de observación y los criterios de aceptación y detención.
 
+La vista previa de producto incluye **Respaldos de alfa** para abrir estas herramientas. El [procedimiento de compatibilidad](COMPATIBILIDAD.md) distingue espacios configurables, almacenes de fechas y demostraciones iniciales. La salida de una demostración anterior recuperada se conserva al cerrar y muestra su ruta al terminar.
+
 1. Abre **Nuevo espacio de pruebas** y luego **Ver carpeta de pruebas**.
 2. Crea tres subcarpetas directas y usa una como origen. Coloca unos archivos sintéticos y una subcarpeta vacía en ella. Deja vacíos el destino y la carpeta de restauración.
 3. Selecciona origen y destino, pulsa **Analizar carpetas** y revisa el recuento, los bytes y el espacio disponible. Pulsa **Copiar y verificar**.
