@@ -16,4 +16,6 @@ Para probar el ejecutor independiente, elige un origen y usa **Copiar en segundo
 
 Para probar un horario desde el paquete portable, elige el origen o un trabajo guardado, escribe una hora próxima en formato HH:mm y pulsa **Programar**. El ejecutor se instala en una carpeta propia bajo LocalAppData. Mantén la sesión de Windows iniciada, cierra la interfaz y vuelve a abrir el almacén después de la hora elegida. Comprueba el resultado y verifica el punto. Usa **Quitar horario** al terminar el ensayo. Windows puede demorar la recuperación de un horario perdido. Si cambia la definición de la tarea o falla el arranque, la ventana pide revisión.
 
+Para probar la bandeja, pulsa **Minimizar a bandeja** desde el espacio de pruebas. Haz clic en el icono de FolderTwin para consultar los trabajos y usa **Respaldar ahora**. Abre la aplicación desde el panel o el menú del icono para revisar los puntos. El menú **Salir** cierra la interfaz. Los avisos de bandeja dependen de la configuración de notificaciones de Windows y sus incidencias también aparecen al abrir el panel.
+
 `SHA256SUMS.txt` contiene el SHA-256 y la ruta relativa de cada archivo distribuido. El artefacto de GitHub incluye el código fuente del commit en `FolderTwin-source.tar` y las licencias de la distribución. El catálogo de la aplicación es independiente y verifica el contenido de los trabajos.

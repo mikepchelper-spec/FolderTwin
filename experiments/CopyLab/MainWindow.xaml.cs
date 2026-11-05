@@ -447,6 +447,8 @@ public partial class MainWindow : Window
             workspace is null ? Visibility.Collapsed : Visibility.Visible;
         VersionsButton.Visibility = OpenWorkspaceJobButton.Visibility;
         VersionsButton.IsEnabled = !busy && workspace is not null;
+        TrayButton.Visibility = VersionsButton.Visibility;
+        TrayButton.IsEnabled = VersionsButton.IsEnabled;
         OpenWorkspaceJobButton.IsEnabled = !busy && workspace is not null;
         BrowseWorkspaceButton.IsEnabled = !busy;
         SourceButton.IsEnabled = DestinationButton.IsEnabled = editable;
@@ -489,6 +491,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        tray?.Dispose();
         try
         {
             if (!copyStarted || workspace is not null || testSelections is not null)
@@ -768,6 +771,7 @@ public partial class MainWindow : Window
 
         await RunWorkspaceSmokeAsync();
         await VersionWindow.RunSmokeAsync();
+        await TrayProbe.RunAsync();
 
         async Task WaitForPauseAsync()
         {

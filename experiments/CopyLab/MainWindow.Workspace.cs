@@ -12,6 +12,35 @@ public partial class MainWindow
     private WorkspacePreview? workspacePreview;
     private WorkspaceJob? workspaceJob;
     private string? workspaceDestination;
+    private LabTray? tray;
+
+    private async void TrayClick(object sender, RoutedEventArgs e)
+    {
+        if (busy || workspace is not { } current)
+            return;
+        busy = true;
+        RefreshActions();
+        try
+        {
+            tray ??= new LabTray(current, ShowMain, () => { ShowMain(); Close(); });
+            await tray.RefreshAsync();
+            Hide();
+        }
+        catch (Exception error) when (IsLabError(error))
+        {
+            tray?.Dispose();
+            tray = null;
+            SetStatus("No se pudo abrir la bandeja. " + error.Message);
+        }
+        finally { busy = false; RefreshActions(); }
+    }
+
+    private void ShowMain()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
 
     private void VersionsClick(object sender, RoutedEventArgs e)
     {
@@ -42,6 +71,8 @@ public partial class MainWindow
         try
         {
             workspace = await Task.Run(open);
+            tray?.Dispose();
+            tray = null;
             workspacePreview = null;
             workspaceJob = null;
             workspaceDestination = null;

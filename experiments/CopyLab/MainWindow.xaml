@@ -34,6 +34,8 @@
                         Visibility="Collapsed" Margin="0,0,8,8" />
                 <Button x:Name="VersionsButton" Content="_Versiones" Click="VersionsClick"
                         Visibility="Collapsed" Margin="0,0,8,8" />
+                <Button x:Name="TrayButton" Content="Minimizar a bandeja" Click="TrayClick"
+                        Visibility="Collapsed" Margin="0,0,8,8" />
             </WrapPanel>
             <TextBlock x:Name="SessionText" Style="{StaticResource Detail}" />
             <Separator Margin="0,4,0,16" />
