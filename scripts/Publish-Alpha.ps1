@@ -40,7 +40,14 @@ try {
     Copy-Item -LiteralPath (Join-Path $core 'LICENSE.TXT') -Destination (Join-Path $output 'LICENSE-dotnet.txt')
     Copy-Item -LiteralPath (Join-Path $core 'THIRD-PARTY-NOTICES.TXT') -Destination (Join-Path $output 'THIRD-PARTY-NOTICES-dotnet.txt')
     Copy-Item -LiteralPath (Join-Path $desktop 'LICENSE') -Destination (Join-Path $output 'LICENSE-dotnet-desktop.txt')
-    Copy-Item -LiteralPath (Join-Path $repo 'ALFA.md') -Destination $output
+    foreach ($guide in @('ALFA.md', 'PILOTO.md', 'ACEPTACION.md', 'PLAN.md')) {
+        Copy-Item -LiteralPath (Join-Path $repo $guide) -Destination $output
+    }
+    $probeDocs = Join-Path $output 'experiments/CopyProbe'
+    New-Item -ItemType Directory -Path $probeDocs | Out-Null
+    Get-ChildItem -LiteralPath (Join-Path $repo 'experiments/CopyProbe') -File -Filter '*.md' | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination $probeDocs
+    }
     if ($sourceFile) {
         Copy-Item -LiteralPath $sourceFile -Destination (Join-Path $output 'FolderTwin-source.tar')
     }

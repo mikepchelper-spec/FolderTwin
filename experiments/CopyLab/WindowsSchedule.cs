@@ -102,6 +102,23 @@ internal sealed class WindowsSchedule : IDisposable
             folder.DeleteTask(Name(id), 0);
     }
 
+    internal void RunNow(LabWorkspace workspace, Guid id)
+    {
+        ValidateJob(workspace, id);
+        dynamic task = Find(id) ?? throw new InvalidDataException("Este trabajo no tiene horario.");
+        try
+        {
+            string xml = task.Xml;
+            _ = VerifyOwnership(xml, workspace, id);
+            if (!(bool)task.Enabled || !MeetsPolicy(xml, tray: false))
+                throw new InvalidDataException("El horario necesita revisión antes de ejecutarse.");
+            dynamic running = task.Run(null);
+            if (running is not null)
+                Marshal.FinalReleaseComObject(running);
+        }
+        finally { Marshal.FinalReleaseComObject(task); }
+    }
+
     internal void SetTrayStartup(LabWorkspace workspace, string? executable, bool enabled)
     {
         Guid id = ScopeId(workspace);
@@ -150,6 +167,8 @@ internal sealed class WindowsSchedule : IDisposable
         if (tray && (triggers[0].Name != Schema + "LogonTrigger" ||
             NormalizeSid((string?)triggers[0].Element(Schema + "UserId")) != user))
             return "LogonTrigger.UserId";
+        if (!tray && triggers[0].Name != Schema + "TimeTrigger" && triggers[0].Name != Schema + "CalendarTrigger")
+            return "TimeTrigger/CalendarTrigger";
         if ((string?)settings?.Element(Schema + "MultipleInstancesPolicy") != "IgnoreNew")
             return "MultipleInstancesPolicy";
         if (!tray && (string?)settings?.Element(Schema + "StartWhenAvailable") != "true")
@@ -158,6 +177,8 @@ internal sealed class WindowsSchedule : IDisposable
             return "ExecutionTimeLimit";
         if ((string?)settings?.Element(Schema + "RestartOnFailure")?.Element(Schema + "Count") != "3")
             return "RestartOnFailure.Count";
+        if ((string?)settings?.Element(Schema + "RestartOnFailure")?.Element(Schema + "Interval") != "PT5M")
+            return "RestartOnFailure.Interval";
         return null;
     }
 

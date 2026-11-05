@@ -2,6 +2,8 @@
 
 Extrae todo el artefacto de Windows x64 en una carpeta nueva y abre `CopyLab.exe`. Conserva los archivos de la distribución juntos. El paquete incluye el runtime de .NET. Es una compilación experimental sin firma, para un espacio desechable.
 
+La [guía del piloto](PILOTO.md) incluye el procedimiento de observación y los criterios de aceptación y detención.
+
 1. Abre **Nuevo espacio de pruebas** y luego **Ver carpeta de pruebas**.
 2. Crea tres subcarpetas directas y usa una como origen. Coloca unos archivos sintéticos y una subcarpeta vacía en ella. Deja vacíos el destino y la carpeta de restauración.
 3. Selecciona origen y destino, pulsa **Analizar carpetas** y revisa el recuento, los bytes y el espacio disponible. Pulsa **Copiar y verificar**.

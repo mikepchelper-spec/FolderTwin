@@ -29,31 +29,43 @@ internal static class ScheduleProbe
                 if (schedule is not { Enabled: true, MeetsPolicy: true } || schedule.Executable != executable)
                     throw new InvalidOperationException("The registered schedule did not preserve the execution policy.");
             }
-            VersionJobResult? result = null;
-            var deadline = DateTime.UtcNow.AddMinutes(2);
-            while (DateTime.UtcNow < deadline)
-            {
-                result = VersionJob.History(workspace, id).Results.FirstOrDefault();
-                if (result is not null)
-                    break;
-                await Task.Delay(500);
-            }
+            var result = await WaitForAttemptAsync(afterSequence: 0);
             if (result is not { State: VersionJobState.Confirmed } ||
                 store.ListPoints().Single().Id != result.Generation || store.Verify(result.Generation))
                 throw new InvalidOperationException("The Windows time trigger did not produce a verified recovery point.");
             using (var scheduler = new WindowsSchedule())
             {
-                var exitDeadline = DateTime.UtcNow.AddSeconds(20);
-                while (scheduler.Read(workspace, id) is { Running: true } && DateTime.UtcNow < exitDeadline)
-                    await Task.Delay(250);
-                if (scheduler.Read(workspace, id) is { Running: true })
-                    throw new InvalidOperationException("The scheduled worker did not exit after confirming its point.");
-            }
-            using (var scheduler = new WindowsSchedule())
-            {
                 scheduler.Register(workspace, id, executable, DateTime.Today.AddDays(1).AddHours(20));
                 if (scheduler.Read(workspace, id) is not { Enabled: true, MeetsPolicy: true })
                     throw new InvalidOperationException("The daily schedule update did not verify.");
+                string detached = Path.Combine(workspace.Root, "destino apartado");
+                Directory.Move(destination, detached);
+                try
+                {
+                    scheduler.RunNow(workspace, id);
+                    var missing = await WaitForAttemptAsync(result.Sequence);
+                    if (missing.State != VersionJobState.WaitingForDestination)
+                        throw new InvalidOperationException("The scheduled worker did not report its absent destination.");
+                    result = missing;
+                }
+                finally { Directory.Move(detached, destination); }
+
+                using (var target = new DirectoryFence(destination))
+                using (WindowsProbeNative.OpenPlainFile(target.Root, FolderBatch.LockName, FileAccess.ReadWrite, FileShare.None))
+                {
+                    scheduler.RunNow(workspace, id);
+                    var busy = await WaitForAttemptAsync(result.Sequence);
+                    if (busy.State != VersionJobState.Busy)
+                        throw new InvalidOperationException("The scheduled worker bypassed the store lock.");
+                    result = busy;
+                }
+                scheduler.RunNow(workspace, id);
+                var recovered = await WaitForAttemptAsync(result.Sequence);
+                var history = VersionJob.History(workspace, id).Results;
+                if (recovered.State != VersionJobState.Confirmed || store.Verify(recovered.Generation!) ||
+                    !history.Take(3).Select(item => item.State).SequenceEqual(
+                        [VersionJobState.Confirmed, VersionJobState.Busy, VersionJobState.WaitingForDestination]))
+                    throw new InvalidOperationException("The scheduled worker did not recover or preserve the prior incidents.");
                 scheduler.Remove(workspace, id);
                 if (scheduler.Read(workspace, id) is not null)
                     throw new InvalidOperationException("The owned schedule was not removed.");
@@ -65,6 +77,21 @@ internal static class ScheduleProbe
                     throw new InvalidOperationException("The optional logon tray definition was not removed.");
             }
             Console.Error.WriteLine("PASS the portable app installs a stable worker; an actual Windows time trigger confirms a point, updates to daily and removes its owned schedule.");
+            Console.Error.WriteLine("PASS the scheduled action reports missing destination and manual-store contention, then recovers and preserves both incidents.");
+
+            async Task<VersionJobResult> WaitForAttemptAsync(long afterSequence)
+            {
+                using var scheduler = new WindowsSchedule();
+                var deadline = DateTime.UtcNow.AddMinutes(2);
+                while (DateTime.UtcNow < deadline)
+                {
+                    var latest = VersionJob.History(workspace, id).Results.FirstOrDefault();
+                    if (latest is not null && latest.Sequence > afterSequence && scheduler.Read(workspace, id) is { Running: false })
+                        return latest;
+                    await Task.Delay(250);
+                }
+                throw new InvalidOperationException("The Windows task did not finish its expected attempt.");
+            }
         }
         finally
         {
