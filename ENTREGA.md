@@ -18,6 +18,8 @@ Estado del 5 de noviembre de 2026: **candidato a lanzamiento con validaciones pe
 
 El paquete incluye ejecutables, runtime 10.0.14, código fuente del commit, licencia GPL, licencias de .NET, guía, instalación, compatibilidad, notas y procedimiento del piloto. No requiere instalar .NET por separado. Las notas dentro del ZIP reflejan el estado anterior a esta aceptación; este registro y la [matriz actual](V1.md) describen sus resultados posteriores. Los artefactos de Actions caducan a los 30 días: conservar el ZIP y este registro durante todo el piloto.
 
+El [borrador de lanzamiento v1.0.0-rc.1](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/untagged-d02dfe0f3b34f94691a1) conserva el mismo ZIP, su checksum, el manifiesto y este registro como archivos separados. GitHub confirmó el digest del ZIP y el del manifiesto tras subirlos. Está marcado como borrador y prelanzamiento; no se publicó una versión final. Las actualizaciones del registro no modifican el ZIP congelado.
+
 ## Aceptación del paquete
 
 Windows CI aprobó los arneses de copia, raíces, registro de trabajos, acumulativo, versiones, espejo, inventario, catálogos, reanudación, retención, configuración y trabajadores. Ejecutó el recorrido WPF del paquete, compatibilidad de formatos anteriores, análisis del espejo, conservación de doce planes incompatibles, retención, importación y retirada de instalaciones.
