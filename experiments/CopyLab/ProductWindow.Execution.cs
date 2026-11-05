@@ -30,10 +30,12 @@ public partial class ProductWindow
     private void RefreshProductActions()
     {
         var job = (JobList.SelectedItem as JobRow)?.Job;
-        bool available = !busy && job is not null;
+        bool executing = job is not null && IsJobRunning(job.Id);
+        bool available = !busy && job is not null && !executing;
         BackupJobButton.IsEnabled = RecoverJobButton.IsEnabled = available;
         SelectedJobText.Text = job is null ? "" : $"Origen\n{job.Source.VolumePath}\nDestino\n{job.Destination.LastVolumePath}";
         if (mirrorJobId != job?.Id) ResetProductActions();
+        RefreshRuntimeDisplay();
     }
 
     private void BackupJobClick(object sender, RoutedEventArgs e)
@@ -44,39 +46,11 @@ public partial class ProductWindow
         {
             if (job.Options.Mode == ProductBackupMode.Accumulative)
             {
-                await Task.Run(() =>
-                {
-                    var store = VersionStore.OpenProduct(job, initialize: true);
-                    store.InitializeMirror(resumeInitialization: true);
-                    var pending = store.ListMirrorOperations().Where(operation => !operation.Applied).ToArray();
-                    if (pending.Length > 1)
-                        throw new InvalidDataException("Hay varias actualizaciones de la copia pendientes de revisar.");
-                    if (pending.Length == 1) store.ResumeMirror(pending[0].Generation);
-                    else
-                    {
-                        var review = store.PreviewMirror(job.Source.VolumePath);
-                        if (review.Conflicts.Length > 0)
-                            throw new InvalidDataException("Hay ediciones externas en el destino. Consérvalas y resuelve estas rutas antes de reintentar.\n" +
-                                string.Join("\n", review.Conflicts.Take(6)));
-                        store.BeginMirror(review);
-                    }
-                });
-                SetStatus("Copia acumulativa completa y verificada. Se conservaron los archivos exclusivos del destino.");
+                await StartWorkerAsync(job, location => StartBackupProcess(location, job.Id));
             }
             else if (job.Options.Mode == ProductBackupMode.Versions)
             {
-                string generation = await Task.Run(() =>
-                {
-                    var store = VersionStore.OpenProduct(job, initialize: true);
-                    var pending = store.ListPending();
-                    if (pending.Length > 1)
-                        throw new InvalidDataException("Hay varios respaldos pendientes. Revisa las incidencias antes de continuar.");
-                    string id = pending.SingleOrDefault()?.Id ?? VersionStore.NewGenerationId();
-                    if (pending.Length == 1) store.ResumePoint(id, expectedSourceIdentity: job.Source.Identity);
-                    else store.CreatePoint(job.Source.VolumePath, id);
-                    return id;
-                });
-                SetStatus($"Respaldo completo · {VersionStore.GenerationTime(generation).ToLocalTime():g}.");
+                await StartWorkerAsync(job, location => StartBackupProcess(location, job.Id));
             }
             else if (job.Options.Mode == ProductBackupMode.ProtectedMirror)
             {
@@ -89,14 +63,13 @@ public partial class ProductWindow
                         throw new InvalidDataException("Hay varias actualizaciones del espejo pendientes de revisar.");
                     if (pending.Length == 1)
                     {
-                        store.ResumeMirror(pending[0].Generation);
                         return null;
                     }
                     return store.PreviewMirror(job.Source.VolumePath);
                 });
                 if (mirrorReview is null)
                 {
-                    SetStatus("Actualización pendiente del espejo completada y verificada.");
+                    await StartWorkerAsync(job, location => StartBackupProcess(location, job.Id));
                     return;
                 }
                 mirrorJobId = job.Id;
@@ -119,9 +92,13 @@ public partial class ProductWindow
         bool empty = AcceptEmptySource.IsChecked == true, mass = AcceptMassChanges.IsChecked == true;
         Start(async () =>
         {
-            await Task.Run(() => VersionStore.OpenProduct(job).BeginMirror(review, empty, mass));
+            Guid approval = await Task.Run(() =>
+            {
+                using var registry = openRegistry();
+                return registry.ApproveMirror(job.Id, review, empty, mass);
+            });
+            await StartWorkerAsync(job, location => StartBackupProcess(location, job.Id, approval));
             ResetProductActions();
-            SetStatus("Espejo actualizado y verificado. El contenido anterior sigue disponible para recuperar.");
         });
     }
 
@@ -213,14 +190,7 @@ public partial class ProductWindow
         if (busy || recoveryJob is not { } job || RecoveryDates.SelectedItem is not RecoveryDate row) return;
         Start(async () =>
         {
-            bool degraded = await Task.Run(() =>
-            {
-                var store = VersionStore.OpenProduct(job);
-                return job.Options.Mode == ProductBackupMode.Accumulative ||
-                    job.Options.Mode == ProductBackupMode.ProtectedMirror && store.RegisteredGenerations().MirrorGeneration == row.Point.Id
-                    ? store.VerifyCurrent(row.Point.Id) : store.Verify(row.Point.Id);
-            });
-            SetStatus("Verificación completa del contenido." + (degraded ? " Una réplica del catálogo necesita revisión." : ""));
+            await StartWorkerAsync(job, location => ProductWorker.StartVerification(location, job.Id, row.Point.Id));
         });
     }
 

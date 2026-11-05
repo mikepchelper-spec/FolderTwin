@@ -23,16 +23,19 @@ internal sealed partial class VersionStore
     private readonly VersionScope workspace;
     private readonly DestinationBinding binding;
     private readonly bool registeredGenerations;
+    private readonly Action<WorkProgress>? observe;
     internal string Destination { get; }
     internal DestinationBinding Binding => binding;
     internal bool SupportsRetention => registeredGenerations;
 
-    private VersionStore(VersionScope workspace, string destination, DestinationBinding binding, bool registeredGenerations)
+    private VersionStore(VersionScope workspace, string destination, DestinationBinding binding, bool registeredGenerations,
+        Action<WorkProgress>? observe = null)
     {
         this.workspace = workspace;
         Destination = destination;
         this.binding = binding;
         this.registeredGenerations = registeredGenerations;
+        this.observe = observe;
     }
 
     internal static VersionStore Initialize(LabWorkspace workspace, string destination)
@@ -101,7 +104,7 @@ internal sealed partial class VersionStore
         byte[] identity = WindowsProbeNative.DirectoryIdentity(origin.Root);
         if (identity.AsSpan().SequenceEqual(binding.Identity))
             throw new InvalidDataException("El origen y el almacén son la misma carpeta.");
-        var plan = FolderBatch.AnalyzeSource(workspace.Root, source, Destination, binding, identity, BatchCatalog.VersionMaximumEntries);
+        var plan = AnalyzeSource(source, identity);
         workspace.ValidatePlan(plan);
         FolderBatch.RequireSameInventory(plan);
         using var pending = WindowsProbeNative.OpenOrCreatePlainDirectory(store.Root, PendingDirectory);
@@ -202,6 +205,7 @@ internal sealed partial class VersionStore
             CopyObjects();
             if (origin is not null)
                 FolderBatch.RequireSameInventory(inventory);
+            observe?.Invoke(new(WorkPhase.Publishing, 0, 1));
             WithCatalogFiles(store, generation, files =>
             {
                 BatchCatalog.PublishLocked(plan, files, generation, () => VerifyObjects(store, plan.Files), checkpoint);
@@ -214,8 +218,11 @@ internal sealed partial class VersionStore
         {
             using var objects = WindowsProbeNative.OpenPlainDirectory(store, ObjectDirectory);
             using var algorithm = WindowsProbeNative.OpenPlainDirectory(objects, Algorithm);
-            foreach (var file in DistinctObjects(plan.Files))
+            var unique = DistinctObjects(plan.Files).ToArray();
+            for (int index = 0; index < unique.Length; index++)
             {
+                var file = unique[index];
+                observe?.Invoke(new(WorkPhase.Copying, index, unique.Length, file.RelativePath));
                 string digest = Digest(file);
                 string final = ObjectPath(digest);
                 using var bucket = WindowsProbeNative.OpenOrCreatePlainDirectory(algorithm, digest[..2]);
@@ -400,17 +407,24 @@ internal sealed partial class VersionStore
 
     private string ObjectPath(string digest) => Path.Combine(Destination, ObjectDirectory, Algorithm, digest[..2], digest);
 
-    private static void VerifyObjects(SafeFileHandle store, BatchFile[] files)
+    private void VerifyObjects(SafeFileHandle store, BatchFile[] files)
     {
         using var objects = WindowsProbeNative.OpenPlainDirectory(store, ObjectDirectory);
         using var algorithm = WindowsProbeNative.OpenPlainDirectory(objects, Algorithm);
-        foreach (var file in DistinctObjects(files))
+        var unique = DistinctObjects(files).ToArray();
+        for (int index = 0; index < unique.Length; index++)
         {
+            var file = unique[index];
+            observe?.Invoke(new(WorkPhase.Verifying, index, unique.Length, file.RelativePath));
             string digest = Digest(file);
             using var bucket = WindowsProbeNative.OpenPlainDirectory(algorithm, digest[..2]);
             VerifyObject(bucket, digest, file);
         }
     }
+
+    private BatchPlan AnalyzeSource(string source, byte[] identity, WorkPhase phase = WorkPhase.Analyzing) =>
+        FolderBatch.AnalyzeSource(workspace.Root, source, Destination, binding, identity, BatchCatalog.VersionMaximumEntries,
+            observe is null ? null : progress => observe(progress with { Phase = phase }));
 
     private static void VerifyObject(SafeFileHandle directory, string digest, BatchFile file)
     {

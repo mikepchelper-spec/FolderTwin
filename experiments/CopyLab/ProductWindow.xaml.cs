@@ -12,9 +12,25 @@ namespace CopyLab;
 public partial class ProductWindow : Window
 {
     private sealed record Choice(ProductJobOptions Options, DedicatedDestinationReview Destination);
-    private sealed record JobRow(Guid Id, string Label, string Detail, bool Pending, ProductJob? Job = null);
+    private sealed class JobRow(Guid id, string label, string detail, bool pending, ProductJob? job = null) : INotifyPropertyChanged
+    {
+        public Guid Id => id;
+        public string Label => label;
+        public bool Pending => pending;
+        public ProductJob? Job => job;
+        private string runtime = "";
+        public string Detail => detail + runtime;
+        public event PropertyChangedEventHandler? PropertyChanged;
+        internal void SetRuntime(string text)
+        {
+            if (runtime == text) return;
+            runtime = text;
+            PropertyChanged?.Invoke(this, new(nameof(Detail)));
+        }
+    }
     private readonly Func<ProductJobRegistry> openRegistry;
     private readonly Func<string, string?>? testPicker;
+    private readonly Func<string, Guid, Guid?, System.Diagnostics.Process>? testWorker;
     private readonly VersionIndex productIndex;
     private string? origin;
     private string? parent;
@@ -23,20 +39,29 @@ public partial class ProductWindow : Window
     private bool busy;
     private Task activeTask = Task.CompletedTask;
 
-    internal ProductWindow(Func<ProductJobRegistry>? openRegistry = null, Func<string, string?>? testPicker = null)
+    internal ProductWindow(Func<ProductJobRegistry>? openRegistry = null, Func<string, string?>? testPicker = null,
+        Func<string, Guid, Guid?, System.Diagnostics.Process>? testWorker = null)
     {
         this.openRegistry = openRegistry ?? ProductJobRegistry.OpenLocal;
         this.testPicker = testPicker;
+        this.testWorker = testWorker;
         productIndex = new(() =>
         {
             using var registry = this.openRegistry();
             return registry.OpenIndexScope();
         });
         InitializeComponent();
+        runtimeTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background,
+            async (_, _) => await PollRuntimeAsync(), Dispatcher);
+        runtimeTimer.Stop();
         ModeChanged(this, new RoutedEventArgs());
     }
 
-    internal Task InitializeAsync() => RunAsync(LoadListAsync);
+    internal async Task InitializeAsync()
+    {
+        await RunAsync(async () => { await LoadListAsync(); await RefreshRuntimeAsync(); });
+        runtimeTimer.Start();
+    }
 
     private void NewJobClick(object sender, RoutedEventArgs e)
     {
@@ -180,6 +205,9 @@ public partial class ProductWindow : Window
         if (ResumeRegistrationButton is not null)
             ResumeRegistrationButton.IsEnabled = !busy && JobList.SelectedItem is JobRow { Pending: true };
         if (BackupJobButton is not null) RefreshProductActions();
+        if (!busy && JobList.SelectedItem is JobRow selected)
+            SetStatus(runSnapshots.TryGetValue(selected.Id, out var history) && history.Runs.FirstOrDefault() is { Result: { } result } run ?
+                ResultText(run, result) : "");
     }
 
     private void SelectJob(Guid id)

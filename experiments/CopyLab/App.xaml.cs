@@ -14,7 +14,8 @@ public partial class App : Application
         bool productSmoke = e.Args is ["--product-smoke"];
         bool trayStartup = e.Args is ["--tray-workspace", _];
         bool scheduled = e.Args is ["--run-scheduled-version-job", _, _];
-        bool worker = scheduled || e.Args is ["--run-version-job", _, _];
+        bool productWorker = e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _];
+        bool worker = productWorker || scheduled || e.Args is ["--run-version-job", _, _];
         if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !productSmoke)
         {
             Shutdown(2);
@@ -49,6 +50,24 @@ public partial class App : Application
                 if (!Guid.TryParseExact(e.Args[2], "N", out Guid id))
                 {
                     Shutdown(2);
+                    return;
+                }
+                if (productWorker)
+                {
+                    if (e.Args[0] == "--verify-product-job")
+                    {
+                        int verified = await Task.Run(() => ProductRunner.VerifyCommand(e.Args[1], id, e.Args[3]));
+                        Shutdown(verified);
+                        return;
+                    }
+                    Guid? approval = null;
+                    if (e.Args.Length == 4)
+                    {
+                        if (!Guid.TryParseExact(e.Args[3], "N", out Guid selected)) { Shutdown(2); return; }
+                        approval = selected;
+                    }
+                    int productResult = await Task.Run(() => ProductRunner.RunCommand(e.Args[1], id, approval));
+                    Shutdown(productResult);
                     return;
                 }
                 int result = scheduled ? await VersionJob.RunScheduledCommandAsync(e.Args[1], id, canRetry: MayRetry) :

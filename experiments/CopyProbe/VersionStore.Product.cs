@@ -9,7 +9,7 @@ internal sealed partial class VersionStore
     private const string InitializationName = ".foldertwin-version-initialize";
 
     internal static VersionStore OpenProduct(ProductJob job, bool initialize = false,
-        Action<ProductStoreStep>? checkpoint = null)
+        Action<ProductStoreStep>? checkpoint = null, Action<WorkProgress>? observe = null)
     {
         job.Options.Validate();
         var scope = new VersionScope(job);
@@ -60,6 +60,6 @@ internal sealed partial class VersionStore
         if (record.ReadAtLeast(observed, observed.Length, false) != observed.Length || record.ReadByte() != -1 ||
             !observed.SequenceEqual(expected))
             throw new InvalidDataException("El almacén de producto está dañado o pertenece a otro trabajo.");
-        return new(scope, job.Destination.LastVolumePath, job.Destination, registeredGenerations: true);
+        return new(scope, job.Destination.LastVolumePath, job.Destination, registeredGenerations: true, observe);
     }
 }

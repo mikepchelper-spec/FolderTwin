@@ -34,10 +34,24 @@
                               HorizontalScrollBarVisibility="Disabled" Margin="0,12,0,0">
                     <StackPanel>
                         <TextBlock x:Name="SelectedJobText" TextWrapping="Wrap" />
+                        <TextBlock x:Name="RuntimeStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        <ProgressBar x:Name="RunProgress" Height="4" Margin="0,8,0,0" Visibility="Collapsed"
+                                     AutomationProperties.Name="Progreso de la operación activa" />
                         <WrapPanel Margin="0,8,0,0">
                             <Button x:Name="BackupJobButton" Content="_Respaldar ahora" Click="BackupJobClick" IsEnabled="False" Margin="0,0,8,4" />
                             <Button x:Name="RecoverJobButton" Content="Re_cuperar archivos" Click="RecoverJobClick" IsEnabled="False" Margin="0,0,8,4" />
+                            <Button x:Name="PauseRunButton" Content="_Pausar" Click="PauseRunClick" IsEnabled="False" Margin="0,0,8,4" />
+                            <Button x:Name="CancelRunButton" Content="_Cancelar ejecución" Click="CancelRunClick" IsEnabled="False" Margin="0,0,8,4" />
                         </WrapPanel>
+                        <TextBlock Text="La pausa y la cancelación se atienden entre archivos o pasos recuperables. Puedes cerrar la ventana mientras el ejecutor sigue trabajando."
+                                   TextWrapping="Wrap" Margin="0,4,0,4" />
+                        <Expander Header="Historial e incidencias" Margin="0,4,0,4">
+                            <ListBox x:Name="RunHistoryList" MaxHeight="180" AutomationProperties.Name="Historial del trabajo seleccionado">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" /></DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Expander>
                         <StackPanel x:Name="MirrorReviewPanel" Visibility="Collapsed" Margin="0,8,0,0">
                             <TextBlock x:Name="MirrorReviewText" TextWrapping="Wrap" />
                             <CheckBox x:Name="AcceptEmptySource" Content="He revisado que el origen esté vacío" Margin="0,8,0,0" />

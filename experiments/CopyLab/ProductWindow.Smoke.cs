@@ -66,7 +66,7 @@ public partial class ProductWindow
                 File.Delete(Path.Combine(source, "datos.txt"));
                 await Click(window, window.BackupJobButton);
                 Check(File.ReadAllText(Path.Combine(accumulated.MirrorCurrentPath, "datos.txt")) == "actualización acumulativa" &&
-                    window.StatusText.Text.StartsWith("Copia acumulativa completa", StringComparison.Ordinal), window.StatusText.Text);
+                    window.StatusText.Text.StartsWith("Respaldo completo", StringComparison.Ordinal), window.StatusText.Text);
                 await Click(window, window.RecoverJobButton);
                 Check(window.RecoveryDates.Items.Count == 1 && window.RecoveryFiles.Items.Count == 2,
                     "Cumulative recovery did not expose the current accumulated content.");
@@ -211,6 +211,7 @@ public partial class ProductWindow
             finally { reopened.Close(); }
             Console.Error.WriteLine("PASS WPF executes and recovers all three modes, preserves cumulative extras, retries busy files and reviews mass mirror changes.");
             Console.Error.WriteLine("PASS product recovery pages files, browses folders, searches Unicode, restores a deleted file and tolerates a corrupt local index.");
+            await RunWorkerSmokeAsync();
         }
         finally
         {
@@ -226,6 +227,8 @@ public partial class ProductWindow
         Check(button.IsEnabled, "A wizard action was unexpectedly disabled.");
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         await window.activeTask;
+        if (button == window.BackupJobButton || button == window.ApplyMirrorButton || button == window.VerifyPointButton)
+            await window.WaitForWorkersAsync();
     }
 
 

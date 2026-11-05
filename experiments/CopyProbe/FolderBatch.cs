@@ -54,8 +54,10 @@ internal static class FolderBatch
     }
 
     internal static BatchPlan AnalyzeSource(string fixtureRoot, string source, string destination,
-        DestinationBinding binding, byte[] sourceIdentity, int maximumEntries = FolderInventory.DefaultMaximumEntries)
+        DestinationBinding binding, byte[] sourceIdentity, int maximumEntries = FolderInventory.DefaultMaximumEntries,
+        Action<WorkProgress>? observe = null)
     {
+        observe?.Invoke(new(WorkPhase.Analyzing, 0, 0));
         var inventory = FolderInventory.Scan(source, maximumEntries: maximumEntries);
         if (!inventory.Complete)
             throw new InvalidDataException(DescribeIncompleteSource(inventory.Issues));
@@ -65,8 +67,10 @@ internal static class FolderBatch
             .OrderBy(path => path, StringComparer.Ordinal).ToArray();
         CheckDirectoryData(source, directories);
         var files = new List<BatchFile>();
+        int totalFiles = inventory.Entries.Count(entry => !entry.IsDirectory);
         foreach (var entry in inventory.Entries.Where(entry => !entry.IsDirectory).OrderBy(entry => entry.RelativePath, StringComparer.Ordinal))
         {
+            observe?.Invoke(new(WorkPhase.Analyzing, files.Count, totalFiles, entry.RelativePath));
             string path = Path.Combine(source, entry.RelativePath);
             using var fence = new DirectoryFence(source, path);
             using var file = WindowsProbeNative.OpenPlainFile(fence.Parent(path), path, FileAccess.Read, FileShare.Read);

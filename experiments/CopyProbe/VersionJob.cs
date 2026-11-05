@@ -265,9 +265,9 @@ internal static class VersionJob
 
     internal static bool Expected(Exception error) => error is IOException or InvalidDataException or UnauthorizedAccessException or
         ArgumentException or JsonException or Win32Exception;
-    private static bool Unavailable(Exception error) => error is FileNotFoundException or DirectoryNotFoundException ||
+    internal static bool Unavailable(Exception error) => error is FileNotFoundException or DirectoryNotFoundException ||
         error.InnerException is Win32Exception { NativeErrorCode: 2 or 3 or 21 };
-    private static bool SharingViolation(Exception error) => error is Win32Exception { NativeErrorCode: 32 } ||
+    internal static bool SharingViolation(Exception error) => error is Win32Exception { NativeErrorCode: 32 } ||
         error.InnerException is Win32Exception { NativeErrorCode: 32 };
     private static string Name(Guid id) => id == Guid.Empty ? throw new ArgumentException("Falta el identificador del trabajo.") :
         $"{Prefix}{id:N}";

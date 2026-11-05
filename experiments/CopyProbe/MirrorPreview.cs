@@ -23,14 +23,15 @@ internal sealed partial class VersionStore
         MirrorJournal.Initialize(store.Root, binding, resumeInitialization);
     }
 
-    internal MirrorPreview PreviewMirror(string source, int maximumChangePercent = 25)
+    internal MirrorPreview PreviewMirror(string source, int maximumChangePercent = 25, string? generation = null)
     {
         using var scope = workspace.OpenRegisteredRoot();
         workspace.CheckRoots(source, Destination);
         using var store = new DirectoryFence(Destination);
         using var marker = binding.OpenVerifiedMarker(store.Root);
         using var operation = OpenLock(store.Root, FileAccess.ReadWrite);
-        return BuildMirrorPreview(scope.Root, store.Root, source, maximumChangePercent);
+        if (generation is not null) _ = GenerationTime(generation);
+        return BuildMirrorPreview(scope.Root, store.Root, source, maximumChangePercent, generation);
     }
 
     private MirrorPreview BuildMirrorPreview(SafeFileHandle scope, SafeFileHandle root, string source, int maximumChangePercent,
@@ -44,14 +45,14 @@ internal sealed partial class VersionStore
         using var origin = new DirectoryFence(source);
         workspace.RequireSourceIdentity(source, origin.Root);
         byte[] sourceIdentity = WindowsProbeNative.DirectoryIdentity(origin.Root);
-        var sourcePlan = FolderBatch.AnalyzeSource(workspace.Root, source, Destination, binding, sourceIdentity, BatchCatalog.VersionMaximumEntries);
+        var sourcePlan = AnalyzeSource(source, sourceIdentity);
         workspace.ValidatePlan(sourcePlan);
         FolderBatch.RequireSameInventory(sourcePlan);
         generation ??= NewGenerationId();
         var before = MirrorPrevious(scope, root, registry.MirrorGeneration, sourceIdentity);
         if (before is not null && !before.DocumentHash.AsSpan().SequenceEqual(registry.Generations[registry.MirrorGeneration!]))
             throw new InvalidDataException("El catálogo actual del espejo no coincide con su registro.");
-        var observed = FolderBatch.AnalyzeSource(workspace.Root, MirrorCurrentPath, Destination, binding, currentIdentity, BatchCatalog.VersionMaximumEntries);
+        var observed = AnalyzeSource(MirrorCurrentPath, currentIdentity, WorkPhase.Verifying);
         string[] conflicts = workspace.IsAccumulative ? AccumulativeConflicts(sourcePlan, before, observed) : MirrorConflicts(before, observed);
         var desiredPlan = workspace.IsAccumulative ? MergeAccumulative(sourcePlan, observed) : sourcePlan;
         byte[] hash = BatchCatalog.WriteMetadata(Stream.Null, desiredPlan, generation, out int catalogBytes);

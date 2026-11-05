@@ -16,7 +16,7 @@ internal sealed record ProductJobOptions(string Name, ProductBackupMode Mode, Ti
 internal sealed record ProductJob(Guid Id, ProductJobOptions Options, LocalJobRoot Source, DestinationBinding Destination);
 internal sealed record ProductJobList(ProductJob[] Jobs, Guid[] Pending, int Unreadable);
 
-internal sealed class ProductJobRegistry : IDisposable
+internal sealed partial class ProductJobRegistry : IDisposable
 {
     private const string IntentName = "intent.json";
     private const string TargetName = "target.json";
@@ -25,6 +25,7 @@ internal sealed class ProductJobRegistry : IDisposable
     private readonly DirectoryFence directory;
     private readonly byte[] identity;
     private readonly string volumePath;
+    internal string Location => volumePath;
     private static readonly JsonSerializerOptions Json = new()
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,

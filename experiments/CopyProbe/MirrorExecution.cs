@@ -176,7 +176,7 @@ internal sealed partial class VersionStore
         using var origin = new DirectoryFence(source);
         if (!WindowsProbeNative.DirectoryIdentity(origin.Root).AsSpan().SequenceEqual(plan.SourceIdentity))
             throw new InvalidDataException("La identidad del origen cambió desde la revisión del espejo.");
-        var observed = FolderBatch.AnalyzeSource(workspace.Root, source, Destination, binding, plan.SourceIdentity, BatchCatalog.VersionMaximumEntries);
+        var observed = AnalyzeSource(source, plan.SourceIdentity);
         FolderBatch.RequireSameInventory(observed);
         if (!BatchCatalog.WriteMetadata(Stream.Null, observed, plan.Generation).AsSpan()
             .SequenceEqual(plan.Version == 3 ? plan.SourceHash : plan.DocumentHash))
@@ -189,7 +189,7 @@ internal sealed partial class VersionStore
         using var current = new DirectoryFence(MirrorCurrentPath);
         if (!WindowsProbeNative.DirectoryIdentity(current.Root).AsSpan().SequenceEqual(identity))
             throw new InvalidDataException("La raíz actual del espejo fue sustituida.");
-        var observed = FolderBatch.AnalyzeSource(workspace.Root, MirrorCurrentPath, Destination, binding, identity, BatchCatalog.VersionMaximumEntries);
+        var observed = AnalyzeSource(MirrorCurrentPath, identity, WorkPhase.Verifying);
         if (MirrorConflicts(expected, observed).Length != 0)
             throw new InvalidDataException("El espejo contiene cambios o rutas inesperadas. Se conservan para revisión.");
     }
@@ -204,8 +204,7 @@ internal sealed partial class VersionStore
 
     private HashSet<string> RequireRecoverableMirrorState(SafeFileHandle directory, MirrorPlan plan, CatalogSnapshot? before, CatalogSnapshot after)
     {
-        var current = FolderBatch.AnalyzeSource(workspace.Root, MirrorCurrentPath, Destination, binding, plan.CurrentIdentity,
-            BatchCatalog.VersionMaximumEntries);
+        var current = AnalyzeSource(MirrorCurrentPath, plan.CurrentIdentity, WorkPhase.Verifying);
         var observed = current.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
         var previous = (before?.Files ?? []).ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
         var desired = after.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
@@ -255,6 +254,7 @@ internal sealed partial class VersionStore
         var previous = before?.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
         foreach (var file in after.Files.Where(file => !previous.TryGetValue(file.RelativePath, out var old) || !SameMirrorFile(old, file)))
         {
+            observe?.Invoke(new(WorkPhase.Publishing, 0, after.Files.Length, file.RelativePath));
             string token = MirrorToken(file.RelativePath);
             string final = Path.Combine(Destination, MirrorJournal.DirectoryName, MirrorJournal.OperationsName, plan.Generation, "staged", token);
             if (!WindowsProbeNative.PlainFileExists(staged, token))
@@ -290,6 +290,7 @@ internal sealed partial class VersionStore
         using var retired = WindowsProbeNative.OpenOrCreatePlainDirectory(directory, "retired");
         foreach (var file in RetiredMirrorFiles(before, after))
         {
+            observe?.Invoke(new(WorkPhase.Publishing, 0, previous.Count, file.RelativePath));
             string token = MirrorToken(file.RelativePath);
             if (WindowsProbeNative.PlainFileExists(retired, token))
             {
@@ -309,6 +310,7 @@ internal sealed partial class VersionStore
         foreach (string relative in (before?.Directories ?? []).Except(after.Directories, StringComparer.Ordinal)
             .OrderByDescending(path => path.Count(c => c == Path.DirectorySeparatorChar)).ThenByDescending(path => path, StringComparer.Ordinal))
         {
+            observe?.Invoke(new(WorkPhase.Publishing, 0, before?.Directories.Length ?? 0, relative));
             // A prior pass may already have replaced an ancestor with a file.
             if (!presentDirectories.Contains(relative))
                 continue;
@@ -322,10 +324,14 @@ internal sealed partial class VersionStore
         }
         using (var current = new DirectoryFence(MirrorCurrentPath))
             foreach (string relative in after.Directories)
+            {
+                observe?.Invoke(new(WorkPhase.Publishing, 0, after.Directories.Length, relative));
                 FolderBatch.WithDirectories(current.Root, relative, () => true);
+            }
         using var staged = WindowsProbeNative.OpenOrCreatePlainDirectory(directory, "staged");
         foreach (var file in wanted.Values.Where(file => !previous.TryGetValue(file.RelativePath, out var old) || !SameMirrorFile(old, file)))
         {
+            observe?.Invoke(new(WorkPhase.Publishing, 0, after.Files.Length, file.RelativePath));
             if (MirrorFileMatches(file))
                 continue;
             string path = Path.Combine(MirrorCurrentPath, file.RelativePath);

@@ -43,8 +43,7 @@ internal sealed partial class VersionStore
         const string baselineName = "baseline.jsonl";
         if (!WindowsProbeNative.PlainFileExists(directory, baselineName))
         {
-            var observed = FolderBatch.AnalyzeSource(workspace.Root, MirrorCurrentPath, Destination, binding,
-                plan.CurrentIdentity, BatchCatalog.VersionMaximumEntries);
+            var observed = AnalyzeSource(MirrorCurrentPath, plan.CurrentIdentity, WorkPhase.Verifying);
             if (!BatchCatalog.WriteMetadata(Stream.Null, observed, plan.Generation).AsSpan().SequenceEqual(plan.BaselineHash))
                 throw new InvalidDataException("El destino cambió antes de guardar la revisión acumulativa. Se conserva para revisión.");
             string draft = baselineName + ".tmp";
@@ -77,6 +76,7 @@ internal sealed partial class VersionStore
         using var algorithm = WindowsProbeNative.OpenPlainDirectory(objects, Algorithm);
         foreach (var file in DistinctObjects(baseline.Files))
         {
+            observe?.Invoke(new(WorkPhase.Copying, 0, baseline.Files.Length, file.RelativePath));
             string digest = Digest(file);
             using var bucket = WindowsProbeNative.OpenOrCreatePlainDirectory(algorithm, digest[..2]);
             if (!WindowsProbeNative.PlainFileExists(bucket, digest))
