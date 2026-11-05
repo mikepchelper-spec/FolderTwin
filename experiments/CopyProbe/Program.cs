@@ -23,6 +23,10 @@ if (args is ["--product-jobs"])
     return ProductJobRegistryProbe.Run();
 if (args is ["--product-store"])
     return ProductStoreProbe.Run();
+if (args is ["--accumulative"])
+    return AccumulativeProbe.Run();
+if (args is ["--interrupt-accumulative-child", var cumulativeRoot])
+    return AccumulativeProbe.InterruptChild(cumulativeRoot);
 if (args is ["--inventory"])
     return InventoryProbe.Run();
 if (args is ["--batch"])

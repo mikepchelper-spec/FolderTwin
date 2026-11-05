@@ -111,6 +111,7 @@ internal static class VolumeProbe
         DestinationBinding binding = DestinationBinding.Register(fence.Root);
         binding.SaveNew(configuration);
         VerifyProductTransfer(state, root, binding);
+        VerifyProductModes(state, root);
         WriteNew(source, content);
         WriteNew(previous, Previous);
 
@@ -204,6 +205,61 @@ internal static class VolumeProbe
             Console.WriteLine("PASS verified transfer across two NTFS volumes recovered at the destination without changing the source.");
         }
         finally { File.Delete(source); }
+    }
+
+    private static void VerifyProductModes(string state, string parent)
+    {
+        string source = Path.Combine(state, "product-source");
+        string settings = Path.Combine(state, "product-settings");
+        string recovery = Path.Combine(state, "product-recovery");
+        var created = new List<ProductJob>();
+        Directory.CreateDirectory(source);
+        Directory.CreateDirectory(settings);
+        Directory.CreateDirectory(recovery);
+        byte[] expected = SHA256.HashData("product backup between NTFS volumes"u8);
+        WriteNew(Path.Combine(source, "datos.txt"), "product backup between NTFS volumes"u8);
+        try
+        {
+            using var registry = new ProductJobRegistry(settings);
+            foreach (var mode in Enum.GetValues<ProductBackupMode>())
+            {
+                var job = registry.Create(new(mode.ToString(), mode, null), LocalJobRoots.ReviewDedicatedDestination(source, parent));
+                created.Add(job);
+                using (var roots = LocalJobRoots.Reopen(new(job.Source,
+                    new(job.Destination.LastVolumePath, job.Destination.Identity), 0, false)))
+                    Check(!roots.Review.SameVolume, "The product-mode test did not use two NTFS volumes.");
+                var store = VersionStore.OpenProduct(job, initialize: true);
+                string generation;
+                if (mode == ProductBackupMode.Versions)
+                {
+                    generation = VersionStore.NewGenerationId();
+                    store.CreatePoint(job.Source.VolumePath, generation);
+                }
+                else
+                {
+                    store.InitializeMirror(resumeInitialization: true);
+                    generation = store.BeginMirror(store.PreviewMirror(job.Source.VolumePath));
+                    Check(!store.VerifyCurrent(generation), "The cross-volume current folder failed verification.");
+                }
+                string output = Directory.CreateDirectory(Path.Combine(recovery, mode.ToString())).FullName;
+                store.Restore(generation, output);
+                CheckHash(Path.Combine(output, "datos.txt"), expected);
+                CheckHash(Path.Combine(source, "datos.txt"), expected);
+            }
+            Console.WriteLine("PASS all three registered product modes copied to another NTFS volume and restored back with matching hashes.");
+        }
+        finally
+        {
+            foreach (var job in created)
+            {
+                using (var fence = new DirectoryFence(job.Destination.LastVolumePath))
+                using (job.Destination.OpenVerifiedMarker(fence.Root)) { }
+                Directory.Delete(job.Destination.LastVolumePath, recursive: true);
+            }
+            Directory.Delete(source, recursive: true);
+            Directory.Delete(settings, recursive: true);
+            Directory.Delete(recovery, recursive: true);
+        }
     }
 
     private static void WriteNew(string path, ReadOnlySpan<byte> bytes)

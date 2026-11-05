@@ -241,7 +241,7 @@ public partial class ProductWindow : Window
         if (ModeDetail is null) return;
         ModeDetail.Text = (ProductBackupMode)BackupMode.SelectedIndex switch
         {
-            ProductBackupMode.Accumulative => "Conserva los archivos que ya están en el destino.",
+            ProductBackupMode.Accumulative => "Añade y actualiza archivos, conserva los exclusivos del destino y detiene los conflictos con ediciones externas.",
             ProductBackupMode.Versions => "Conserva fechas recuperables, incluso si se borra un archivo del origen.",
             ProductBackupMode.ProtectedMirror => "Mantiene una carpeta actual y conserva el contenido retirado.",
             _ => ""

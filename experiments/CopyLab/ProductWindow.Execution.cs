@@ -30,10 +30,9 @@ public partial class ProductWindow
     private void RefreshProductActions()
     {
         var job = (JobList.SelectedItem as JobRow)?.Job;
-        bool available = !busy && job?.Options.Mode is ProductBackupMode.Versions or ProductBackupMode.ProtectedMirror;
+        bool available = !busy && job is not null;
         BackupJobButton.IsEnabled = RecoverJobButton.IsEnabled = available;
-        SelectedJobText.Text = job is null ? "" : $"Origen\n{job.Source.VolumePath}\nDestino\n{job.Destination.LastVolumePath}" +
-            (job.Options.Mode == ProductBackupMode.Accumulative ? "\nLa ejecución acumulativa está en preparación." : "");
+        SelectedJobText.Text = job is null ? "" : $"Origen\n{job.Source.VolumePath}\nDestino\n{job.Destination.LastVolumePath}";
         if (mirrorJobId != job?.Id) ResetProductActions();
     }
 
@@ -43,7 +42,28 @@ public partial class ProductWindow
         ResetProductActions();
         Start(async () =>
         {
-            if (job.Options.Mode == ProductBackupMode.Versions)
+            if (job.Options.Mode == ProductBackupMode.Accumulative)
+            {
+                await Task.Run(() =>
+                {
+                    var store = VersionStore.OpenProduct(job, initialize: true);
+                    store.InitializeMirror(resumeInitialization: true);
+                    var pending = store.ListMirrorOperations().Where(operation => !operation.Applied).ToArray();
+                    if (pending.Length > 1)
+                        throw new InvalidDataException("Hay varias actualizaciones de la copia pendientes de revisar.");
+                    if (pending.Length == 1) store.ResumeMirror(pending[0].Generation);
+                    else
+                    {
+                        var review = store.PreviewMirror(job.Source.VolumePath);
+                        if (review.Conflicts.Length > 0)
+                            throw new InvalidDataException("Hay ediciones externas en el destino. Consérvalas y resuelve estas rutas antes de reintentar.\n" +
+                                string.Join("\n", review.Conflicts.Take(6)));
+                        store.BeginMirror(review);
+                    }
+                });
+                SetStatus("Copia acumulativa completa y verificada. Se conservaron los archivos exclusivos del destino.");
+            }
+            else if (job.Options.Mode == ProductBackupMode.Versions)
             {
                 string generation = await Task.Run(() =>
                 {
@@ -110,7 +130,13 @@ public partial class ProductWindow
         if (busy || (JobList.SelectedItem as JobRow)?.Job is not { } job) return;
         Start(async () =>
         {
-            var points = await Task.Run(() => VersionStore.OpenProduct(job).ListPoints());
+            var points = await Task.Run(() =>
+            {
+                var store = VersionStore.OpenProduct(job);
+                var available = store.ListPoints();
+                return job.Options.Mode == ProductBackupMode.Accumulative ?
+                    available.Where(point => point.Id == store.RegisteredGenerations().MirrorGeneration).ToArray() : available;
+            });
             if (points.Length == 0) throw new InvalidDataException("Este trabajo todavía no tiene un respaldo confirmado.");
             recoveryJob = job;
             JobListPanel.Visibility = Visibility.Collapsed;
@@ -148,7 +174,13 @@ public partial class ProductWindow
         if (busy || recoveryJob is not { } job || RecoveryDates.SelectedItem is not RecoveryDate row) return;
         Start(async () =>
         {
-            bool degraded = await Task.Run(() => VersionStore.OpenProduct(job).Verify(row.Point.Id));
+            bool degraded = await Task.Run(() =>
+            {
+                var store = VersionStore.OpenProduct(job);
+                return job.Options.Mode == ProductBackupMode.Accumulative ||
+                    job.Options.Mode == ProductBackupMode.ProtectedMirror && store.RegisteredGenerations().MirrorGeneration == row.Point.Id
+                    ? store.VerifyCurrent(row.Point.Id) : store.Verify(row.Point.Id);
+            });
             SetStatus("Verificación completa del contenido." + (degraded ? " Una réplica del catálogo necesita revisión." : ""));
         });
     }

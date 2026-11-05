@@ -6,7 +6,9 @@ using Microsoft.Win32.SafeHandles;
 internal enum MirrorStep { Planned, PointConfirmed, Staged, Ready, Retired, DirectoryRemoved, Promoted, CurrentVerified, Registered, Released, Applied }
 internal sealed record MirrorPlan(int Version, string Generation, byte[] DocumentHash, string? Previous, byte[] PreviousHash,
     string Source, byte[] SourceIdentity, byte[] CurrentIdentity, Guid Marker, byte[] StoreIdentity,
-    int MaximumChangePercent, bool EmptyReviewed, bool MassReviewed);
+    int MaximumChangePercent, bool EmptyReviewed, bool MassReviewed,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] byte[]? SourceHash = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] byte[]? BaselineHash = null);
 internal sealed record MirrorOperation(string Generation, string? Previous, bool Ready, bool Applied);
 
 internal static class MirrorJournal
@@ -88,12 +90,15 @@ internal static class MirrorJournal
             throw new InvalidDataException("El plan del espejo está dañado.");
         var plan = JsonSerializer.Deserialize<MirrorPlan>(bytes.AsSpan(32), Json)
             ?? throw new InvalidDataException("Falta el plan del espejo.");
-        if (plan.Version is not (1 or 2) || plan.Generation != generation || plan.Marker != binding.Marker ||
+        if (plan.Version is not (1 or 2 or 3) || plan.Generation != generation || plan.Marker != binding.Marker ||
             plan.StoreIdentity is not { Length: 24 } || !plan.StoreIdentity.AsSpan().SequenceEqual(binding.Identity) ||
             plan.CurrentIdentity is not { Length: 24 } || !plan.CurrentIdentity.AsSpan().SequenceEqual(currentIdentity) ||
             plan.SourceIdentity is not { Length: 24 } || plan.DocumentHash is not { Length: 32 } || plan.PreviousHash is not { Length: 32 } ||
             plan.MaximumChangePercent is < 1 or > 100)
             throw new InvalidDataException("Identidades o referencias inválidas en el plan del espejo.");
+        if (plan.Version == 3 ? plan.SourceHash is not { Length: 32 } || plan.BaselineHash is not { Length: 32 } :
+            plan.SourceHash is not null || plan.BaselineHash is not null)
+            throw new InvalidDataException("El plan no identifica correctamente su modo de publicación.");
         DirectoryFence.CheckName(plan.Source);
         if (plan.Previous is { } previous)
             _ = VersionStore.GenerationTime(previous);

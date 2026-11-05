@@ -16,7 +16,7 @@ Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 - [Investigación](INVESTIGACION.md): necesidades observadas, documentación técnica y fuentes.
 - [Nombres](NOMBRES.md): elección, alternativas anteriores y estado de la comprobación de disponibilidad.
 
-La vista previa de la v1 registra los tres modos y permite ejecutar versionado y espejo protegido desde WPF, verificar un punto y recuperarlo por fecha en una carpeta nueva. La ejecución acumulativa y el resto de la integración de producto siguen pendientes. Usa solo carpetas desechables con datos sintéticos. [Estado y recorrido de prueba](V1.md).
+La vista previa de la v1 registra y ejecuta los tres modos desde WPF, verifica el contenido y lo recupera en una carpeta nueva. El acumulativo conserva los exclusivos del destino y detiene conflictos externos. Versionado y espejo permiten seleccionar una fecha recuperable. Los controles de ejecución, horarios y el resto de la integración de producto siguen pendientes. Usa solo carpetas desechables con datos sintéticos. [Estado y recorrido de prueba](V1.md).
 
 ## Alfa portable de Windows
 
@@ -36,7 +36,9 @@ C# + .NET 10 LTS + WPF con tema Fluent, APIs de archivos de Windows y Programado
 
 El laboratorio incluye copia inicial, restauración, versionado con objetos SHA-256, programación, espejo protegido y retención manual. La interfaz muestra los fallos y archivos omitidos. Los archivos detectados como solo disponibles en la nube quedan para revisión.
 
-Con el SDK de .NET 10, ejecuta `dotnet run --project experiments/CopyProbe` en Windows. El experimento genera sus propios datos temporales y comprueba copia, flush, verificación SHA-256 y restauración. Incluye fallos inyectados, archivos ocupados, corrupción y recuperación de una copia interrumpida a partir de su registro en disco. GitHub Actions ejecuta las mismas comprobaciones. El alcance actual se limita a datos sintéticos en un volumen.
+Con el SDK de .NET 10, ejecuta `dotnet run --project experiments/CopyProbe` en Windows. El experimento genera sus propios datos temporales y comprueba copia, flush, verificación SHA-256 y restauración. Incluye fallos inyectados, archivos ocupados, corrupción y recuperación de una copia interrumpida a partir de su registro en disco. GitHub Actions ejecuta las mismas comprobaciones. El ensayo básico usa un volumen y el laboratorio VHDX comprueba escenarios entre volúmenes. Ambos usan datos sintéticos.
+
+Usa `-- --accumulative` para probar la copia acumulativa de producto, sus conflictos, recuperación tras interrupciones y conservación de datos exclusivos del destino. [Protocolo y alcance](experiments/CopyProbe/ACUMULATIVA.md).
 
 Añade `-- --compare` para comparar el flujo de .NET, CopyFile2 y Robocopy sobre el mismo conjunto sintético. Consulta el [resultado y sus límites](PLAN.md#resultado-de-la-comparación-de-transferencia).
 

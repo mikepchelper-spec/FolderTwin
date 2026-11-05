@@ -11,8 +11,7 @@ internal sealed partial class VersionStore
     internal static VersionStore OpenProduct(ProductJob job, bool initialize = false,
         Action<ProductStoreStep>? checkpoint = null)
     {
-        if (job.Options.Mode is not (ProductBackupMode.Versions or ProductBackupMode.ProtectedMirror))
-            throw new InvalidDataException("El trabajo no usa un almacén de versiones.");
+        job.Options.Validate();
         var scope = new VersionScope(job);
         using var root = scope.OpenRegisteredRoot();
         using var marker = job.Destination.OpenVerifiedMarker(root.Root);

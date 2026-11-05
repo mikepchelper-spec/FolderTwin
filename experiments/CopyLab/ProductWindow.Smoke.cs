@@ -53,6 +53,43 @@ public partial class ProductWindow
 
                 ProductJob[] jobs;
                 using (var registry = Open()) jobs = registry.List().Jobs;
+                var cumulative = jobs.Single(job => job.Options.Mode == ProductBackupMode.Accumulative);
+                window.SelectJob(cumulative.Id);
+                await Click(window, window.BackupJobButton);
+                var accumulated = VersionStore.OpenProduct(cumulative);
+                Check(File.ReadAllText(Path.Combine(accumulated.MirrorCurrentPath, "datos.txt")) == "original", window.StatusText.Text);
+                File.WriteAllText(Path.Combine(accumulated.MirrorCurrentPath, "exclusivo.txt"), "conservado");
+                File.WriteAllText(Path.Combine(source, "datos.txt"), "actualización acumulativa");
+                await Click(window, window.BackupJobButton);
+                Check(File.ReadAllText(Path.Combine(accumulated.MirrorCurrentPath, "datos.txt")) == "actualización acumulativa" &&
+                    File.ReadAllText(Path.Combine(accumulated.MirrorCurrentPath, "exclusivo.txt")) == "conservado", window.StatusText.Text);
+                File.Delete(Path.Combine(source, "datos.txt"));
+                await Click(window, window.BackupJobButton);
+                Check(File.ReadAllText(Path.Combine(accumulated.MirrorCurrentPath, "datos.txt")) == "actualización acumulativa" &&
+                    window.StatusText.Text.StartsWith("Copia acumulativa completa", StringComparison.Ordinal), window.StatusText.Text);
+                await Click(window, window.RecoverJobButton);
+                Check(window.RecoveryDates.Items.Count == 1 && window.RecoveryFiles.Items.Count == 2,
+                    "Cumulative recovery did not expose the current accumulated content.");
+                await Click(window, window.VerifyPointButton);
+                Check(window.StatusText.Text.StartsWith("Verificación completa", StringComparison.Ordinal), window.StatusText.Text);
+                File.WriteAllText(Path.Combine(accumulated.MirrorCurrentPath, "exclusivo.txt"), "edición posterior");
+                await Click(window, window.VerifyPointButton);
+                Check(!window.StatusText.Text.StartsWith("Verificación completa", StringComparison.Ordinal),
+                    "Current-copy verification ignored a destination edit.");
+                string cumulativeOutput = Folder("Recuperación acumulativa desde WPF");
+                picks.Enqueue(cumulativeOutput);
+                await Click(window, window.ReviewRestoreButton);
+                await Click(window, window.RestorePointButton);
+                Check(File.ReadAllText(Path.Combine(Directory.EnumerateDirectories(cumulativeOutput).Single(), "exclusivo.txt")) == "conservado",
+                    window.StatusText.Text);
+                await Click(window, window.ReturnToJobsButton);
+                File.WriteAllText(Path.Combine(source, "datos.txt"), "original");
+                File.WriteAllText(Path.Combine(accumulated.MirrorCurrentPath, "datos.txt"), "edición externa");
+                int confirmed = accumulated.ListPoints().Length;
+                await Click(window, window.BackupJobButton);
+                Check(window.StatusText.Text.Contains("datos.txt", StringComparison.Ordinal) && accumulated.ListPoints().Length == confirmed &&
+                    File.ReadAllText(Path.Combine(accumulated.MirrorCurrentPath, "datos.txt")) == "edición externa",
+                    "The WPF cumulative flow did not preserve and report a destination conflict.");
                 var versions = jobs.Single(job => job.Options.Mode == ProductBackupMode.Versions);
                 window.SelectJob(versions.Id);
                 await Click(window, window.BackupJobButton);
@@ -116,7 +153,7 @@ public partial class ProductWindow
                     "The reopened window lost jobs when the source was unavailable.");
             }
             finally { reopened.Close(); }
-            Console.Error.WriteLine("PASS the WPF wizard registers three modes; versions retry a busy file, restore an earlier date offline, and mirror changes require review.");
+            Console.Error.WriteLine("PASS WPF executes and recovers all three modes, preserves cumulative extras, retries busy files and reviews mass mirror changes.");
         }
         finally
         {

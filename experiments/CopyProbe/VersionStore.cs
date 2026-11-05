@@ -86,6 +86,8 @@ internal sealed partial class VersionStore
         Action<PendingStep>? pendingCheckpoint = null, Action<CopyStep, string>? objectCheckpoint = null,
         Action<RegistryStep>? registryCheckpoint = null)
     {
+        if (workspace.IsAccumulative)
+            throw new InvalidDataException("La copia acumulativa se publica mediante su actualización de carpeta actual.");
         _ = GenerationTime(generation);
         using var scope = workspace.OpenRegisteredRoot();
         workspace.CheckRoots(source, Destination);
@@ -137,6 +139,8 @@ internal sealed partial class VersionStore
 
     internal void ResumePoint(string generation, Action<CatalogStep>? checkpoint = null, byte[]? expectedSourceIdentity = null)
     {
+        if (workspace.IsAccumulative)
+            throw new InvalidDataException("Reanuda la actualización de la copia acumulativa.");
         _ = GenerationTime(generation);
         using var scope = workspace.OpenRegisteredRoot();
         using var store = new DirectoryFence(Destination);
@@ -189,14 +193,15 @@ internal sealed partial class VersionStore
     }
 
     private void CopyAndConfirm(SafeFileHandle store, BatchPlan plan, string generation, Action<CatalogStep>? checkpoint,
-        Action<CopyStep, string>? objectCheckpoint)
+        Action<CopyStep, string>? objectCheckpoint, BatchPlan? sourceInventory = null)
     {
+        var inventory = sourceInventory ?? plan;
         DirectoryFence? origin = null;
         try
         {
             CopyObjects();
             if (origin is not null)
-                FolderBatch.RequireSameInventory(plan);
+                FolderBatch.RequireSameInventory(inventory);
             WithCatalogFiles(store, generation, files =>
             {
                 BatchCatalog.PublishLocked(plan, files, generation, () => VerifyObjects(store, plan.Files), checkpoint);
@@ -234,7 +239,7 @@ internal sealed partial class VersionStore
                             origin = new DirectoryFence(plan.Source);
                             if (!WindowsProbeNative.DirectoryIdentity(origin.Root).AsSpan().SequenceEqual(plan.SourceIdentity))
                                 throw new InvalidDataException("La carpeta de origen cambió desde el análisis.");
-                            FolderBatch.RequireSameInventory(plan);
+                            FolderBatch.RequireSameInventory(inventory);
                         }
                         string input = Path.Combine(plan.Source, file.RelativePath);
                         using var parent = new DirectoryFence(plan.Source, input);

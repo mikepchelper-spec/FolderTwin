@@ -3,7 +3,7 @@ using Microsoft.Win32.SafeHandles;
 internal sealed record MirrorPreview(string Generation, BatchPlan SourcePlan, byte[] DocumentHash, string? Previous, byte[] PreviousHash,
     byte[] RegistryHash, byte[] CurrentIdentity, int Added, int Replaced, int Removed, int AddedDirectories, int RemovedDirectories,
     string[] Conflicts, long StageBytes, long EstimatedBytes, ulong AvailableBytes, int MaximumChangePercent,
-    bool RequiresEmptyReview, bool RequiresMassReview);
+    bool RequiresEmptyReview, bool RequiresMassReview, BatchPlan? Baseline = null);
 
 internal sealed partial class VersionStore
 {
@@ -48,26 +48,32 @@ internal sealed partial class VersionStore
         workspace.ValidatePlan(sourcePlan);
         FolderBatch.RequireSameInventory(sourcePlan);
         generation ??= NewGenerationId();
-        byte[] hash = BatchCatalog.WriteMetadata(Stream.Null, sourcePlan, generation, out int catalogBytes);
         var before = MirrorPrevious(scope, root, registry.MirrorGeneration, sourceIdentity);
         if (before is not null && !before.DocumentHash.AsSpan().SequenceEqual(registry.Generations[registry.MirrorGeneration!]))
             throw new InvalidDataException("El catálogo actual del espejo no coincide con su registro.");
         var observed = FolderBatch.AnalyzeSource(workspace.Root, MirrorCurrentPath, Destination, binding, currentIdentity, BatchCatalog.VersionMaximumEntries);
-        string[] conflicts = MirrorConflicts(before, observed);
-        var desired = sourcePlan.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
-        var previous = before?.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
+        string[] conflicts = workspace.IsAccumulative ? AccumulativeConflicts(sourcePlan, before, observed) : MirrorConflicts(before, observed);
+        var desiredPlan = workspace.IsAccumulative ? MergeAccumulative(sourcePlan, observed) : sourcePlan;
+        byte[] hash = BatchCatalog.WriteMetadata(Stream.Null, desiredPlan, generation, out int catalogBytes);
+        var desired = desiredPlan.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
+        var baselineFiles = workspace.IsAccumulative ? observed.Files : before?.Files ?? [];
+        var baselineDirectories = workspace.IsAccumulative ? observed.Directories : before?.Directories ?? [];
+        var previous = baselineFiles.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
         int added = desired.Keys.Count(path => !previous.ContainsKey(path));
         int replaced = desired.Values.Count(file => previous.TryGetValue(file.RelativePath, out var old) && !SameMirrorFile(old, file));
         int removed = previous.Keys.Count(path => !desired.ContainsKey(path));
-        int addedDirectories = sourcePlan.Directories.Except(before?.Directories ?? [], StringComparer.Ordinal).Count();
-        int removedDirectories = (before?.Directories ?? []).Except(sourcePlan.Directories, StringComparer.Ordinal).Count();
+        int addedDirectories = desiredPlan.Directories.Except(baselineDirectories, StringComparer.Ordinal).Count();
+        int removedDirectories = baselineDirectories.Except(desiredPlan.Directories, StringComparer.Ordinal).Count();
         long stageBytes = desired.Values.Where(file => !previous.TryGetValue(file.RelativePath, out var old) || !SameMirrorFile(old, file)).Sum(file => file.Length);
-        long previousEntries = previous.Count + (before?.Directories.Length ?? 0);
-        bool mass = previousEntries > 0 && (replaced + removed + removedDirectories) * 100L >= previousEntries * maximumChangePercent;
+        long previousEntries = previous.Count + baselineDirectories.Length;
+        bool mass = !workspace.IsAccumulative && previousEntries > 0 &&
+            (replaced + removed + removedDirectories) * 100L >= previousEntries * maximumChangePercent;
         return new(generation, sourcePlan, hash, registry.MirrorGeneration, before?.DocumentHash ?? new byte[32], registry.LastHash,
             currentIdentity, added, replaced, removed, addedDirectories, removedDirectories, conflicts, stageBytes,
-            checked(sourcePlan.Bytes + stageBytes + 3L * catalogBytes), LabWorkspace.AvailableSpace(root), maximumChangePercent,
-            sourcePlan.Files.Length == 0 && sourcePlan.Directories.Length == 0, mass);
+            checked(desiredPlan.Bytes + stageBytes + (workspace.IsAccumulative ? 5L : 3L) * catalogBytes),
+            LabWorkspace.AvailableSpace(root), maximumChangePercent,
+            !workspace.IsAccumulative && sourcePlan.Files.Length == 0 && sourcePlan.Directories.Length == 0, mass,
+            workspace.IsAccumulative ? observed : null);
     }
 
     private CatalogSnapshot? MirrorPrevious(SafeFileHandle scope, SafeFileHandle root, string? generation, byte[]? sourceIdentity = null)
@@ -98,6 +104,23 @@ internal sealed partial class VersionStore
 
     private static bool SameMirrorFile(BatchFile first, BatchFile second) => first.Length == second.Length &&
         first.Hash.AsSpan().SequenceEqual(second.Hash) && first.Metadata == second.Metadata;
+
+    internal bool VerifyCurrent(string generation)
+    {
+        _ = GenerationTime(generation);
+        using var scope = workspace.OpenRegisteredRoot();
+        using var store = new DirectoryFence(Destination);
+        using var marker = binding.OpenVerifiedMarker(store.Root);
+        using var operation = OpenLock(store.Root, FileAccess.Read);
+        RequireNoPendingMirror(store.Root);
+        if (GenerationRegistry.Read(store.Root, binding).MirrorGeneration != generation)
+            throw new InvalidDataException("La copia actual cambió. Vuelve a seleccionar el respaldo antes de verificarla.");
+        using var mirror = MirrorJournal.Open(store.Root, binding, out var currentIdentity);
+        var catalog = ReadPoint(store.Root, generation);
+        VerifyObjects(store.Root, catalog.Files);
+        RequireMirrorContents(catalog, currentIdentity);
+        return catalog.Degraded;
+    }
 
     internal MirrorOperation[] ListMirrorOperations()
     {
