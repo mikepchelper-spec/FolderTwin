@@ -50,6 +50,7 @@ internal static class LocalJobRootsProbe
             Check(!File.Exists(Path.Combine(target, CopyRecovery.LockPath("ajeno.tmp"))));
             VerifiedCopy.RunBound(replacement, binding, "prueba.txt", @"Subcarpeta\copia.txt", @"Subcarpeta\copia.tmp", expected);
             Check(File.ReadAllText(Path.Combine(target, "Subcarpeta", "copia.txt")) == "solo lectura");
+            VerifyDedicatedDestination(workspace.Root, origin);
             Console.WriteLine("PASS local roots remain read-only during review; aliases, nested roots, junctions and substituted directories are rejected.");
             Console.WriteLine("PASS the marker-bound copy publishes a verified nested file and rejects path escapes before writing.");
             return 0;
@@ -59,6 +60,31 @@ internal static class LocalJobRootsProbe
             using (workspace.OpenRegisteredRoot()) { }
             Directory.Delete(workspace.Root, recursive: true);
         }
+    }
+
+    private static void VerifyDedicatedDestination(string workspace, string origin)
+    {
+        var planned = LocalJobRoots.ReviewDedicatedDestination(origin, workspace);
+        string child = Path.Combine(workspace, planned.FolderName);
+        Check(!Directory.Exists(child));
+        Directory.CreateDirectory(child);
+        string unrelated = Path.Combine(child, "existente.txt");
+        File.WriteAllText(unrelated, "conservar");
+        Reject(() => LocalJobRoots.CreateDedicatedDestination(planned));
+        Check(File.ReadAllText(unrelated) == "conservar" && Directory.EnumerateFileSystemEntries(child).Count() == 1);
+
+        string parent = Directory.CreateDirectory(Path.Combine(workspace, "Padre")).FullName;
+        var stale = LocalJobRoots.ReviewDedicatedDestination(origin, parent);
+        Directory.Move(parent, Path.Combine(workspace, "Padre anterior"));
+        Directory.CreateDirectory(parent);
+        Reject(() => LocalJobRoots.CreateDedicatedDestination(stale));
+        Check(!Directory.EnumerateFileSystemEntries(parent).Any());
+
+        var fresh = LocalJobRoots.ReviewDedicatedDestination(origin, parent);
+        using var created = LocalJobRoots.CreateDedicatedDestination(fresh);
+        Check(Directory.Exists(Path.Combine(parent, fresh.FolderName)) &&
+            !Directory.EnumerateFileSystemEntries(Path.Combine(parent, fresh.FolderName)).Any());
+        Console.WriteLine("PASS dedicated destination creation refuses occupied names and substituted parents.");
     }
 
     private static void Reject(Func<LocalJobRoots> open)

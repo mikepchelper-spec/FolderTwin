@@ -2,6 +2,10 @@ using Microsoft.Win32.SafeHandles;
 
 internal sealed record LocalJobRoot(string VolumePath, byte[] Identity);
 internal sealed record LocalRootReview(LocalJobRoot Source, LocalJobRoot Destination, ulong AvailableBytes, bool SameVolume);
+internal sealed record DedicatedDestinationReview(LocalJobRoot Source, LocalJobRoot Parent, Guid FolderId, ulong AvailableBytes)
+{
+    internal string FolderName => $"FolderTwin-{FolderId:N}";
+}
 
 // This check is read-only. A data operation must keep the handles open and
 // separately verify the destination's job marker before writing.
@@ -52,11 +56,52 @@ internal sealed class LocalJobRoots : IDisposable
         throw new InvalidDataException("Una de las carpetas cambió desde la revisión. Vuelve a elegirla y comprobarla.");
     }
 
-    private static LocalJobRoot Inspect(SafeFileHandle handle, bool writable)
+    internal static DedicatedDestinationReview ReviewDedicatedDestination(string sourcePath, string parentPath)
+    {
+        using var origin = new DirectoryFence(sourcePath);
+        using var parent = new DirectoryFence(parentPath);
+        var source = Inspect(origin.Root, writable: false);
+        var destinationParent = Inspect(parent.Root, writable: true, allowVolumeRoot: true);
+        var review = new DedicatedDestinationReview(source, destinationParent, Guid.NewGuid(), LabWorkspace.AvailableSpace(parent.Root));
+        CheckNewDestination(review);
+        return review;
+    }
+
+    internal static LocalJobRoots CreateDedicatedDestination(DedicatedDestinationReview review)
+    {
+        using var origin = new DirectoryFence(review.Source.VolumePath);
+        using var parent = new DirectoryFence(review.Parent.VolumePath);
+        var source = Inspect(origin.Root, writable: false);
+        var destinationParent = Inspect(parent.Root, writable: true, allowVolumeRoot: true);
+        if (!source.Identity.AsSpan().SequenceEqual(review.Source.Identity) ||
+            !destinationParent.Identity.AsSpan().SequenceEqual(review.Parent.Identity))
+            throw new InvalidDataException("La carpeta elegida cambió desde la revisión.");
+        string destinationPath = CheckNewDestination(review with { Source = source, Parent = destinationParent });
+        using var created = WindowsProbeNative.CreatePlainDirectory(parent.Root, review.FolderName);
+        LabWorkspace.RequireEmpty(created);
+        var result = new LocalJobRoots(source.VolumePath, destinationPath);
+        if (result.Review.Destination.Identity.AsSpan().SequenceEqual(WindowsProbeNative.DirectoryIdentity(created)))
+            return result;
+        result.Dispose();
+        throw new InvalidDataException("El destino nuevo cambió de identidad.");
+    }
+
+    private static string CheckNewDestination(DedicatedDestinationReview review)
+    {
+        if (review.FolderId == Guid.Empty)
+            throw new InvalidDataException("Falta la identidad de la carpeta dedicada.");
+        string path = Path.Combine(review.Parent.VolumePath, review.FolderName);
+        if (path.Equals(review.Source.VolumePath, StringComparison.OrdinalIgnoreCase) ||
+            Contains(path, review.Source.VolumePath) || Contains(review.Source.VolumePath, path))
+            throw new InvalidDataException("El destino dedicado debe quedar fuera del origen.");
+        return path;
+    }
+
+    private static LocalJobRoot Inspect(SafeFileHandle handle, bool writable, bool allowVolumeRoot = false)
     {
         WindowsProbeNative.RequireNtfsVolume(handle, writable);
         string path = Path.TrimEndingDirectorySeparator(WindowsProbeNative.VolumePath(handle));
-        if (path.Length == Path.GetPathRoot(path)?.Length)
+        if (!allowVolumeRoot && path.Length == Path.GetPathRoot(path)?.Length)
             throw new InvalidDataException("Elige una carpeta dedicada dentro del volumen.");
         WindowsProbeNative.RequireSupportedData(handle, "carpeta del trabajo");
         return new(path, WindowsProbeNative.DirectoryIdentity(handle));
