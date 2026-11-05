@@ -169,6 +169,14 @@
                     <TextBlock Text="Para retirar la aplicación, quita primero sus horarios. Los trabajos quedarán deshabilitados y podrás seguir recuperando sus respaldos. Se conservan la configuración, el historial y los datos." TextWrapping="Wrap" />
                     <CheckBox x:Name="AcceptRemoveSchedules" Content="Deshabilitar todos los trabajos y retirar sus horarios propios" Checked="ApplicationChoiceChanged" Unchecked="ApplicationChoiceChanged" Margin="0,12,0,8" />
                     <Button x:Name="RemoveApplicationSchedulesButton" Content="Retirar todos los _horarios" Click="RemoveApplicationSchedulesClick" IsEnabled="False" HorizontalAlignment="Left" />
+                    <Separator Margin="0,16,0,12" />
+                    <TextBlock Text="Versiones instaladas" FontSize="18" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
+                    <TextBlock Text="Después de retirar los horarios y deshabilitar los trabajos puedes eliminar una versión instalada. Los respaldos y su configuración permanecen. Para borrar la versión abierta, usa otra copia portable de FolderTwin." TextWrapping="Wrap" Margin="0,8,0,8" />
+                    <Button x:Name="ReviewInstalledVersionsButton" Content="Revisar versiones instaladas" Click="ReviewInstalledVersionsClick" HorizontalAlignment="Left" />
+                    <ComboBox x:Name="InstalledVersionChoice" DisplayMemberPath="Label" ItemContainerStyle="{StaticResource NamedDateChoice}" SelectionChanged="InstalledVersionChanged" AutomationProperties.Name="Versión instalada que se quiere retirar" Margin="0,8,0,8" />
+                    <TextBlock x:Name="InstalledVersionDetail" TextWrapping="Wrap" />
+                    <CheckBox x:Name="AcceptInstalledVersionRemoval" Content="Eliminar únicamente la versión instalada seleccionada" Checked="ApplicationChoiceChanged" Unchecked="ApplicationChoiceChanged" Margin="0,8,0,8" />
+                    <Button x:Name="RemoveInstalledVersionButton" Content="Eliminar versión revisada" Click="RemoveInstalledVersionClick" IsEnabled="False" HorizontalAlignment="Left" />
                     <Button Content="Volver a _trabajos" Click="ReturnFromApplicationClick" HorizontalAlignment="Left" Margin="0,16,0,0" />
                 </StackPanel>
             </ScrollViewer>

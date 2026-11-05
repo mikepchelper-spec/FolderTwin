@@ -8,6 +8,7 @@ public partial class ProductWindow
     private static async Task RunApplicationSmokeAsync()
     {
         var fixture = LabWorkspace.Create();
+        using var package = new InstallationProbe.Fixture();
         ProductWindow? window = null;
         try
         {
@@ -34,7 +35,7 @@ public partial class ProductWindow
                 using var registry = Open();
                 RejectMaintenance(() => { using var run = registry.StartRun(jobs[0].Id); });
                 RejectMaintenance(() => registry.UpdateSettings(jobs[0].Id, "must not change", null, false, false));
-                return "synthetic-verified-worker.exe";
+                return LabInstallation.EnsureAt(package.Package, package.Installs);
             }
             void Configure(string _, Guid id, bool remove)
             {
@@ -54,7 +55,7 @@ public partial class ProductWindow
                 using (var waiting = registry.AcquireScheduledLock(jobs[0].Id))
                     RejectMaintenance(() => ProductDeployment.RemoveSchedules(registry, review, (_, _) => { }));
             }
-            window = new ProductWindow(Open, testSchedule: Configure, testPackageInstall: Prepare);
+            window = new ProductWindow(Open, testSchedule: Configure, testPackageInstall: Prepare, testInstallations: package.Installs);
             await window.InitializeAsync();
             await Click(window, window.ManageApplicationButton);
             Check(window.ApplicationPanel.Visibility == Visibility.Visible && !window.InstallApplicationButton.IsEnabled &&
@@ -77,6 +78,20 @@ public partial class ProductWindow
             await Click(window, window.ManageApplicationButton);
             window.AcceptRemoveSchedules.IsChecked = true;
             await Click(window, window.RemoveApplicationSchedulesButton);
+            await Click(window, window.ReviewInstalledVersionsButton);
+            Check(window.InstalledVersionChoice.Items.Count == 1 && !window.RemoveInstalledVersionButton.IsEnabled &&
+                window.InstalledVersionChoice.SelectedItem is InstallRemovalChoice { Current: false }, "WPF bypassed installed-version review or acceptance.");
+            var selectedVersion = ((InstallRemovalChoice)window.InstalledVersionChoice.SelectedItem).Review;
+            using (var registry = Open())
+                RejectMaintenance(() => ProductDeployment.RemoveVersion(registry, registry.ReviewMaintenance(), package.Installs, selectedVersion,
+                    static () => { }, step => { if (step == InstallRemovalStep.FileRemoved) throw new IOException("Synthetic interrupted removal."); }));
+            await Click(window, window.ReviewInstalledVersionsButton);
+            Check(window.InstalledVersionChoice.SelectedItem is InstallRemovalChoice { InProgress: true },
+                "WPF did not reopen the interrupted version-removal journal.");
+            window.AcceptInstalledVersionRemoval.IsChecked = true;
+            await Click(window, window.RemoveInstalledVersionButton);
+            Check(window.InstalledVersionChoice.Items.Count == 0 && !Directory.Exists(Path.Combine(package.Installs, selectedVersion.Fingerprint)),
+                "WPF did not finish the reviewed package removal.");
             using (var registry = Open())
             {
                 Check(registry.List().Jobs.All(job => !job.Enabled) && schedules.Count == 0, "Retried withdrawal did not disable jobs and remove their tasks.");
@@ -93,7 +108,15 @@ public partial class ProductWindow
             window.ReturnFromApplicationClick(window, new RoutedEventArgs());
             await window.activeTask;
             Check(window.JobList.Items.Count == 3 && window.JobListPanel.Visibility == Visibility.Visible, "Withdrawal hid the preserved recovery jobs.");
+            await Click(window, window.ManageApplicationButton);
+            window.AcceptApplicationUpdate.IsChecked = true;
+            await Click(window, window.InstallApplicationButton);
+            await Click(window, window.ReviewInstalledVersionsButton);
+            Check(window.InstalledVersionChoice.Items.Count == 1 && installations == 2 && schedules.Count == 0 &&
+                !((InstallRemovalChoice)window.InstalledVersionChoice.SelectedItem).Review.Identity.AsSpan().SequenceEqual(selectedVersion.Identity),
+                "WPF could not reinstall the same package or re-enabled withdrawn schedules.");
             Console.Error.WriteLine("PASS WPF application management reviews and installs, excludes active workers/retries and stale settings, retries a partial task withdrawal and preserves verified recovery for all disabled modes.");
+            Console.Error.WriteLine("PASS WPF reviews a concrete installed version, requires acceptance, reopens an interrupted removal, preserves all backup modes and reinstalls without re-enabling withdrawn jobs.");
         }
         finally
         {

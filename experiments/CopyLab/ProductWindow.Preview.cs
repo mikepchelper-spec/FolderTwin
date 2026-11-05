@@ -32,7 +32,10 @@ public partial class ProductWindow
                 if (result.State != ProductRunState.Confirmed) throw new IOException(result.Detail ?? "No se pudo crear el respaldo sintético.");
             }
         });
-        var window = new ProductWindow(Open) { Title = "FolderTwin · Prueba desechable" };
+        string installations = Directory.CreateDirectory(Path.Combine(fixture.Root, "installations")).FullName;
+        var window = new ProductWindow(Open, testSchedule: (_, _, _) => { },
+            testPackageInstall: () => LabInstallation.EnsureAt(AppContext.BaseDirectory, installations), testInstallations: installations)
+        { Title = "FolderTwin · Prueba desechable" };
         if (variant == "compact") { window.Width = 600; window.Height = 500; }
         // The pinned WPF SDK still labels the theme API experimental; this override is confined to the visual fixture.
 #pragma warning disable WPF0001

@@ -133,6 +133,54 @@ internal sealed class WindowsSchedule : IDisposable
         catch (Exception error) when (error is FileNotFoundException || error is COMException { HResult: unchecked((int)0x80070002) }) { return null; }
     }
 
+    internal void RequireNoVersionReferences(params string[] versionPaths)
+    {
+        var paths = versionPaths.Select(path => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        int folders = 0, tasks = 0;
+        Visit(folder, 0);
+        void Visit(dynamic current, int depth)
+        {
+            if (++folders > 4096 || depth > 64) throw new InvalidDataException("La consulta de horarios superó su límite. No se retira la versión.");
+            dynamic collection = current.GetTasks(1); // Include hidden tasks; observe only.
+            try
+            {
+                int count = (int)collection.Count;
+                for (int index = 1; index <= count; index++)
+                {
+                    if (++tasks > 20_000) throw new InvalidDataException("Hay demasiadas tareas para comprobar la retirada.");
+                    dynamic task = collection[index];
+                    try
+                    {
+                        var xml = XDocument.Parse((string)task.Xml);
+                        foreach (var command in xml.Descendants(Schema + "Actions").Elements(Schema + "Exec").Elements(Schema + "Command"))
+                        {
+                            string candidate = Environment.ExpandEnvironmentVariables(command.Value.Trim().Trim('"'));
+                            if (!Path.IsPathFullyQualified(candidate)) continue;
+                            string? parent = Path.GetDirectoryName(candidate);
+                            if (parent is not null && paths.Contains(Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent))))
+                                throw new InvalidDataException("Una tarea aún usa esta versión. Retira su horario o cambia su ejecutor antes de borrar la aplicación.");
+                        }
+                    }
+                    finally { Marshal.FinalReleaseComObject(task); }
+                }
+            }
+            finally { Marshal.FinalReleaseComObject(collection); }
+            dynamic children = current.GetFolders(0);
+            try
+            {
+                int count = (int)children.Count;
+                for (int index = 1; index <= count; index++)
+                {
+                    dynamic child = children[index];
+                    try { Visit(child, depth + 1); }
+                    finally { Marshal.FinalReleaseComObject(child); }
+                }
+            }
+            finally { Marshal.FinalReleaseComObject(children); }
+        }
+    }
+
     private string VerifyOwnership(string xml, Owner owner)
     {
         var root = XDocument.Parse(xml).Root ?? throw new InvalidDataException("La tarea no tiene definición.");

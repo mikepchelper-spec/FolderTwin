@@ -108,7 +108,7 @@ internal static class InstallationProbe
         Console.Error.WriteLine("PASS package removal checks all handles and hashes before deleting, rejects busy/foreign/changed files, resumes every journal boundary, preserves other data, and permits reinstall without reusing old removal authority.");
     }
 
-    private sealed class Fixture : IDisposable
+    internal sealed class Fixture : IDisposable
     {
         internal LabWorkspace Workspace { get; } = LabWorkspace.Create();
         internal string Package { get; }

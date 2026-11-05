@@ -115,6 +115,14 @@ internal static class ProductScheduleProbe
             ProductDeployment.RemoveSchedules(registry, registry.ReviewMaintenance());
             Check(registry.List().Jobs.All(job => !job.Enabled && scheduler.ReadProduct(registry, job.Id) is null),
                 "Application withdrawal did not remove all owned tasks and disable jobs.");
+            string installsRoot = Path.GetDirectoryName(Path.GetDirectoryName(executable)!)!;
+            var versions = LabInstallation.ListRemovalsAt(installsRoot);
+            Check(versions.Length == 2 && versions.All(version => !version.Current), "The native installed-package review lost a version.");
+            CheckVersionReference(registry, installsRoot, versions[0].Review);
+            foreach (var version in versions)
+                ProductDeployment.RemoveVersion(registry, registry.ReviewMaintenance(), installsRoot, version.Review);
+            Check(LabInstallation.ListRemovalsAt(installsRoot).Length == 0 && !File.Exists(executable) && !File.Exists(updatedExecutable),
+                "The native uninstall left its reviewed runtime files installed.");
             foreach (var job in registry.List().Jobs)
             {
                 var store = VersionStore.OpenProduct(job);
@@ -127,6 +135,7 @@ internal static class ProductScheduleProbe
                     "A withdrawn job could no longer restore its backup.");
             }
             Console.Error.WriteLine("PASS native deployment installs a second verified package, redirects only enabled schedules, runs the updated worker and withdraws owned tasks while preserving restoration for all modes.");
+            Console.Error.WriteLine("PASS native uninstall checks Task Scheduler references, removes both reviewed real runtimes and restores every preserved backup mode afterward.");
 
             async Task<ProductRunView> WaitAsync(ProductJob job, long after, bool waiting = false, TimeSpan? limit = null)
             {
@@ -154,9 +163,9 @@ internal static class ProductScheduleProbe
             }
             using (fixture.OpenRegisteredRoot()) { }
             Directory.Delete(fixture.Root, recursive: true);
-            if (executable is not null && LabInstallation.IsInstalledWorker(executable, product: true))
+            if (executable is not null && File.Exists(executable) && LabInstallation.IsInstalledWorker(executable, product: true))
                 Directory.Delete(Path.GetDirectoryName(executable)!, recursive: true);
-            if (updatedExecutable is not null && LabInstallation.IsInstalledWorker(updatedExecutable, product: true))
+            if (updatedExecutable is not null && File.Exists(updatedExecutable) && LabInstallation.IsInstalledWorker(updatedExecutable, product: true))
                 Directory.Delete(Path.GetDirectoryName(updatedExecutable)!, recursive: true);
         }
     }
@@ -224,6 +233,49 @@ internal static class ProductScheduleProbe
             try { action(); }
             catch (Exception error) when (ProductAutomation.Expected(error)) { return; }
             throw new InvalidOperationException("Maintenance accepted a foreign task.");
+        }
+    }
+
+    private static void CheckVersionReference(ProductJobRegistry registry, string installations, InstallRemovalReview version)
+    {
+        var type = Type.GetTypeFromProgID("Schedule.Service") ?? throw new IOException("Scheduler unavailable.");
+        dynamic service = Activator.CreateInstance(type) ?? throw new IOException("Scheduler unavailable.");
+        dynamic? root = null;
+        string name = "FolderTwin-Reference-Probe-" + Guid.NewGuid().ToString("N");
+        bool created = false;
+        string user = System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value;
+        string executable = Path.Combine(installations, version.Fingerprint, "CopyLab.exe");
+        try
+        {
+            service.Connect(); root = service.GetFolder("\\");
+            System.Xml.Linq.XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
+            System.Xml.Linq.XElement Element(string key, object value) => new(ns + key, value);
+            var xml = new System.Xml.Linq.XDocument(new System.Xml.Linq.XElement(ns + "Task", new System.Xml.Linq.XAttribute("version", "1.4"),
+                Element("RegistrationInfo", Element("Description", "Synthetic external reference; never executed")),
+                Element("Principals", new System.Xml.Linq.XElement(ns + "Principal", new System.Xml.Linq.XAttribute("id", "Author"),
+                    Element("UserId", user), Element("LogonType", "InteractiveToken"), Element("RunLevel", "LeastPrivilege"))),
+                Element("Settings", new[] { Element("Enabled", false), Element("Hidden", true) }),
+                new System.Xml.Linq.XElement(ns + "Actions", new System.Xml.Linq.XAttribute("Context", "Author"),
+                    Element("Exec", Element("Command", executable)))));
+            dynamic task = root.RegisterTask(name, xml.ToString(), 2, user, null, 3, null);
+            System.Runtime.InteropServices.Marshal.FinalReleaseComObject(task);
+            created = true;
+            bool rejected = false;
+            try { ProductDeployment.RemoveVersion(registry, registry.ReviewMaintenance(), installations, version); }
+            catch (InvalidDataException error) when (error.Message.Contains("tarea aún usa", StringComparison.Ordinal)) { rejected = true; }
+            dynamic preserved = root.GetTask(name);
+            try { Check(rejected && File.Exists(executable) && !((bool)preserved.Enabled), "Removal changed a hidden foreign reference or deleted its runtime."); }
+            finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(preserved); }
+            Console.Error.WriteLine("PASS a hidden task outside the job registry blocks runtime removal and retains its definition and referenced files.");
+        }
+        finally
+        {
+            try { if (created) root!.DeleteTask(name, 0); }
+            finally
+            {
+                if (root is not null) System.Runtime.InteropServices.Marshal.FinalReleaseComObject(root);
+                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(service);
+            }
         }
     }
 

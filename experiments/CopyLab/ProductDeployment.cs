@@ -47,4 +47,23 @@ internal static class ProductDeployment
             if (scheduler.ReadProductReviewed(registry, job) is { Running: true })
                 throw new IOException("Hay un horario en ejecución. Espera a que termine antes de gestionar la aplicación.");
     }
+
+    internal static void RemoveVersion(ProductJobRegistry registry, ProductMaintenanceReview review, string installations,
+        InstallRemovalReview version, Action? checkTasks = null, Action<InstallRemovalStep>? checkpoint = null)
+    {
+        using var maintenance = registry.BeginMaintenance(review);
+        if (maintenance.Jobs.Any(job => job.Enabled)) throw new InvalidDataException("Retira primero los horarios y deshabilita los trabajos antes de borrar versiones instaladas.");
+        using var scheduler = checkTasks is null ? new WindowsSchedule() : null;
+        if (scheduler is not null)
+        {
+            foreach (var job in maintenance.Jobs)
+                if (scheduler.ReadProductReviewed(registry, job) is not null)
+                    throw new InvalidDataException("Quedan horarios propios. Retíralos antes de borrar una versión instalada.");
+            using var apps = new DirectoryFence(installations);
+            scheduler.RequireNoVersionReferences(Path.Combine(installations, version.Fingerprint),
+                Path.Combine(WindowsProbeNative.VolumePath(apps.Root), version.Fingerprint));
+        }
+        else checkTasks!();
+        LabInstallation.RemoveAt(installations, version, checkpoint);
+    }
 }

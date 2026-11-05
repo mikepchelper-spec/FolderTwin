@@ -8,6 +8,10 @@ namespace CopyLab;
 
 internal enum InstallRemovalStep { PlanPartial, Planned, FileRemoved, DirectoryRemoved, RootRemoved, CompletionPartial, Completed }
 internal sealed record InstallRemovalReview(int Version, string Fingerprint, byte[] AppsIdentity, byte[] Identity, byte[] Manifest);
+internal sealed record InstallRemovalChoice(InstallRemovalReview Review, bool InProgress, bool Current)
+{
+    public string Label => Review.Fingerprint[..12] + (Current ? " · Versión abierta" : InProgress ? " · Retirada pendiente" : " · Instalada");
+}
 
 internal static partial class LabInstallation
 {
@@ -17,6 +21,66 @@ internal static partial class LabInstallation
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, AllowDuplicateProperties = false,
         RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true, MaxDepth = 8
     };
+
+    internal static string ProductInstallations => AppsRoot(product: true);
+
+    internal static InstallRemovalChoice[] ListRemovalsAt(string installations)
+    {
+        DirectoryFence apps;
+        try { apps = new(installations); }
+        catch (Exception error) when (error is FileNotFoundException or DirectoryNotFoundException ||
+            error.InnerException is System.ComponentModel.Win32Exception { NativeErrorCode: 2 or 3 }) { return []; }
+        using (apps)
+        using (var current = new DirectoryFence(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory)))
+        {
+            byte[] identity = WindowsProbeNative.DirectoryIdentity(current.Root);
+            var names = WindowsProbeNative.ReadDirectory(apps.Root).Where(entry => entry.Attributes.HasFlag(FileAttributes.Directory) &&
+                entry.Name.Length == 64 && !entry.Name.AsSpan().ContainsAnyExcept("0123456789abcdef")).Select(entry => entry.Name).ToHashSet(StringComparer.Ordinal);
+            SafeFileHandle? removals = null;
+            try { removals = WindowsProbeNative.OpenPlainDirectory(apps.Root, RemovalsName); }
+            catch (FileNotFoundException) { }
+            using (removals)
+            {
+                if (removals is not null)
+                    names.UnionWith(WindowsProbeNative.ReadDirectory(removals).Where(entry => entry.Attributes.HasFlag(FileAttributes.Directory) &&
+                        entry.Name.Length == 64 && !entry.Name.AsSpan().ContainsAnyExcept("0123456789abcdef")).Select(entry => entry.Name));
+                if (names.Count > 256) throw new InvalidDataException("Hay demasiadas versiones instaladas para una sola revisión.");
+                var choices = new List<InstallRemovalChoice>();
+                foreach (string name in names.Order(StringComparer.Ordinal))
+                {
+                    bool pending = false, complete = false;
+                    if (removals is not null)
+                    {
+                        SafeFileHandle? journal = null;
+                        try { journal = WindowsProbeNative.OpenPlainDirectory(removals, name); }
+                        catch (FileNotFoundException) { }
+                        using (journal)
+                        {
+                            pending = journal is not null && WindowsProbeNative.PlainFileExists(journal, "plan");
+                            if (pending && WindowsProbeNative.PlainFileExists(journal!, "complete"))
+                            {
+                                var prior = ReadRemoval(journal!, name, apps.Root);
+                                using var receipt = WindowsProbeNative.OpenPlainFile(journal!, "complete", FileAccess.Read, FileShare.Read);
+                                byte[] bytes = new byte[32]; receipt.ReadExactly(bytes);
+                                if (receipt.ReadByte() != -1 || !bytes.AsSpan().SequenceEqual(SHA256.HashData(EncodeRemoval(prior))))
+                                    throw new InvalidDataException("El recibo de una retirada está dañado.");
+                                complete = true;
+                            }
+                        }
+                    }
+                    if (complete)
+                    {
+                        try { using var unexpected = WindowsProbeNative.OpenPlainDirectory(apps.Root, name); }
+                        catch (FileNotFoundException) { continue; }
+                        throw new InvalidDataException("Una versión retirada todavía tiene una carpeta. Se conserva para revisión.");
+                    }
+                    var review = ReviewRemovalAt(installations, name);
+                    choices.Add(new(review, pending, review.Identity.AsSpan().SequenceEqual(identity)));
+                }
+                return choices.ToArray();
+            }
+        }
+    }
 
     internal static InstallRemovalReview ReviewRemovalAt(string installations, string fingerprint)
     {
