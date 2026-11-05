@@ -113,6 +113,8 @@ internal static class VersionProbe
             Reject(() => store.Verify(@"..\escape"));
             Console.WriteLine("PASS corruption in a shared object is reported for both points and blocks new publication without overwriting it.");
             CheckDurableIntent(workspace);
+            CheckCatalogTransitions(workspace);
+            CheckFullReview(workspace);
             return 0;
 
             int ObjectCount() => Directory.EnumerateFiles(Path.Combine(destination, "objects", "sha256"), "*", SearchOption.AllDirectories)
@@ -124,6 +126,89 @@ internal static class VersionProbe
         }
 
         string NewFolder(string name) => Directory.CreateDirectory(Path.Combine(workspace.Root, name)).FullName;
+    }
+
+    private static void CheckCatalogTransitions(LabWorkspace workspace)
+    {
+        string source = Directory.CreateDirectory(Path.Combine(workspace.Root, "origen transiciones")).FullName;
+        File.WriteAllText(Path.Combine(source, "dato.txt"), "contenido de cada transición");
+        foreach (var boundary in Enum.GetValues<CatalogStep>())
+        {
+            string destination = Directory.CreateDirectory(Path.Combine(workspace.Root, "catálogo " + boundary)).FullName;
+            var store = VersionStore.Initialize(workspace, destination);
+            string generation = VersionStore.NewGenerationId();
+            bool reached = false;
+            Reject(() => store.CreatePoint(source, generation, step =>
+            {
+                if (step == boundary)
+                {
+                    reached = true;
+                    throw new IOException("Injected generation publication interruption.");
+                }
+            }), "Injected generation publication interruption");
+            Check(reached && store.ListPoints().Length == (boundary == CatalogStep.Committed ? 1 : 0),
+                "A generation became confirmed at the wrong publication transition.");
+            string moved = Path.Combine(workspace.Root, "origen transiciones apartado");
+            Directory.Move(source, moved);
+            try
+            {
+                store = VersionStore.Open(LabWorkspace.Open(workspace.Root), destination);
+                store.ResumePoint(generation);
+                Check(store.ListPoints().Single().Id == generation && store.ListPending().Length == 0 && !store.Verify(generation),
+                    "A generation did not recover after its catalog publication interruption.");
+            }
+            finally { Directory.Move(moved, source); }
+        }
+        Console.WriteLine("PASS every generation catalog transition recovers the same confirmed point without the source.");
+    }
+
+    private static void CheckFullReview(LabWorkspace workspace)
+    {
+        string source = Directory.CreateDirectory(Path.Combine(workspace.Root, "origen revisión completa")).FullName;
+        string destination = Directory.CreateDirectory(Path.Combine(workspace.Root, "revisión completa")).FullName;
+        string changed = Path.Combine(source, "contenido.bin");
+        string renamed = Path.Combine(source, "antes.txt");
+        File.WriteAllBytes(changed, [1, 2, 3, 4]);
+        File.WriteAllText(renamed, "renombrado");
+        var store = VersionStore.Initialize(workspace, destination);
+        string first = VersionStore.NewGenerationId();
+        store.CreatePoint(source, first);
+        DateTime originalDate = File.GetLastWriteTimeUtc(changed);
+        File.WriteAllBytes(changed, [4, 3, 2, 1]);
+        File.SetLastWriteTimeUtc(changed, originalDate);
+        File.Move(renamed, Path.Combine(source, "después.txt"));
+        string second = VersionStore.NewGenerationId();
+        store.CreatePoint(source, second);
+        var catalogs = store.ReadCatalogs(second, first);
+        Check(!catalogs.Current.Files.Single(file => file.RelativePath == "contenido.bin").Hash.AsSpan()
+                .SequenceEqual(catalogs.Previous!.Files.Single(file => file.RelativePath == "contenido.bin").Hash) &&
+            catalogs.Current.Files.Any(file => file.RelativePath == "después.txt") &&
+            !catalogs.Current.Files.Any(file => file.RelativePath == "antes.txt") &&
+            catalogs.Previous.Files.Any(file => file.RelativePath == "antes.txt"),
+            "The full review missed a same-date/same-size edit or a renamed path.");
+        bool writerRejected = false;
+        using (var writer = new FileStream(changed, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
+        {
+            try { store.CreatePoint(source, VersionStore.NewGenerationId()); }
+            catch (IOException) { writerRejected = true; }
+        }
+        Check(writerRejected && store.ListPoints().Length == 2, "An open writer was accepted for a new generation.");
+        var attributes = File.GetAttributes(source);
+        try
+        {
+            File.SetAttributes(source, attributes | FileAttributes.Offline);
+            Reject(() => store.CreatePoint(source, VersionStore.NewGenerationId()));
+            Check(store.ListPoints().Length == 2, "An incomplete inventory became a confirmed date.");
+        }
+        finally { File.SetAttributes(source, attributes); }
+        File.Delete(changed);
+        File.Delete(Path.Combine(source, "después.txt"));
+        string empty = VersionStore.NewGenerationId();
+        store.CreatePoint(source, empty);
+        Check(store.ReadCatalogs(empty, null).Current.Files.Length == 0 && store.ListPoints().Length == 3 &&
+            !store.Verify(first) && !store.Verify(second),
+            "An empty new generation removed or damaged an earlier date.");
+        Console.WriteLine("PASS full review detects same-date edits and renames; blocked and offline sources preserve prior dates, as does a later empty generation.");
     }
 
     private static void CheckDurableIntent(LabWorkspace workspace)

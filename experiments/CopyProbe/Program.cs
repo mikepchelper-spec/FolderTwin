@@ -65,7 +65,7 @@ if (args is ["--volume-lab", "reopen"])
     return VolumeProbe.Run("reopen");
 if (args.Length != 0)
 {
-    Console.Error.WriteLine("Unknown scenario. This experiment does not accept paths.");
+    Console.Error.WriteLine("Unknown scenario. Use a documented synthetic probe or a registered workspace command.");
     return 2;
 }
 
