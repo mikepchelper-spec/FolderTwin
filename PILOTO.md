@@ -1,8 +1,8 @@
 # Piloto controlado de FolderTwin
 
-Disponibilidad de entorno, 5 de noviembre de 2026: no hay por ahora USB, otra cuenta/equipo o VM de pruebas disponibles. El piloto no se ha iniciado. Sus validaciones externas permanecen pendientes por indicación del usuario; no se les asigna una fecha ni se dan por aprobadas.
+Este documento es un procedimiento, no un informe de resultados. El piloto y las comprobaciones externas requieren evidencia propia; no se asignan fechas ni aprobaciones por haber completado la aceptación de software.
 
-El piloto de producto dura de 7 a 14 días. Usa Windows 11 x64, discos locales NTFS y carpetas desechables. Prepara archivos sintéticos que puedas volver a generar y reserva otra ubicación para las restauraciones. Conserva aparte los respaldos personales y FreeFileSync. La observación comienza cuando una persona inicia este procedimiento con un paquete cuya aceptación de software haya sido revisada. No se cuenta el tiempo transcurrido desde crear este documento. [ENTREGA.md](ENTREGA.md) fija el candidato comprobado y su evidencia; el [VHDX de 76b7eed](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42105791375) está aprobado. La [matriz de v1](V1.md) conserva las validaciones externas pendientes.
+El piloto de producto dura de 7 a 14 días. Usa Windows 11 x64, discos locales NTFS y carpetas desechables. Prepara archivos sintéticos que puedas volver a generar y reserva otra ubicación para las restauraciones. Conserva aparte los respaldos personales y FreeFileSync. La observación comienza cuando una persona inicia este procedimiento con un paquete cuya aceptación de software haya sido revisada. No se cuenta el tiempo transcurrido desde crear este documento. Conserva el informe separado de [Releases](https://github.com/mikepchelper-spec/FolderTwin/releases) que identifica ese ZIP y su commit; no atribuyas a una compilación nueva los resultados de otra. La [matriz de v1](V1.md) define las validaciones externas.
 
 ## Instalar y preparar
 

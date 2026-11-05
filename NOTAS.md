@@ -1,6 +1,11 @@
 # Notas del candidato de FolderTwin 1.0
 
-Estado: candidato `76b7eed` con aceptación de software aprobada y validaciones externas pendientes. Corrige la pérdida de foco al abrir recuperación y buscar con Enter. Pasaron Windows, WPF, el laboratorio VHDX y el recorrido normal de los tres modos en escritorio. [ENTREGA.md](ENTREGA.md) fija el ZIP, sus hashes y la evidencia posterior a compilarlo. La [matriz de v1](V1.md) mantiene abiertos el piloto y las comprobaciones externas, sin entorno disponible por ahora. Consulta [GUIA.md](GUIA.md) y [PILOTO.md](PILOTO.md). No se declara v1 final.
+Serie candidata de FolderTwin 1.0, sin declaración de v1 definitiva. La identidad exacta de cada paquete está en **COMPILACION.json**. El informe posterior de aceptación y el hash del ZIP se distribuyen por separado en [Releases](https://github.com/mikepchelper-spec/FolderTwin/releases); deben identificar el mismo commit y manifiesto. Estas notas describen funciones y cambios, sin anticipar el resultado de una compilación. Consulta [GUIA.md](GUIA.md) y [PILOTO.md](PILOTO.md).
+
+## Cambios de esta entrega
+
+- Las guías distribuidas se separan de los informes de aceptación de desarrollo. El ZIP identifica sus propias fuentes y runtime y no presenta un candidato anterior como actual.
+- Se conserva el foco al abrir recuperación y al realizar consultas consecutivas con Enter. La revisión de interfaz cubre también el retorno entre paneles, los controles de revisión y los estados sin puntos.
 
 ## Funciones disponibles
 
@@ -29,7 +34,7 @@ Los almacenes nuevos y anteriores conservan lectores explícitos. No se permite 
 
 Estos puntos se mantienen abiertos hasta contar con evidencia. Los ensayos con VHDX, fallos inyectados y procesos terminados se registran por separado y no aprueban el comportamiento de un disco físico. El corte eléctrico físico queda excluido.
 
-Los doce casos WPF de resolución de planes, instalación, actualización, retirada y recuperación posterior pasaron desde el paquete del candidato. Los borradores y diarios conservados no se descartan dentro del almacén anterior: mantienen su espacio y restricciones de limpieza.
+Los borradores y diarios conservados no se descartan dentro del almacén anterior: mantienen su espacio y restricciones de limpieza. El informe externo identifica qué pruebas pasaron desde cada paquete concreto.
 
 ## Límites del alcance
 

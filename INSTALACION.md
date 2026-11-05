@@ -1,6 +1,6 @@
 # Instalación y ciclo de la aplicación
 
-La distribución actual es portable y sigue siendo una vista previa de v1. No necesita instalar .NET por separado. Esta guía no sustituye los criterios pendientes de V1-12.
+La distribución es portable y sigue siendo una candidata de software de v1. No necesita instalar .NET por separado. Esta guía describe el procedimiento; el informe de aceptación de cada paquete se entrega aparte en [Releases](https://github.com/mikepchelper-spec/FolderTwin/releases).
 
 Extrae todo el paquete en una carpeta nueva y abre `FolderTwin.exe`. Conserva juntos ejecutables, bibliotecas, runtime, licencias, guías y `SHA256SUMS.txt`. No mezcles dos distribuciones copiando archivos encima de una carpeta anterior. La aplicación abre los trabajos de producto sin argumentos. **Respaldos de alfa** mantiene el acceso a las herramientas anteriores.
 
@@ -22,13 +22,9 @@ En la misma sección pulsa **Revisar versiones instaladas**, elige la versión y
 
 La versión abierta no se puede elegir para borrar. Abre otra copia portable para retirarla. Al terminar, cierra FolderTwin y retira la carpeta portable si ya no la necesitas. La configuración y los respaldos permanecen disponibles al extraer de nuevo el paquete. También puedes deshabilitar o retirar un trabajo individual desde **Editar trabajo y horario**.
 
-## Evidencia disponible y pendiente
+## Resultados por paquete
 
-El arnés de instalación usa paquetes de bytes sintéticos que no se ejecutan: interrumpe archivos y registros, completa los prefijos exactos, rechaza corrupción y archivos ajenos y crea otra versión sin modificar la primera. El recorrido WPF de producto ejecuta ese arnés. La aceptación nativa de horarios comprueba además el paquete real y su instalación estable en un runner desechable.
-
-El recorrido WPF local añade revisión y aceptación, gestión desde la ventana principal, rechazo de configuración obsoleta, exclusión de trabajadores y reintentos, repetición de una retirada parcial y verificación y restauración de los tres modos después de deshabilitar. El arnés nativo de CI prepara un segundo paquete, comprueba que los horarios habilitados apunten a él, ejecuta su trabajador, retira tareas y restaura los tres modos. Incluye una tarea sintética con propietario distinto que debe conservarse sin instalar ni deshabilitar trabajos. Pasó desde el paquete reproducible de `45d32e7` ([CI](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42038982994)).
-
-El recorrido WPF también pasó selección y aceptación de una versión concreta, reanudación después de un archivo eliminado, reinstalación con identidad nueva y verificación/restauración de los tres modos tras retirar los binarios sintéticos. El ensayo nativo retiró dos runtimes reales y restauró los tres modos después. Una referencia externa oculta impidió la retirada y conservó su tarea y archivos. Ambos recorridos volvieron a pasar desde el candidato `76b7eed` ([CI](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42104199340)). [Identidad y aceptación del artefacto](ENTREGA.md).
+El informe de aceptación se publica por separado en [Releases](https://github.com/mikepchelper-spec/FolderTwin/releases), después de probar el ZIP. Comprueba su commit y manifiesto contra COMPILACION.json y SHA256SUMS.txt antes de usar sus resultados. Esta guía no atribuye a un paquete nuevo las pruebas de otro.
 
 ## Motor de retirada de versiones en prueba
 

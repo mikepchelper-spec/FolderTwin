@@ -11,6 +11,7 @@ public partial class ProductWindow
     internal static async Task RunSmokeAsync()
     {
         InstallationProbe.Run();
+        await RunSurfaceSmokeAsync();
         var workspace = LabWorkspace.Create();
         try
         {

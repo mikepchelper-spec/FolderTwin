@@ -1,6 +1,6 @@
 # Retención experimental
 
-Solo se habilita para almacenes `FTVERS02` dentro de espacios registrados con datos sintéticos. Las operaciones son manuales y comparten el bloqueo exclusivo de copia, verificación y restauración. `--retention` ejecuta el arnés desechable completo.
+Se habilita para almacenes de laboratorio `FTVERS02` y trabajos de producto `FTVERS03` con registro de generaciones comprobable. `FTVERS01` conserva recuperación, pero no autoriza limpieza. Las operaciones son manuales y comparten el bloqueo exclusivo de copia, verificación y restauración. Los ensayos usan datos sintéticos; `--retention` ejecuta el arnés desechable y `--product-smoke` recorre los controles de producto.
 
 ## Revisión
 

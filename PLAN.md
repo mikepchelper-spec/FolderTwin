@@ -6,6 +6,14 @@ Fecha de inicio 2026-10-29. Revisión del plan y los ensayos 2026-11-05, incluid
 
 ## 1. Resultado que buscamos
 
+### Cierre independiente del candidato de software
+
+El goal de cierre de software no espera el entorno externo del piloto. Su salida exige auditar el alcance implementado, revisar la interfaz y entregar un paquete reproducible con guías coherentes, aceptación desde ese paquete y borrador revisado. USB físico, piloto, ciclos de Windows, otra cuenta/equipo, nube y accesibilidad que necesite otro entorno conservan sus pendientes y no se convierten en aprobaciones.
+
+La auditoría encontró que el ZIP congelado de `76b7eed` incluía informes anteriores que todavía presentaban `8bde43f` como candidato actual. La nueva distribución separa guías e informes: README específico del paquete, notas sin un candidato antiguo, COMPILACION.json con commit/runtime/hash de fuentes y SHA256SUMS.txt para el contenido. ENTREGA, V1 y los informes de desarrollo quedan en el repositorio y el archivo de fuentes como antecedentes; el informe posterior se adjunta por separado al ZIP. No se reconstruye un paquete para incluir su propia aceptación o hash.
+
+La revisión WPF adicional cubre ambos temas, tamaño mínimo, pasos del asistente, hora inválida, cancelación, trabajo sin puntos, recuperación vacía, retorno entre paneles y Tab en configuración/retención. Las pruebas existentes conservan trabajadores, historial, bandeja, importación, cuarentena, instalación y retirada. La aceptación y la identidad final del nuevo paquete se registrarán en ENTREGA después de compilar y probarlo.
+
 La [matriz de la v1](V1.md) registra el paso de la alfa de laboratorio a la aplicación distribuible. Conserva por separado la aceptación ya realizada y las validaciones externas del producto.
 
 La revisión adicional de teclado retuvo `8bde43f`: abrir recuperación y buscar podían perder el foco al deshabilitar temporalmente el panel. El candidato corregido `76b7eed` pasó la regresión WPF con ventana visible, consultas consecutivas con Enter en los temas claro y oscuro y el recorrido normal de los tres modos. Pasaron también Windows CI y el laboratorio VHDX del mismo commit. [Incidencia, paquete y reanudación](ENTREGA.md).

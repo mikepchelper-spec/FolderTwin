@@ -36,7 +36,9 @@ Para producir el paquete desde el código, instala el SDK indicado en [global.js
 .\scripts\Publish-Portable.ps1 -OutputDirectory "$env:TEMP\FolderTwin-win-x64"
 ```
 
-Elige un nombre nuevo para cada compilación. El script guarda los archivos intermedios en una carpeta hermana con sufijo `.build`. La automatización compara los SHA-256 de todos los archivos tras dos compilaciones desde árboles limpios y ejecuta el recorrido WPF desde el paquete. La comparación cubre el contenido distribuido. GitHub genera el ZIP al entregar el artefacto.
+Elige un nombre nuevo para cada compilación y parte de un commit limpio. El script guarda los archivos intermedios en una carpeta hermana con sufijo `.build` e incluye sus fuentes archivadas. Al compilar árboles extraídos, indica `-SourceArchive <tar> -SourceRevision <commit-completo>`. La automatización compara los SHA-256 tras dos compilaciones limpias, comprueba el contenido y ejecuta WPF desde el paquete. GitHub genera el ZIP al entregar el artefacto.
+
+La distribución usa un [README para el paquete](distribucion/README.md) y **COMPILACION.json**, con commit, runtime y hash de fuentes. Las guías de uso se incluyen; los informes de desarrollo permanecen en el repositorio y el archivo de fuentes. La aceptación posterior y el hash del ZIP se adjuntan aparte: no se recompila para introducir su propio resultado. `scripts/Test-Portable.ps1` comprueba identidad, fuentes, hashes, inventario exacto, licencias y enlaces de las guías.
 
 ## Decisión propuesta
 
