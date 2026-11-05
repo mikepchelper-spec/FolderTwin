@@ -90,7 +90,8 @@ internal sealed class WindowsSchedule : IDisposable
     private dynamic? Find(Guid id)
     {
         try { return folder.GetTask(Name(id)); }
-        catch (COMException error) when (error.HResult == unchecked((int)0x80070002)) { return null; }
+        catch (Exception error) when (error is FileNotFoundException ||
+            error is COMException { HResult: unchecked((int)0x80070002) }) { return null; }
     }
 
     private string VerifyOwnership(string xml, LabWorkspace workspace, Guid id)
