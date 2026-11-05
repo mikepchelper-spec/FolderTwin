@@ -100,6 +100,10 @@ jobs:
               -not (Test-Path -LiteralPath (Join-Path $outputA 'PresentationFramework.dll'))) {
             throw 'The portable package is missing its bundled runtime.'
           }
+          $startupLog = Join-Path $env:RUNNER_TEMP 'FolderTwin-startup-smoke.err'
+          $startup = Start-Process -FilePath (Join-Path $outputA 'FolderTwin.exe') -WorkingDirectory $outputA -ArgumentList '--product-startup-smoke' -WindowStyle Hidden -RedirectStandardError $startupLog -PassThru -Wait
+          Get-Content -LiteralPath $startupLog
+          if ($startup.ExitCode -ne 0) { throw "The packaged product startup exited with $($startup.ExitCode)." }
           $errorLog = Join-Path $env:RUNNER_TEMP 'FolderTwin-portable-smoke.err'
           $process = Start-Process -FilePath (Join-Path $outputA 'CopyLab.exe') -WorkingDirectory $outputA -ArgumentList '--smoke' -WindowStyle Hidden -RedirectStandardError $errorLog -PassThru -Wait
           if ($process.ExitCode -ne 0) {
@@ -107,7 +111,7 @@ jobs:
             throw "The packaged WPF smoke test exited with $($process.ExitCode)."
           }
           $productLog = Join-Path $env:RUNNER_TEMP 'FolderTwin-product-smoke.err'
-          $product = Start-Process -FilePath (Join-Path $outputA 'CopyLab.exe') -WorkingDirectory $outputA -ArgumentList '--product-smoke' -WindowStyle Hidden -RedirectStandardError $productLog -PassThru -Wait
+          $product = Start-Process -FilePath (Join-Path $outputA 'FolderTwin.exe') -WorkingDirectory $outputA -ArgumentList '--product-smoke' -WindowStyle Hidden -RedirectStandardError $productLog -PassThru -Wait
           Get-Content -LiteralPath $productLog
           if ($product.ExitCode -ne 0) { throw "The packaged product wizard exited with $($product.ExitCode)." }
           $scheduleLog = Join-Path $env:RUNNER_TEMP 'FolderTwin-schedule-smoke.err'

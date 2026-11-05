@@ -28,6 +28,8 @@ try {
         "-p:RuntimeFrameworkVersion=$runtimeVersion" "-p:PathMap=$repo=/_/FolderTwin" `
         -p:DebugType=None -p:DebugSymbols=false -p:ContinuousIntegrationBuild=true -p:IncludeSourceRevisionInInformationalVersion=false
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish terminó con código $LASTEXITCODE." }
+    # The apphost continues to locate CopyLab.dll; the public entry point uses the product name.
+    Copy-Item -LiteralPath (Join-Path $output 'CopyLab.exe') -Destination (Join-Path $output 'FolderTwin.exe')
 
     $cache = & $DotNet nuget locals global-packages --list --force-english-output
     if ($LASTEXITCODE -ne 0 -or $cache -isnot [string] -or -not $cache.StartsWith('global-packages: ')) {

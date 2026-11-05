@@ -24,7 +24,7 @@ El panel de producto separa lista y detalles, y los apila en ventanas estrechas.
 
 ## Alfa portable de Windows
 
-Abre un resultado de [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml) para `main` y descarga el artefacto `FolderTwin-alpha-win-x64-…`. Extrae todo el contenido y abre `CopyLab.exe`. El paquete incluye .NET, el código fuente del commit y la [guía de la alfa](ALFA.md) para trabajar con datos sintéticos.
+Abre un resultado de [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml) para `main` y descarga el artefacto `FolderTwin-alpha-win-x64-…`. Extrae todo el contenido y abre `FolderTwin.exe`: la entrada habitual muestra los trabajos de producto sin comandos. **Respaldos de alfa** abre las herramientas anteriores. El paquete incluye .NET, el código fuente del commit y la [guía de la alfa](ALFA.md) para trabajar con datos sintéticos. Sigue siendo una vista previa; no es la entrega final de v1.
 
 Para producir el paquete desde el código, instala el SDK indicado en [global.json](global.json) y ejecuta en PowerShell 7 para Windows:
 

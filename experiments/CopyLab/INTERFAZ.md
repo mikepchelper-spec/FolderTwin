@@ -2,6 +2,8 @@
 
 La ventana de producto sigue siendo una vista previa. Esta evidencia cubre la distribución del panel y algunos controles de accesibilidad; no aprueba por sí sola V1-10 ni EXT-05.
 
+El paquete ofrece `FolderTwin.exe` como entrada pública. Sin argumentos abre los trabajos de producto; el ejecutable interno `CopyLab.exe` conserva sus protocolos y también abre producto sin argumentos. **Respaldos de alfa** y el argumento de desarrollo `--lab` dan acceso explícito al laboratorio. `--product-startup-smoke` está restringido al runner Windows hospedado: abre el ejecutable público sin argumentos con un perfil vacío, comprueba el título de trabajos y su cierre sin crear trabajos. Este ensayo comprueba el arranque, no todo el recorrido de instalación.
+
 ## Sesión sintética reproducible
 
 Después de compilar, `CopyLab.exe --product-synthetic-preview` crea una sesión desechable, tres trabajos y sus respaldos sintéticos. No abre el registro habitual del usuario. `--product-synthetic-preview compact` abre con 600 × 500 unidades de WPF y `--product-synthetic-preview light` fuerza el tema claro solo en esa ventana. El tema normal sigue el sistema. No se instalan horarios al crear esta sesión.

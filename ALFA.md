@@ -1,6 +1,6 @@
 # FolderTwin · Alfa para Windows
 
-Extrae todo el artefacto de Windows x64 en una carpeta nueva y abre `CopyLab.exe`. Conserva los archivos de la distribución juntos. El paquete incluye el runtime de .NET. Es una compilación experimental sin firma, para un espacio desechable.
+Extrae todo el artefacto de Windows x64 en una carpeta nueva y abre `FolderTwin.exe`. La apertura habitual muestra los trabajos de producto. Para seguir las pruebas de laboratorio de esta guía, pulsa **Respaldos de alfa**. Conserva los archivos de la distribución juntos. El paquete incluye el runtime de .NET. Es una compilación experimental sin firma, para un espacio desechable. `CopyLab.exe` se conserva como entrada interna compatible; también abre los trabajos sin argumentos.
 
 La [guía del piloto](PILOTO.md) incluye el procedimiento de observación y los criterios de aceptación y detención.
 

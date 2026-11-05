@@ -6,6 +6,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Product>FolderTwin</Product>
+    <Title>FolderTwin</Title>
+    <Description>Copias locales y versiones recuperables para Windows.</Description>
   </PropertyGroup>
   <ItemGroup>
     <Using Remove="System.Windows.Forms" />

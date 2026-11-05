@@ -10,7 +10,9 @@ public partial class App : Application
         bool smoke = e.Args is ["--smoke"];
         bool indexScale = e.Args is ["--index-scale"];
         bool scheduleSmoke = e.Args is ["--schedule-smoke"];
-        bool productPreview = e.Args is ["--product-preview"];
+        bool productPreview = e.Args.Length == 0 || e.Args is ["--product-preview"];
+        bool labPreview = e.Args is ["--lab"];
+        bool startupSmoke = e.Args is ["--product-startup-smoke"];
         bool productSyntheticPreview = e.Args is ["--product-synthetic-preview"] or ["--product-synthetic-preview", "compact"] or ["--product-synthetic-preview", "light"];
         bool productSmoke = e.Args is ["--product-smoke"];
         bool productScheduleSmoke = e.Args is ["--product-schedule-smoke"];
@@ -23,7 +25,7 @@ public partial class App : Application
         bool productScheduled = e.Args is ["--run-scheduled-product-job", _, _];
         bool productWorker = productScheduled || e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _] or ["--restore-product-job", _, _, _] or ["--review-product-mirror", _, _] or ["--review-product-pending", _, _] or ["--abandon-product-version", _, _, _];
         bool worker = productWorker || scheduled || e.Args is ["--run-version-job", _, _];
-        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !productSyntheticPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !heldMirrorChild && !heldAbandonChild && !productScheduleSmoke)
+        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !labPreview && !startupSmoke && !productSyntheticPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !heldMirrorChild && !heldAbandonChild && !productScheduleSmoke)
         {
             Shutdown(2);
             return;
@@ -31,6 +33,12 @@ public partial class App : Application
 
         try
         {
+            if (startupSmoke)
+            {
+                await ProductStartupProbe.RunAsync();
+                Shutdown(0);
+                return;
+            }
             if (heldAbandonChild)
             {
                 if (!Guid.TryParseExact(e.Args[2], "N", out var abandonId) || !Guid.TryParseExact(e.Args[3], "N", out var reviewRun)) { Shutdown(2); return; }
@@ -186,10 +194,10 @@ public partial class App : Application
         }
         catch (Exception error)
         {
-            if (smoke || indexScale || worker || scheduleSmoke || productSmoke || heldProductChild || heldRestoreChild || heldMirrorChild || productScheduleSmoke)
+            if (smoke || indexScale || worker || scheduleSmoke || productSmoke || heldProductChild || heldRestoreChild || heldMirrorChild || heldAbandonChild || productScheduleSmoke || startupSmoke)
                 Console.Error.WriteLine(error);
             else
-                MessageBox.Show(error.Message, "FolderTwin · Laboratorio", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(error.Message, "FolderTwin", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
         }
     }
