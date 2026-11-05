@@ -14,6 +14,8 @@ internal static class ProductWorker
 
     internal static Process StartRestoration(string registry, Guid id, Guid request) =>
         Launch(["--restore-product-job", registry, id.ToString("N"), request.ToString("N")]);
+    internal static Process StartMirrorReview(string registry, Guid id) =>
+        Launch(["--review-product-mirror", registry, id.ToString("N")]);
 
     private static Process Launch(string[] arguments)
     {

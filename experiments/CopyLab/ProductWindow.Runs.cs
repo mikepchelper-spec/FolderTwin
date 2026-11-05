@@ -115,9 +115,13 @@ public partial class ProductWindow
         last.Running ? last.Progress?.Paused == true ? "Pausado" : "En ejecución" :
         last.Result is { } result ? result.State switch
         {
-            ProductRunState.Confirmed => result.Degraded ? "Verificado; catálogo requiere atención" :
-                last.Intent.Operation == ProductRunOperation.Restore ? "Recuperación completa" :
-                last.Intent.Operation == ProductRunOperation.Verify ? "Verificación completa" : "Respaldo completo",
+            ProductRunState.Confirmed => result.Degraded ? "Verificado; catálogo requiere atención" : last.Intent.Operation switch
+            {
+                ProductRunOperation.ReviewMirror => last.Mirror?.ResumePending == true ? "Actualización pendiente de reanudar" : "Revisión del espejo lista",
+                ProductRunOperation.Restore => "Recuperación completa",
+                ProductRunOperation.Verify => "Verificación completa",
+                _ => "Respaldo completo"
+            },
             ProductRunState.Cancelled => "Cancelado; puede haber trabajo pendiente",
             ProductRunState.WaitingForSource => "Esperando origen",
             ProductRunState.WaitingForDestination => "Esperando destino",
@@ -128,11 +132,14 @@ public partial class ProductWindow
     private static string Phase(WorkPhase phase) => phase switch
     {
         WorkPhase.Analyzing => "Analizando", WorkPhase.Copying => "Copiando contenido", WorkPhase.Verifying => "Verificando",
-        WorkPhase.Publishing => "Publicando", _ => "Recuperando"
+        WorkPhase.Publishing => "Publicando", WorkPhase.Preparing => "Preparando trabajo", _ => "Recuperando"
     };
 
     private static string ResultText(ProductRunView run, ProductRunResult result) => result.State switch
     {
+        ProductRunState.Confirmed when run.Mirror is { } review => review.ResumePending ? "Reanuda la actualización pendiente desde su diario." :
+            review.Conflicts > 0 ? "La revisión detectó conflictos. Conserva los cambios externos antes de repetir el análisis." :
+                "Revisión terminada. Comprueba los cambios antes de aplicar el espejo.",
         ProductRunState.Confirmed when run.Restore is { } restore => "Recuperación completa y verificada.\n" +
             Path.Combine(restore.Target.Parent.VolumePath, restore.Target.FolderName) +
             (result.Degraded ? "\nUna réplica del catálogo necesita revisión." : ""),
@@ -140,6 +147,8 @@ public partial class ProductWindow
             (result.Degraded ? " Una réplica del catálogo necesita revisión." : "") : "Respaldo completo y verificado.",
         ProductRunState.Cancelled when run.Intent.Operation == ProductRunOperation.Restore =>
             "Recuperación cancelada. Revisa una carpeta nueva para reintentar; los archivos ya recuperados se conservan.",
+        ProductRunState.Cancelled when run.Intent.Operation == ProductRunOperation.ReviewMirror =>
+            "Revisión cancelada. Repite el análisis para revisar el espejo antes de aplicarlo.",
         ProductRunState.Cancelled => "Operación cancelada en un límite recuperable. Reintenta para continuar el trabajo pendiente.",
         ProductRunState.WaitingForSource => "El origen no está disponible. Reconéctalo y reintenta.",
         ProductRunState.WaitingForDestination => "El destino no está disponible. Reconéctalo y reintenta.",

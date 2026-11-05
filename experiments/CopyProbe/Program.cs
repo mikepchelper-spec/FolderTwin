@@ -32,6 +32,12 @@ if (args is ["--product-runs"])
     return ProductRunProbe.Run();
 if (args is ["--product-restore"])
     return ProductRestoreProbe.Run();
+if (args is ["--product-mirror-review"])
+    return ProductMirrorReviewProbe.Run();
+if (args is ["--review-product-mirror", var mirrorRegistry, var mirrorJob] && Guid.TryParseExact(mirrorJob, "N", out var reviewJobId))
+    return ProductRunner.ReviewMirrorCommand(mirrorRegistry, reviewJobId);
+if (args is ["--held-mirror-review-child", var mirrorFixture, var heldMirror] && Guid.TryParseExact(heldMirror, "N", out var heldMirrorId))
+    return ProductMirrorReviewProbe.HeldChild(mirrorFixture, heldMirrorId);
 if (args is ["--restore-product-job", var restoreRegistry, var restoreJob, var restoreRequest] &&
     Guid.TryParseExact(restoreJob, "N", out var restoreJobId) && Guid.TryParseExact(restoreRequest, "N", out var restoreRequestId))
     return ProductRunner.RestoreCommand(restoreRegistry, restoreJobId, restoreRequestId);

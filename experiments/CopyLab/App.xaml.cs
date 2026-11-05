@@ -15,12 +15,13 @@ public partial class App : Application
         bool productScheduleSmoke = e.Args is ["--product-schedule-smoke"];
         bool heldProductChild = e.Args is ["--held-product-child", _, _];
         bool heldRestoreChild = e.Args is ["--held-restore-child", _, _, _];
+        bool heldMirrorChild = e.Args is ["--held-mirror-review-child", _, _];
         bool trayStartup = e.Args is ["--tray-workspace", _];
         bool scheduled = e.Args is ["--run-scheduled-version-job", _, _];
         bool productScheduled = e.Args is ["--run-scheduled-product-job", _, _];
-        bool productWorker = productScheduled || e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _] or ["--restore-product-job", _, _, _];
+        bool productWorker = productScheduled || e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _] or ["--restore-product-job", _, _, _] or ["--review-product-mirror", _, _];
         bool worker = productWorker || scheduled || e.Args is ["--run-version-job", _, _];
-        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !productScheduleSmoke)
+        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !heldMirrorChild && !productScheduleSmoke)
         {
             Shutdown(2);
             return;
@@ -28,6 +29,13 @@ public partial class App : Application
 
         try
         {
+            if (heldMirrorChild)
+            {
+                if (!Guid.TryParseExact(e.Args[2], "N", out var reviewId)) { Shutdown(2); return; }
+                int heldResult = await Task.Run(() => ProductMirrorReviewProbe.HeldChild(e.Args[1], reviewId));
+                Shutdown(heldResult);
+                return;
+            }
             if (heldRestoreChild)
             {
                 if (!Guid.TryParseExact(e.Args[2], "N", out var restoreId) || !Guid.TryParseExact(e.Args[3], "N", out var requestId)) { Shutdown(2); return; }
@@ -78,6 +86,12 @@ public partial class App : Application
                 }
                 if (productWorker)
                 {
+                    if (e.Args[0] == "--review-product-mirror")
+                    {
+                        int reviewed = await Task.Run(() => ProductRunner.ReviewMirrorCommand(e.Args[1], id));
+                        Shutdown(reviewed);
+                        return;
+                    }
                     if (e.Args[0] == "--restore-product-job")
                     {
                         if (!Guid.TryParseExact(e.Args[3], "N", out var requestId)) { Shutdown(2); return; }
@@ -146,7 +160,7 @@ public partial class App : Application
         }
         catch (Exception error)
         {
-            if (smoke || indexScale || worker || scheduleSmoke || productSmoke || heldProductChild || heldRestoreChild || productScheduleSmoke)
+            if (smoke || indexScale || worker || scheduleSmoke || productSmoke || heldProductChild || heldRestoreChild || heldMirrorChild || productScheduleSmoke)
                 Console.Error.WriteLine(error);
             else
                 MessageBox.Show(error.Message, "FolderTwin · Laboratorio", MessageBoxButton.OK, MessageBoxImage.Error);

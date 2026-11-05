@@ -54,7 +54,6 @@ public partial class ProductWindow
                 "El trabajo se guardará deshabilitado. Comprueba el respaldo existente. Para habilitar nuevas copias se exigirá revisar también el origen.";
             InvalidateImportReview();
             SetStatus("Revisa las carpetas antes de importar. El respaldo se conserva.");
-            ChooseImportDestinationButton.Focus();
         });
     }
 

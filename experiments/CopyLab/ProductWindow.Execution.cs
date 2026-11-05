@@ -14,8 +14,9 @@ public partial class ProductWindow
                 Point.Expired ? " · Expirado" : Point.Degraded ? " · Una réplica íntegra" : "");
     }
     private sealed record RestoreChoice(string Generation, DedicatedDestinationReview Destination, string? RelativeFile = null);
-    private MirrorPreview? mirrorReview;
+    private ProductMirrorReview? mirrorReview;
     private Guid? mirrorJobId;
+    private Guid? mirrorReviewRun;
     private ProductJob? recoveryJob;
     private RestoreChoice? restoreChoice;
 
@@ -23,6 +24,7 @@ public partial class ProductWindow
     {
         mirrorReview = null;
         mirrorJobId = null;
+        mirrorReviewRun = null;
         MirrorReviewPanel.Visibility = Visibility.Collapsed;
         AcceptEmptySource.IsChecked = AcceptMassChanges.IsChecked = false;
     }
@@ -40,6 +42,7 @@ public partial class ProductWindow
         ApplyScheduleButton.IsEnabled = available && job is { Enabled: true, Retired: false, Options.DailyAt: not null };
         SelectedJobText.Text = job is null ? "" : $"Origen\n{job.Source.VolumePath}\nDestino\n{job.Destination.LastVolumePath}";
         if (mirrorJobId != job?.Id) ResetProductActions();
+        RefreshMirrorReviewDisplay(job, executing);
         RefreshRuntimeDisplay();
         RefreshProductRetentionActions();
         if (RecoveryPanel.Visibility == Visibility.Visible && recoveryJob?.Id == job?.Id)
@@ -58,58 +61,28 @@ public partial class ProductWindow
         ResetProductActions();
         Start(async () =>
         {
-            if (job.Options.Mode == ProductBackupMode.Accumulative)
-            {
-                await StartWorkerAsync(job, location => StartBackupProcess(location, job.Id));
-            }
-            else if (job.Options.Mode == ProductBackupMode.Versions)
-            {
-                await StartWorkerAsync(job, location => StartBackupProcess(location, job.Id));
-            }
-            else if (job.Options.Mode == ProductBackupMode.ProtectedMirror)
-            {
-                mirrorReview = await Task.Run<MirrorPreview?>(() =>
-                {
-                    var store = VersionStore.OpenProduct(job, initialize: true);
-                    store.InitializeMirror(resumeInitialization: true);
-                    var pending = store.ListMirrorOperations().Where(operation => !operation.Applied).ToArray();
-                    if (pending.Length > 1)
-                        throw new InvalidDataException("Hay varias actualizaciones del espejo pendientes de revisar.");
-                    if (pending.Length == 1)
-                    {
-                        return null;
-                    }
-                    return store.PreviewMirror(job.Source.VolumePath);
-                });
-                if (mirrorReview is null)
-                {
-                    await StartWorkerAsync(job, location => StartBackupProcess(location, job.Id));
-                    return;
-                }
-                mirrorJobId = job.Id;
-                MirrorReviewPanel.Visibility = Visibility.Visible;
-                MirrorReviewText.Text = $"Revisión del espejo\n{mirrorReview.Added:N0} nuevos · {mirrorReview.Replaced:N0} modificados · " +
-                    $"{mirrorReview.Removed:N0} retirados · {mirrorReview.Conflicts.Length:N0} conflictos. " +
-                    "El estado anterior queda recuperable antes de reemplazar o retirar archivos.";
-                AcceptEmptySource.Visibility = mirrorReview.RequiresEmptyReview ? Visibility.Visible : Visibility.Collapsed;
-                AcceptMassChanges.Visibility = mirrorReview.RequiresMassReview ? Visibility.Visible : Visibility.Collapsed;
-                ApplyMirrorButton.IsEnabled = mirrorReview.Conflicts.Length == 0;
-                SetStatus(mirrorReview.Conflicts.Length == 0 ? "Revisa los cambios antes de actualizar el espejo." :
-                    "Hay cambios externos en el destino. Consérvalos y resuelve el conflicto antes de repetir el análisis.");
-            }
+            await StartWorkerAsync(job, location => job.Options.Mode == ProductBackupMode.ProtectedMirror ?
+                StartMirrorReviewProcess(location, job.Id) : StartBackupProcess(location, job.Id));
         });
     }
 
     private void ApplyMirrorClick(object sender, RoutedEventArgs e)
     {
-        if (busy || mirrorReview is not { } review || (JobList.SelectedItem as JobRow)?.Job is not { } job || job.Id != mirrorJobId) return;
+        if (busy || mirrorReview is not { } review || mirrorReviewRun is not { } reviewRun ||
+            (JobList.SelectedItem as JobRow)?.Job is not { } job || job.Id != mirrorJobId) return;
         bool empty = AcceptEmptySource.IsChecked == true, mass = AcceptMassChanges.IsChecked == true;
         Start(async () =>
         {
+            if (review.ResumePending)
+            {
+                await StartWorkerAsync(job, location => StartBackupProcess(location, job.Id));
+                ResetProductActions();
+                return;
+            }
             Guid approval = await Task.Run(() =>
             {
                 using var registry = openRegistry();
-                return registry.ApproveMirror(job.Id, review, empty, mass);
+                return registry.ApproveMirror(job.Id, reviewRun, empty, mass);
             });
             await StartWorkerAsync(job, location => StartBackupProcess(location, job.Id, approval));
             ResetProductActions();

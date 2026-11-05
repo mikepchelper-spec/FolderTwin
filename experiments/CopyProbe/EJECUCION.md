@@ -24,7 +24,17 @@ La copia y la verificación se ejecutan en otro proceso. Cerrar la ventana detie
 
 Una ejecución sin aprobación deja pendientes las retiradas de archivos o carpetas, los cambios masivos y el origen vacío. La aprobación manual conserva generación, hashes de catálogo y registro, identidades, punto anterior, umbral y aceptaciones. El ejecutor vuelve a revisar y exige que coincidan antes de aplicar. Una actualización ya pendiente se reanuda desde su diario autorizado.
 
-Versionado reintenta la generación pendiente o la generación registrada por el intento interrumpido. Acumulativo y espejo usan su diario de publicación. Reanudar un inventario persistido sigue exigiendo sus datos e identidades; un origen cambiado puede requerir revisión. El flujo de producto para abandonar o sustituir una intención incompatible conservando sus datos sigue pendiente. También siguen pendientes el traslado de la revisión inicial de espejo al flujo controlable y el resto de la integración descrita en [V1.md](../../V1.md).
+Versionado reintenta la generación pendiente o la generación registrada por el intento interrumpido. Acumulativo y espejo usan su diario de publicación. Reanudar un inventario persistido sigue exigiendo sus datos e identidades; un origen cambiado puede requerir revisión. El flujo de producto para abandonar o sustituir una intención incompatible conservando sus datos sigue pendiente, junto al resto de la integración descrita en [V1.md](../../V1.md).
+
+## Revisión controlada del espejo
+
+`--review-product-mirror` ejecuta el análisis con una operación `ReviewMirror` independiente. Mantiene el bloqueo por trabajo, publica progreso y atiende las mismas solicitudes de pausa y cancelación. El motor mantiene su bloqueo del almacén mientras analiza. Preparar el almacén y la carpeta actual vacía puede ser necesario en la primera ejecución, pero el análisis no publica puntos ni actualiza archivos de la carpeta actual.
+
+El intento conserva una generación propuesta y un resumen acotado en `mirror-review`: hash de intención, prueba de revisión, hashes de documento y registro, identidades, punto anterior, conteos de archivos y carpetas, conflictos, espacio observado y aceptaciones requeridas. No persiste el inventario completo en la configuración local. El resultado confirmado significa que terminó el análisis de esa operación; no actualiza la fecha del respaldo ni aparece como punto recuperable. Un resumen sin resultado confirmado no habilita aplicar.
+
+La interfaz reabre la revisión desde el mismo intento. Aplicar guarda una aprobación nueva ligada a esa revisión y exige las aceptaciones de origen vacío o cambios masivos. El ejecutor vuelve a analizar con la generación propuesta y comprueba hashes, identidades y punto anterior antes de actualizar. Los conflictos impiden aprobar. Una revisión obsoleta no permite cambiar datos. Si ya hay un diario autorizado pendiente, la revisión lo identifica y ofrece reanudar su operación en lugar de aprobar un análisis nuevo.
+
+Terminar o cancelar el proceso de análisis conserva los registros y los respaldos anteriores. El análisis se repite para obtener una nueva revisión. La bandeja conserva las incidencias de copia y también señala análisis fallidos o cancelados y revisiones destructivas pendientes. Una revisión correcta no oculta un fallo anterior del respaldo. `--product-mirror-review` y el recorrido WPF prueban estos límites, controles reales, terminación, reapertura y aplicación separada. La aceptación visual y las validaciones externas siguen separadas.
 
 ## Restauración controlada
 

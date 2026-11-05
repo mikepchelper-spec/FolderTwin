@@ -5,8 +5,8 @@ using Microsoft.Win32.SafeHandles;
 
 internal enum ProductRunState { Confirmed, Cancelled, WaitingForSource, WaitingForDestination, Busy, Review }
 internal enum ProductRunAction { Pause, Resume, Cancel }
-internal enum ProductRunOperation { Backup, Verify, Restore }
-internal enum WorkPhase { Analyzing, Copying, Verifying, Publishing, Restoring }
+internal enum ProductRunOperation { Backup, Verify, Restore, ReviewMirror }
+internal enum WorkPhase { Analyzing, Copying, Verifying, Publishing, Restoring, Preparing }
 internal sealed record WorkProgress(WorkPhase Phase, int Processed, int Total, string? RelativePath = null);
 internal sealed record ProductRunIntent(int Version, Guid Job, Guid Id, long Sequence, byte[] JobStamp, DateTimeOffset StartedUtc,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] ProductRunOperation Operation = ProductRunOperation.Backup,
@@ -18,7 +18,7 @@ internal sealed record ProductRunProgress(int Version, byte[] IntentHash, long R
 internal sealed record ProductRunCommand(int Version, byte[] IntentHash, long Number, ProductRunAction Action);
 internal sealed record ProductRunView(ProductRunIntent Intent, ProductRunResult? Result, string? Generation,
     ProductRunProgress? Progress, bool Running, ProductRetry? Retry = null, bool RetryRunning = false,
-    ProductRestoreRequest? Restore = null);
+    ProductRestoreRequest? Restore = null, ProductMirrorReview? Mirror = null);
 internal sealed record ProductRetry(int Version, byte[] IntentHash, int Number, DateTimeOffset NextUtc);
 internal sealed record ProductRunHistory(ProductRunView[] Runs, int Unreadable);
 
@@ -41,7 +41,7 @@ internal sealed partial class ProductJobRegistry
         try
         {
             var definition = ReadConfirmed(job, ReadIntent(job, id));
-            if (operation == ProductRunOperation.Backup && (!definition.Enabled || definition.Retired))
+            if (operation is ProductRunOperation.Backup or ProductRunOperation.ReviewMirror && (!definition.Enabled || definition.Retired))
                 throw new InvalidDataException("El trabajo está deshabilitado o retirado. Sus respaldos se conservan para recuperar.");
             execution = WindowsProbeNative.OpenPlainFile(job, "execution.lock", FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
             using var runs = WindowsProbeNative.OpenOrCreatePlainDirectory(job, "runs");
@@ -134,6 +134,17 @@ internal sealed partial class ProductJobRegistry
                 var restore = intent.RestoreRequest is { } request ? ReadRestoreRequest(job, id, request) : null;
                 if (restore is not null && generation is not null && generation != restore.Generation)
                     throw new InvalidDataException("La recuperación no corresponde a la fecha revisada.");
+                ProductMirrorReview? mirror = null;
+                if (intent.Operation == ProductRunOperation.ReviewMirror)
+                {
+                    if (WindowsProbeNative.PlainFileExists(run, "mirror-review"))
+                    {
+                        mirror = Decode<ProductMirrorReview>(run, "mirror-review");
+                        ValidateMirrorReview(mirror, intent, generation);
+                    }
+                    if (result?.State == ProductRunState.Confirmed && mirror is null)
+                        throw new InvalidDataException("Falta la revisión confirmada del espejo.");
+                }
                 ProductRetry? retry = null;
                 bool retryRunning = false;
                 if (WindowsProbeNative.PlainFileExists(run, "retry"))
@@ -145,7 +156,7 @@ internal sealed partial class ProductJobRegistry
                         throw new InvalidDataException("El reintento no corresponde al resultado registrado.");
                     retryRunning = IsLocked(run, "retry.active");
                 }
-                found.Add(new(intent, result, generation, progress, running, retry, retryRunning, restore));
+                found.Add(new(intent, result, generation, progress, running, retry, retryRunning, restore, mirror));
             }
             catch (Exception error) when (VersionJob.Expected(error)) { unreadable++; }
         }
@@ -210,7 +221,7 @@ internal sealed partial class ProductJobRegistry
         if (confirmed.ReadByte() != -1) throw new InvalidDataException("La confirmación del trabajo tiene un tamaño inválido.");
         return stamp;
     }
-    private static byte[] IntentHash(ProductRunIntent intent) => SHA256.HashData(Encode(intent));
+    internal static byte[] IntentHash(ProductRunIntent intent) => SHA256.HashData(Encode(intent));
     private static string RunName(ProductRunIntent intent) => intent.Sequence.ToString("D20", CultureInfo.InvariantCulture) + "-" + intent.Id.ToString("N");
     private static long DirectorySequence(string name) => name.Length == 53 && name[20] == '-' &&
         long.TryParse(name.AsSpan(0, 20), NumberStyles.None, CultureInfo.InvariantCulture, out long sequence) && sequence > 0 &&
@@ -277,6 +288,11 @@ internal sealed partial class ProductJobRegistry
             Generation = generation;
         }
         internal ProductRunAction? ReadAction() => ReadCommands(run, Intent).LastOrDefault()?.Action;
+        internal void SaveMirrorReview(ProductMirrorReview review)
+        {
+            ValidateMirrorReview(review, Intent, Generation);
+            RetentionJournal.WriteFile(run, "mirror-review", Encode(review));
+        }
         internal void Progress(WorkProgress work, bool paused)
         {
             if (!ValidWork(work)) throw new InvalidDataException("El progreso contiene una ruta o un recuento inválido.");
