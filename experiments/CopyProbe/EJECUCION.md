@@ -24,7 +24,7 @@ La copia y la verificación se ejecutan en otro proceso. Cerrar la ventana detie
 
 Una ejecución sin aprobación deja pendientes las retiradas de archivos o carpetas, los cambios masivos y el origen vacío. La aprobación manual conserva generación, hashes de catálogo y registro, identidades, punto anterior, umbral y aceptaciones. El ejecutor vuelve a revisar y exige que coincidan antes de aplicar. Una actualización ya pendiente se reanuda desde su diario autorizado.
 
-Versionado reintenta la generación pendiente o la generación registrada por el intento interrumpido. Acumulativo y espejo usan su diario de publicación. Reanudar un inventario persistido sigue exigiendo sus datos e identidades; un origen cambiado puede requerir revisión. El flujo de producto para abandonar o sustituir una intención incompatible conservando sus datos sigue pendiente, junto al resto de la integración descrita en [V1.md](../../V1.md).
+Versionado reintenta la generación pendiente o la generación registrada por el intento interrumpido. Acumulativo y espejo usan su diario de publicación. Reanudar un inventario persistido sigue exigiendo sus datos e identidades; un origen cambiado puede requerir revisión. El producto permite revisar y conservar un plan completo de versionado antes de iniciar otro. Para borradores y diarios de los otros modos, se retira el trabajo conservando sus datos y recuperación y se crea otro destino dedicado. El diario anterior y su espacio permanecen; no se completan con otro contenido. [Procedimiento y límites](PENDIENTES.md).
 
 ## Revisión controlada del espejo
 
