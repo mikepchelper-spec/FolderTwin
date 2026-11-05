@@ -14,6 +14,15 @@ public partial class MainWindow
     private string? workspaceDestination;
     private LabTray? tray;
 
+    internal async Task StartTrayAsync(string root)
+    {
+        await SwitchWorkspaceAsync(() => LabWorkspace.Open(root));
+        var current = workspace ?? throw new IOException("No se pudo abrir el espacio de la bandeja.");
+        tray ??= new LabTray(current, ShowMain, () => { ShowMain(); Close(); }, notifications: testSelections is null);
+        await tray.RefreshAsync();
+        Hide();
+    }
+
     private async void TrayClick(object sender, RoutedEventArgs e)
     {
         if (busy || workspace is not { } current)
@@ -22,7 +31,7 @@ public partial class MainWindow
         RefreshActions();
         try
         {
-            tray ??= new LabTray(current, ShowMain, () => { ShowMain(); Close(); });
+            tray ??= new LabTray(current, ShowMain, () => { ShowMain(); Close(); }, notifications: testSelections is null);
             await tray.RefreshAsync();
             Hide();
         }

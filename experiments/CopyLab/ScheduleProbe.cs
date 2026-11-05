@@ -49,6 +49,12 @@ internal static class ScheduleProbe
                 scheduler.Remove(workspace, id);
                 if (scheduler.Read(workspace, id) is not null)
                     throw new InvalidOperationException("The owned schedule was not removed.");
+                scheduler.SetTrayStartup(workspace, executable, enabled: true);
+                if (scheduler.ReadTray(workspace) is not { Enabled: true, MeetsPolicy: true })
+                    throw new InvalidOperationException("The optional logon tray definition did not verify.");
+                scheduler.SetTrayStartup(workspace, executable: null, enabled: false);
+                if (scheduler.ReadTray(workspace) is not null)
+                    throw new InvalidOperationException("The optional logon tray definition was not removed.");
             }
             Console.Error.WriteLine("PASS the portable app installs a stable worker; an actual Windows time trigger confirms a point, updates to daily and removes its owned schedule.");
         }
@@ -58,6 +64,7 @@ internal static class ScheduleProbe
             {
                 using var scheduler = new WindowsSchedule();
                 scheduler.Remove(workspace, id);
+                scheduler.SetTrayStartup(workspace, executable: null, enabled: false);
             }
             using (workspace.OpenRegisteredRoot()) { }
             Directory.Delete(workspace.Root, recursive: true);

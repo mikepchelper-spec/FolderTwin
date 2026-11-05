@@ -63,6 +63,14 @@ internal static class TrayProbe
             await tray.RefreshAsync();
             if (tray.NotificationCount != 2 || !tray.StatusText.Contains("requieren atención", StringComparison.Ordinal))
                 throw new InvalidOperationException("The tray hid the loss of a catalog replica.");
+            var startup = new MainWindow(smoke: true);
+            try
+            {
+                await startup.StartTrayAsync(workspace.Root);
+                if (startup.IsVisible)
+                    throw new InvalidOperationException("The tray startup opened the full window.");
+            }
+            finally { startup.Close(); }
             Console.Error.WriteLine("PASS tray status covers both jobs; failures stay visible, repeated retries do not repeat notices and Run now starts both workers.");
         }
         finally

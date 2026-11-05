@@ -66,6 +66,8 @@ En la alfa portable, **Programar** instala y verifica una copia del paquete bajo
 
 **Minimizar a bandeja** mantiene un icono del espacio actual. Un clic abre el estado de sus trabajos, la antigüedad de los últimos puntos y **Respaldar ahora**. La antigüedad muestra el más antiguo de los últimos puntos consultables por trabajo. Un fallo de un trabajo o de sus catálogos pide atención aunque otro trabajo termine bien. La consulta se repite cada cinco minutos y al abrir el panel. Los avisos no se repiten por un reintento con el mismo estado. **Abrir aplicación** vuelve a la ventana y **Salir** cierra la interfaz. Los ejecutores independientes y los horarios tienen su propio ciclo de ejecución.
 
+En **Horario y bandeja**, la opción **Mostrar estado al iniciar sesión** registra un inicio opcional del monitor para ese espacio. Usa **Aplicar inicio** para guardar o retirar esa opción. Windows inicia el monitor con el usuario actual y una demora de 30 segundos.
+
 Durante una copia, **Cancelar copia** solicita detener el lote en el próximo punto seguro. Si un archivo está en curso, el motor termina ese paso y conserva lo ya verificado para el reintento. Si la confirmación del catálogo ya empezó, el lote puede terminar.
 
 Durante la copia, el reintento, la restauración y la verificación, la ventana muestra el archivo en curso y los recuentos de archivos procesados y verificados. El resultado final aparece al terminar las comprobaciones.

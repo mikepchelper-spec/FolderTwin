@@ -186,6 +186,23 @@ public partial class VersionWindow : Window
         SourceText.Text = "Origen registrado · " + source;
     }
 
+    private void StartupClick(object sender, RoutedEventArgs e)
+    {
+        if (busy)
+            return;
+        bool enabled = TrayAtLogin.IsChecked == true;
+        Start(async () =>
+        {
+            await Task.Run(() =>
+            {
+                string? executable = enabled ? LabInstallation.EnsureWorker() : null;
+                using var scheduler = new WindowsSchedule();
+                scheduler.SetTrayStartup(workspace, executable, enabled);
+            });
+            SetStatus(enabled ? "El estado se abrirá en la bandeja al iniciar sesión." : "Se retiró el inicio automático de la bandeja.");
+        });
+    }
+
     private async Task ShowScheduleAsync()
     {
         if (Path.GetDirectoryName(workspace.Root) != LabWorkspace.PersistentParent)
@@ -193,13 +210,19 @@ public partial class VersionWindow : Window
             ScheduleText.Text = "Para programar, crea un nuevo espacio de pruebas persistente.";
             return;
         }
-        if (backgroundJob is not { } id)
-        {
-            ScheduleText.Text = "El horario se ejecuta mientras tengas la sesión iniciada.";
-            return;
-        }
         try
         {
+            var startup = await Task.Run(() =>
+            {
+                using var scheduler = new WindowsSchedule();
+                return scheduler.ReadTray(workspace);
+            });
+            TrayAtLogin.IsChecked = startup is { Enabled: true, MeetsPolicy: true };
+            if (backgroundJob is not { } id)
+            {
+                ScheduleText.Text = "El horario se ejecuta mientras tengas la sesión iniciada.";
+                return;
+            }
             var information = await Task.Run(() =>
             {
                 using var scheduler = new WindowsSchedule();
@@ -461,6 +484,7 @@ public partial class VersionWindow : Window
         bool persistent = Path.GetDirectoryName(workspace.Root) == LabWorkspace.PersistentParent;
         ScheduleButton.IsEnabled = ScheduleTime.IsEnabled = CreatePointButton.IsEnabled && persistent;
         RemoveScheduleButton.IsEnabled = !busy && backgroundJob is not null && persistent;
+        TrayAtLogin.IsEnabled = ApplyStartupButton.IsEnabled = !busy && persistent;
         JobChoice.IsEnabled = !busy && store is not null;
         ResumeButton.IsEnabled = !busy && row?.Pending is not null;
         VerifyButton.IsEnabled = RestorePointButton.IsEnabled = confirmed;

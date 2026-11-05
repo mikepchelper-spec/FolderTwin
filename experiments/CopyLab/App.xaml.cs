@@ -10,8 +10,9 @@ public partial class App : Application
         bool smoke = e.Args is ["--smoke"];
         bool indexScale = e.Args is ["--index-scale"];
         bool scheduleSmoke = e.Args is ["--schedule-smoke"];
+        bool trayStartup = e.Args is ["--tray-workspace", _];
         bool worker = e.Args is ["--run-version-job", _, _];
-        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke)
+        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup)
         {
             Shutdown(2);
             return;
@@ -44,6 +45,12 @@ public partial class App : Application
             }
             var window = new MainWindow(smoke);
             MainWindow = window;
+            if (trayStartup)
+            {
+                ShutdownMode = ShutdownMode.OnMainWindowClose;
+                await window.StartTrayAsync(e.Args[1]);
+                return;
+            }
             if (smoke)
             {
                 try

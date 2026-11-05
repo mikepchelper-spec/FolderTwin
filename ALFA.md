@@ -18,4 +18,6 @@ Para probar un horario desde el paquete portable, elige el origen o un trabajo g
 
 Para probar la bandeja, pulsa **Minimizar a bandeja** desde el espacio de pruebas. Haz clic en el icono de FolderTwin para consultar los trabajos y usa **Respaldar ahora**. Abre la aplicación desde el panel o el menú del icono para revisar los puntos. El menú **Salir** cierra la interfaz. Los avisos de bandeja dependen de la configuración de notificaciones de Windows y sus incidencias también aparecen al abrir el panel.
 
+En **Versiones**, despliega **Horario y bandeja**. Puedes activar **Mostrar estado al iniciar sesión** y pulsar **Aplicar inicio** para registrar el monitor del espacio con el usuario actual. Para retirarlo, desmarca la opción y vuelve a aplicar. La consulta inicial se hace después de abrir la sesión y usa la instalación estable del ejecutor. El recorrido de cerrar y abrir sesión en un equipo real forma parte de las comprobaciones del piloto.
+
 `SHA256SUMS.txt` contiene el SHA-256 y la ruta relativa de cada archivo distribuido. El artefacto de GitHub incluye el código fuente del commit en `FolderTwin-source.tar` y las licencias de la distribución. El catálogo de la aplicación es independiente y verifica el contenido de los trabajos.
