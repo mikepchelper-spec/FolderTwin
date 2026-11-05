@@ -18,6 +18,8 @@ internal sealed class LabWorkspace
     private readonly byte[] identity;
 
     internal string Root { get; }
+    internal static string PersistentParent => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FolderTwin-Lab", "workspaces");
 
     private LabWorkspace(string root, byte[] identity)
     {
@@ -28,6 +30,25 @@ internal sealed class LabWorkspace
     internal static LabWorkspace Create()
     {
         string root = Directory.CreateTempSubdirectory(Prefix).FullName;
+        return Register(root);
+    }
+
+    internal static LabWorkspace CreatePersistent()
+    {
+        string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        using var parent = new DirectoryFence(local);
+        if (new DriveInfo(Path.GetPathRoot(local)!).DriveType != DriveType.Fixed)
+            throw new InvalidDataException("El espacio de pruebas requiere almacenamiento fijo local.");
+        using var application = WindowsProbeNative.OpenOrCreatePlainDirectory(parent.Root, "FolderTwin-Lab");
+        using var workspaces = WindowsProbeNative.OpenOrCreatePlainDirectory(application, "workspaces");
+        string name = Prefix + Guid.NewGuid().ToString("N");
+        using var root = WindowsProbeNative.OpenOrCreatePlainDirectory(workspaces, name);
+        RequireEmpty(root);
+        return Register(Path.Combine(PersistentParent, name));
+    }
+
+    private static LabWorkspace Register(string root)
+    {
         using var fence = new DirectoryFence(root);
         byte[] identity = WindowsProbeNative.DirectoryIdentity(fence.Root);
         using var marker = WindowsProbeNative.OpenPlainFile(fence.Root, MarkerName, FileAccess.Write, FileShare.None, FileMode.CreateNew);
@@ -39,9 +60,10 @@ internal sealed class LabWorkspace
 
     internal static LabWorkspace Open(string root)
     {
-        string relative = Path.GetRelativePath(Path.GetTempPath(), root);
-        if (!Path.IsPathFullyQualified(root) || Path.GetFullPath(root) != root || relative != Path.GetFileName(root) ||
-            !relative.StartsWith(Prefix, StringComparison.Ordinal))
+        string? parent = Path.GetDirectoryName(root);
+        if (!Path.IsPathFullyQualified(root) || Path.GetFullPath(root) != root ||
+            parent != Path.TrimEndingDirectorySeparator(Path.GetTempPath()) && parent != PersistentParent ||
+            !Path.GetFileName(root).StartsWith(Prefix, StringComparison.Ordinal))
             throw new InvalidDataException("Elige un espacio desechable creado por FolderTwin.");
         using var fence = new DirectoryFence(root);
         byte[] identity = WindowsProbeNative.DirectoryIdentity(fence.Root);

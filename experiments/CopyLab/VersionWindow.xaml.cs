@@ -2,6 +2,8 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation.Peers;
@@ -85,6 +87,7 @@ public partial class VersionWindow : Window
             workspace.CheckRoots(selected, current.Destination);
             source = selected;
             backgroundJob = null;
+            JobChoice.SelectedItem = null;
             SourceText.Text = selected;
             SetStatus("El origen está listo para analizar y crear un punto.");
             RefreshActions();
@@ -122,6 +125,107 @@ public partial class VersionWindow : Window
                 using var process = Process.Start(start) ?? throw new IOException("No se pudo iniciar el trabajo.");
                 SetStatus("Trabajo iniciado en segundo plano. Puedes cerrar la ventana. Actualiza el almacén para revisar los puntos confirmados.");
             });
+    }
+
+    private void ScheduleClick(object sender, RoutedEventArgs e)
+    {
+        if (busy || store is not { } current || source is not { } origin)
+            return;
+        if (!TimeOnly.TryParseExact(ScheduleTime.Text, "HH:mm", CultureInfo.InvariantCulture,
+            DateTimeStyles.None, out var time))
+        {
+            SetStatus("Escribe la hora como HH:mm, por ejemplo 20:00.");
+            return;
+        }
+        Start(async () =>
+        {
+            DateTime first = DateTime.Today.Add(time.ToTimeSpan());
+            if (first <= DateTime.Now)
+                first = first.AddDays(1);
+            backgroundJob ??= await Task.Run(() => VersionJob.Create(workspace, origin, current.Destination));
+            Guid id = backgroundJob.Value;
+            await Task.Run(() =>
+            {
+                string executable = LabInstallation.EnsureWorker();
+                using var scheduler = new WindowsSchedule();
+                scheduler.Register(workspace, id, executable, first);
+            });
+            ScheduleText.Text = $"Cada día a las {time:HH:mm}, con tu sesión iniciada. El ejecutor queda instalado en LocalAppData.";
+            SetStatus("Horario registrado y comprobado. Puedes cerrar la interfaz.");
+        });
+    }
+
+    private void RemoveScheduleClick(object sender, RoutedEventArgs e)
+    {
+        if (busy || store is null)
+            return;
+        Start(async () =>
+        {
+            if (backgroundJob is not { } id)
+            {
+                SetStatus("Elige un trabajo guardado para retirar su horario.");
+                return;
+            }
+            await Task.Run(() =>
+            {
+                using var scheduler = new WindowsSchedule();
+                scheduler.Remove(workspace, id);
+            });
+            ScheduleText.Text = "Horario retirado.";
+            SetStatus("Se retiró la ejecución automática de este trabajo.");
+        });
+    }
+
+    private void JobChoiceChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!busy && JobChoice.SelectedItem is VersionJobInfo job)
+            Start(async () =>
+            {
+                SelectJob(job);
+                await ShowScheduleAsync();
+                SetStatus("Trabajo seleccionado.");
+            });
+    }
+
+    private void SelectJob(VersionJobInfo job)
+    {
+        backgroundJob = job.Id;
+        source = Path.Combine(workspace.Root, job.Source);
+        SourceText.Text = "Origen registrado · " + source;
+    }
+
+    private async Task ShowScheduleAsync()
+    {
+        if (Path.GetDirectoryName(workspace.Root) != LabWorkspace.PersistentParent)
+        {
+            ScheduleText.Text = "Para programar, crea un nuevo espacio de pruebas persistente.";
+            return;
+        }
+        if (backgroundJob is not { } id)
+        {
+            ScheduleText.Text = "El horario se ejecuta mientras tengas la sesión iniciada.";
+            return;
+        }
+        try
+        {
+            var information = await Task.Run(() =>
+            {
+                using var scheduler = new WindowsSchedule();
+                return scheduler.Read(workspace, id);
+            });
+            ScheduleText.Text = information switch
+            {
+                null => "Este trabajo no tiene horario.",
+                { MeetsPolicy: false } => "El horario requiere revisión de sus opciones en Windows.",
+                { Enabled: false } => "Horario deshabilitado en Windows.",
+                { LastResult: not (0 or 0x41303) } => "El último intento programado requiere revisión. Puedes consultar el Programador de tareas.",
+                { } task => $"Próxima ejecución · {task.NextRun:g}, con tu sesión iniciada."
+            };
+        }
+        catch (Exception error) when (IsExpected(error))
+        {
+            ScheduleText.Text = "No se pudo consultar el horario. " + error.Message;
+        }
     }
 
     private async Task RunPointAsync(string id, Action write)
@@ -164,6 +268,13 @@ public partial class VersionWindow : Window
             (jobs.Entries.Length > 4 ? $"\nHay {jobs.Entries.Length - 4} trabajos adicionales." : "") +
             (failed > 0 ? $"\n{failed} trabajos tienen un último intento pendiente de resolver." : "") +
             (jobs.Unreadable > 0 ? $"\n{jobs.Unreadable} registros de trabajos requieren revisión." : "");
+        JobChoice.ItemsSource = jobs.Entries.Select(entry => entry.Job).ToArray();
+        var chosen = jobs.Entries.Select(entry => entry.Job).FirstOrDefault(job => job.Id == backgroundJob) ??
+            (source is null && jobs.Entries.Length == 1 ? jobs.Entries[0].Job : null);
+        JobChoice.SelectedItem = chosen;
+        if (chosen is not null)
+            SelectJob(chosen);
+        await ShowScheduleAsync();
     }
 
     private void TimelineChanged(object sender, SelectionChangedEventArgs e)
@@ -355,6 +466,10 @@ public partial class VersionWindow : Window
         ChooseSourceButton.IsEnabled = RefreshButton.IsEnabled = !busy && store is not null;
         CreatePointButton.IsEnabled = ChooseSourceButton.IsEnabled && source is not null;
         BackgroundButton.IsEnabled = CreatePointButton.IsEnabled;
+        bool persistent = Path.GetDirectoryName(workspace.Root) == LabWorkspace.PersistentParent;
+        ScheduleButton.IsEnabled = ScheduleTime.IsEnabled = CreatePointButton.IsEnabled && persistent;
+        RemoveScheduleButton.IsEnabled = !busy && backgroundJob is not null && persistent;
+        JobChoice.IsEnabled = !busy && store is not null;
         ResumeButton.IsEnabled = !busy && row?.Pending is not null;
         VerifyButton.IsEnabled = RestorePointButton.IsEnabled = confirmed;
         RestoreFileButton.IsEnabled = confirmed && entry is { IsDirectory: false };
@@ -365,7 +480,7 @@ public partial class VersionWindow : Window
     }
 
     private static bool IsExpected(Exception error) => error is IOException or InvalidDataException or
-        UnauthorizedAccessException or Win32Exception or ArgumentException or JsonException;
+        UnauthorizedAccessException or Win32Exception or ArgumentException or JsonException or COMException;
 
     private static string JobStateText(VersionJobState state) => state switch
     {

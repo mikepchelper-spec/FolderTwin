@@ -9,8 +9,9 @@ public partial class App : Application
         base.OnStartup(e);
         bool smoke = e.Args is ["--smoke"];
         bool indexScale = e.Args is ["--index-scale"];
+        bool scheduleSmoke = e.Args is ["--schedule-smoke"];
         bool worker = e.Args is ["--run-version-job", _, _];
-        if (e.Args.Length != 0 && !smoke && !indexScale && !worker)
+        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke)
         {
             Shutdown(2);
             return;
@@ -18,6 +19,12 @@ public partial class App : Application
 
         try
         {
+            if (scheduleSmoke)
+            {
+                await ScheduleProbe.RunAsync();
+                Shutdown(0);
+                return;
+            }
             if (worker)
             {
                 if (!Guid.TryParseExact(e.Args[2], "N", out Guid id))
@@ -57,7 +64,7 @@ public partial class App : Application
         }
         catch (Exception error)
         {
-            if (smoke || indexScale || worker)
+            if (smoke || indexScale || worker || scheduleSmoke)
                 Console.Error.WriteLine(error);
             else
                 MessageBox.Show(error.Message, "FolderTwin · Laboratorio", MessageBoxButton.OK, MessageBoxImage.Error);

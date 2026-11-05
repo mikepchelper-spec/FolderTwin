@@ -2,7 +2,7 @@
 
 *Copias locales. Versiones recuperables.*
 
-App sencilla de respaldo para Windows. La alfa permite elegir carpetas, copiar, verificar y restaurar datos sintéticos en un espacio temporal. El uso con datos personales queda para el piloto.
+App sencilla de respaldo para Windows. La alfa permite elegir carpetas, copiar, verificar y restaurar datos sintéticos en un espacio de pruebas. El uso con datos personales queda para el piloto.
 
 ## Leer primero
 
@@ -54,13 +54,15 @@ Usa `-- --catalog` para probar los catálogos JSONL duplicados, su confirmación
 
 Usa `-- --resume` para terminar trabajadores de prueba y reabrir sus lotes pendientes desde otros procesos. Reconoce lo ya verificado, recupera temporales con registro válido y deja pendientes los archivos que aún necesitan el origen. Los datos sin verificar quedan para revisión. [Descriptor de ejecución](experiments/CopyProbe/PENDING.md).
 
-Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Pulsa **Nuevo espacio temporal** y luego **Ver carpeta temporal**. En el Explorador, crea subcarpetas directas para el origen, el destino y la restauración. Coloca únicamente archivos sintéticos en el origen y deja vacías las otras carpetas. También están disponibles las carpetas de demostración **Origen**, **Origen ampliado** y **Destino** al iniciar la ventana.
+Para abrir la ventana de laboratorio en Windows, ejecuta `dotnet run --project experiments/CopyLab`. Pulsa **Nuevo espacio de pruebas** y luego **Ver carpeta de pruebas**. Los nuevos espacios quedan bajo `%LocalAppData%\FolderTwin-Lab\workspaces` y conservan su marcador de identidad. En el Explorador, crea subcarpetas directas para el origen, el destino y la restauración. Coloca únicamente archivos sintéticos en el origen y deja vacías las otras carpetas. También están disponibles las carpetas de demostración **Origen**, **Origen ampliado** y **Destino** al iniciar la ventana.
 
 Elige el origen y el destino y pulsa **Analizar carpetas**. La vista previa muestra el recuento, el tamaño de contenido y, para los trabajos configurables, el espacio disponible y la reserva. Elige **Copiar y verificar**. Si el lote queda parcial, revisa las incidencias y usa **Reintentar copia**. Tras la confirmación, puedes usar **Verificar respaldo** o **Restaurar y verificar**. El trabajo configurable permite elegir una subcarpeta vacía distinta para cada restauración.
 
 En un espacio temporal, abre **Versiones** para usar una carpeta dedicada como almacén. Elige un origen sintético y crea un punto. Selecciona una fecha para recorrer sus carpetas, verificar los objetos o restaurar el punto o un archivo. El filtro de cambios compara la fecha seleccionada con la anterior. Si seleccionas un archivo eliminado, se recupera desde el punto anterior. Los puntos pendientes ofrecen **Reintentar punto**. La vista puede reconstruir su índice SQLite desde los catálogos confirmados. Si el índice dañado sigue presente, la ventana lo conserva y muestra la vista directa con un aviso.
 
-**Copiar en segundo plano** registra el trabajo y abre un ejecutor independiente. Puedes cerrar la ventana y volver a abrir el almacén para revisar sus puntos y los resultados de los trabajos. El ejecutor comprueba las identidades registradas. Si hay un punto pendiente para el mismo origen, intenta completarlo antes de crear otro. Un origen o destino ausente queda indicado en el historial. La programación horaria y la bandeja siguen pendientes.
+**Copiar en segundo plano** registra el trabajo y abre un ejecutor independiente. Puedes cerrar la ventana y volver a abrir el almacén para revisar sus puntos y los resultados de los trabajos. El ejecutor comprueba las identidades registradas. Si hay un punto pendiente para el mismo origen, intenta completarlo antes de crear otro. Un origen o destino ausente queda indicado en el historial.
+
+En la alfa portable, **Programar** instala y verifica una copia del paquete bajo `%LocalAppData%\FolderTwin-Lab\app` y registra un horario diario para el usuario actual. Requiere un espacio de pruebas persistente y una sesión iniciada. Introduce la hora del equipo como HH:mm. La lista de trabajos guardados permite recuperar una selección anterior y **Quitar horario** retira su tarea de Windows. Los espacios temporales de versiones anteriores siguen admitiendo copia y restauración. La bandeja y sus avisos siguen pendientes.
 
 Durante una copia, **Cancelar copia** solicita detener el lote en el próximo punto seguro. Si un archivo está en curso, el motor termina ese paso y conserva lo ya verificado para el reintento. Si la confirmación del catálogo ya empezó, el lote puede terminar.
 

@@ -22,14 +22,15 @@ public partial class MainWindow
     private void CreateWorkspaceClick(object sender, RoutedEventArgs e)
     {
         if (CreateWorkspaceButton.IsEnabled)
-            activeTask = SwitchWorkspaceAsync(LabWorkspace.Create);
+            activeTask = SwitchWorkspaceAsync(LabWorkspace.CreatePersistent);
     }
 
     private void OpenWorkspaceClick(object sender, RoutedEventArgs e)
     {
         if (!OpenWorkspaceButton.IsEnabled)
             return;
-        string? root = PickFolder("Elige un espacio FolderTwin-Workspace", Path.GetTempPath());
+        string? root = PickFolder("Elige un espacio FolderTwin-Workspace",
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
         if (root is not null)
             activeTask = SwitchWorkspaceAsync(() => LabWorkspace.Open(Path.TrimEndingDirectorySeparator(root)));
     }
@@ -49,7 +50,7 @@ public partial class MainWindow
             copyStarted = copied = restored = false;
             ResultsList.ItemsSource = HistoryList.ItemsSource = null;
             HistoryStatus.Text = "Aún no hay intentos registrados.";
-            SessionText.Text = $"Espacio temporal · {workspace.Root}\nSe conserva al cerrar la ventana.";
+            SessionText.Text = $"Espacio de pruebas · {workspace.Root}\nSe conserva al cerrar la ventana.";
             SourceText.Text = "Elige una subcarpeta con datos sintéticos.";
             DestinationText.Text = "Elige una subcarpeta vacía del espacio.";
             PreviewText.Text = "Analiza las carpetas para revisar qué se copiará.";
@@ -57,7 +58,7 @@ public partial class MainWindow
         }
         catch (Exception error) when (IsLabError(error))
         {
-            SetStatus("No se pudo abrir el espacio temporal. " + error.Message);
+            SetStatus("No se pudo abrir el espacio de pruebas. " + error.Message);
         }
         finally
         {
@@ -76,7 +77,7 @@ public partial class MainWindow
         }
         catch (Exception error) when (IsLabError(error))
         {
-            SetStatus("No se pudo abrir la carpeta temporal. " + error.Message);
+            SetStatus("No se pudo abrir la carpeta de pruebas. " + error.Message);
         }
     }
 

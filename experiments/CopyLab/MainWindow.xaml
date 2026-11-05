@@ -21,16 +21,16 @@
         <StackPanel Margin="28,24" MaxWidth="680">
             <TextBlock Text="FolderTwin" FontSize="13" FontWeight="SemiBold" />
             <TextBlock Text="Laboratorio de copia" FontSize="30" FontWeight="SemiBold" Margin="0,5,0,0" />
-            <TextBlock Text="Prueba un trabajo con datos sintéticos en un espacio temporal o usa las carpetas de demostración."
+            <TextBlock Text="Prueba un trabajo con datos sintéticos en un espacio desechable o usa las carpetas de demostración."
                        Style="{StaticResource Detail}" />
             <WrapPanel Margin="0,0,0,8">
-                <Button x:Name="CreateWorkspaceButton" Content="_Nuevo espacio temporal" Click="CreateWorkspaceClick" Margin="0,0,8,8" />
+                <Button x:Name="CreateWorkspaceButton" Content="_Nuevo espacio de pruebas" Click="CreateWorkspaceClick" Margin="0,0,8,8" />
                 <Button x:Name="OpenWorkspaceButton" Content="Abrir _espacio" Click="OpenWorkspaceClick" Margin="0,0,8,8" />
                 <Button x:Name="OpenPreviousButton" Content="Abrir _demostración anterior" Click="OpenPreviousClick"
                         Margin="0,0,8,8" AutomationProperties.AutomationId="OpenPreviousSession" />
                 <Button x:Name="OpenWorkspaceJobButton" Content="Abrir _trabajo" Click="OpenWorkspaceJobClick"
                         Visibility="Collapsed" Margin="0,0,8,8" />
-                <Button x:Name="BrowseWorkspaceButton" Content="Ver carpeta temporal" Click="BrowseWorkspaceClick"
+                <Button x:Name="BrowseWorkspaceButton" Content="Ver carpeta de pruebas" Click="BrowseWorkspaceClick"
                         Visibility="Collapsed" Margin="0,0,8,8" />
                 <Button x:Name="VersionsButton" Content="_Versiones" Click="VersionsClick"
                         Visibility="Collapsed" Margin="0,0,8,8" />
