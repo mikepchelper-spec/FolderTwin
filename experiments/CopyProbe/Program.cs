@@ -17,6 +17,8 @@ if (args is ["--uncached"])
     return UncachedProbe.Run();
 if (args is ["--paths"])
     return PathProbe.Run();
+if (args is ["--product-roots"])
+    return LocalJobRootsProbe.Run();
 if (args is ["--inventory"])
     return InventoryProbe.Run();
 if (args is ["--batch"])

@@ -10,6 +10,7 @@ Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 
 - [Plan de trabajo](PLAN.md): experiencia, arquitectura, prioridades, pruebas y límites.
 - [Matriz de aceptación](ACEPTACION.md): requisitos de las etapas 2 a 5, evidencia y validaciones pendientes del piloto.
+- [Alcance y aceptación de la v1](V1.md): trabajo de producto, criterios de salida y comprobaciones externas.
 - [Guía del piloto](PILOTO.md): preparación, observación, recuperación y criterios de detención.
 - [Investigación](INVESTIGACION.md): necesidades observadas, documentación técnica y fuentes.
 - [Nombres](NOMBRES.md): elección, alternativas anteriores y estado de la comprobación de disponibilidad.

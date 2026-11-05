@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Microsoft.Win32.SafeHandles;
 
 internal enum CopyStep { Writing, Written, Flushing, Flushed, WritingReceipt, FlushingReceipt, ReceiptFlushed, Verified, Published }
 
@@ -12,16 +13,43 @@ internal static class VerifiedCopy
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var fence = recoveryRoot is null ? null : new DirectoryFence(recoveryRoot, source, temporary, destination);
-        var directory = fence?.Parent(destination);
+        Copy(source, destination, temporary, fence?.Parent(source), fence?.Parent(destination),
+            checkpoint, expectedHash, cancellationToken, binding, metadata);
+    }
+
+    internal static void RunBound(LocalJobRoots roots, DestinationBinding binding, string sourceRelative, string destinationRelative,
+        string temporaryRelative, byte[] expectedHash, Action<CopyStep, string>? checkpoint = null,
+        CancellationToken cancellationToken = default, FileMetadata? metadata = null)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (Path.IsPathRooted(sourceRelative) || Path.IsPathRooted(destinationRelative) || Path.IsPathRooted(temporaryRelative))
+            throw new ArgumentException("El trabajo solo admite rutas relativas a sus carpetas verificadas.");
+        using var marker = binding.OpenVerifiedMarker(roots.DestinationHandle);
+        string source = Path.Combine(roots.Review.Source.VolumePath, sourceRelative);
+        string destination = Path.Combine(roots.Review.Destination.VolumePath, destinationRelative);
+        string temporary = Path.Combine(roots.Review.Destination.VolumePath, temporaryRelative);
+        using var origin = new DirectoryFence(roots.Review.Source.VolumePath, source);
+        using var target = new DirectoryFence(roots.Review.Destination.VolumePath, destination, temporary);
+        if (!WindowsProbeNative.DirectoryIdentity(origin.Root).AsSpan().SequenceEqual(roots.Review.Source.Identity))
+            throw new InvalidDataException("La raíz de origen cambió desde la revisión.");
+        binding.RequireDirectoryIdentity(target.Root);
+        Copy(source, destination, temporary, origin.Parent(source), target.Parent(destination),
+            checkpoint, expectedHash, cancellationToken, binding: null, metadata);
+    }
+
+    private static void Copy(string source, string destination, string temporary,
+        SafeFileHandle? sourceDirectory, SafeFileHandle? directory, Action<CopyStep, string>? checkpoint,
+        byte[]? expectedHash, CancellationToken cancellationToken, DestinationBinding? binding, FileMetadata? metadata)
+    {
         using var marker = binding?.OpenVerifiedMarker(
             directory ?? throw new ArgumentException("A configured copy requires a trusted fixture root."));
         using var operation = directory is null ? null : CopyRecovery.Begin(directory, temporary, destination);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        using (var input = fence is null
+        using (var input = sourceDirectory is null
             ? new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read)
-            : WindowsProbeNative.OpenPlainFile(fence.Parent(source), source, FileAccess.Read, FileShare.Read))
+            : WindowsProbeNative.OpenPlainFile(sourceDirectory, source, FileAccess.Read, FileShare.Read))
         {
-            if (fence is not null)
+            if (sourceDirectory is not null)
                 WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, Path.GetFileName(source));
             using var output = directory is null
                 ? new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
@@ -44,7 +72,7 @@ internal static class VerifiedCopy
                 metadata.Apply(output.SafeFileHandle);
             }
             output.Flush(flushToDisk: true);
-            if (fence is not null)
+            if (sourceDirectory is not null)
                 WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, Path.GetFileName(source));
         }
         checkpoint?.Invoke(CopyStep.Flushed, temporary);

@@ -71,6 +71,13 @@ internal static class VolumeProbe
             if (reader.ReadLine() != label || reader.ReadLine() is not null)
                 throw new InvalidDataException("The disposable volume gate is missing or incorrect.");
 
+        using (var roots = new LocalJobRoots(state, root))
+        {
+            Check(!roots.Review.SameVolume, "Product roots did not distinguish the disposable NTFS volume from the runner volume.");
+            using var reopened = LocalJobRoots.Reopen(roots.Review);
+            Check(reopened.Review.AvailableBytes > 0, "The product review could not reopen the disposable destination.");
+        }
+
         string source = Path.Combine(root, "source.bin");
         string pending = Path.Combine(root, "pending.tmp");
         string final = Path.Combine(root, "final.bin");
@@ -103,6 +110,7 @@ internal static class VolumeProbe
 
         DestinationBinding binding = DestinationBinding.Register(fence.Root);
         binding.SaveNew(configuration);
+        VerifyProductTransfer(state, root, binding);
         WriteNew(source, content);
         WriteNew(previous, Previous);
 
@@ -163,6 +171,36 @@ internal static class VolumeProbe
 
     private static bool IsDiskFull(IOException error) =>
         error.HResult is unchecked((int)0x80070070) or unchecked((int)0x80070027);
+
+    private static void VerifyProductTransfer(string sourceRoot, string destinationRoot, DestinationBinding binding)
+    {
+        const string name = "product-cross-volume.bin";
+        const string draft = "product-cross-volume.tmp";
+        string source = Path.Combine(sourceRoot, name);
+        string final = Path.Combine(destinationRoot, name);
+        string temporary = Path.Combine(destinationRoot, draft);
+        byte[] hash = SHA256.HashData("verified across two volumes"u8);
+        WriteNew(source, "verified across two volumes"u8);
+        using var roots = new LocalJobRoots(sourceRoot, destinationRoot);
+        try
+        {
+            VerifiedCopy.RunBound(roots, binding, name, name, draft, hash, (step, _) =>
+            {
+                if (step == CopyStep.Verified)
+                    throw new InjectedFailure();
+            });
+            throw new InvalidOperationException("The cross-volume transfer did not stop at its verification boundary.");
+        }
+        catch (InjectedFailure)
+        {
+            Check(!File.Exists(final), "The interrupted cross-volume copy was published.");
+        }
+        Check(CopyRecovery.Recover(destinationRoot, temporary, final, binding, hash) == RecoveryResult.Published,
+            "The cross-volume copy could not recover on the destination volume.");
+        CheckHash(final, hash);
+        CheckHash(source, hash);
+        Console.WriteLine("PASS verified transfer across two NTFS volumes recovered at the destination without changing the source.");
+    }
 
     private static void WriteNew(string path, ReadOnlySpan<byte> bytes)
     {

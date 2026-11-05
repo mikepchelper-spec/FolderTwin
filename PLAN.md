@@ -6,6 +6,8 @@ Fecha de inicio 2026-10-29. Revisión del plan y los ensayos 2026-11-04, incluid
 
 ## 1. Resultado que buscamos
 
+La [matriz de la v1](V1.md) registra el paso de la alfa de laboratorio a la aplicación distribuible. Conserva por separado la aceptación ya realizada y las validaciones externas del producto.
+
 En menos de dos minutos, una persona debe poder elegir una carpeta, elegir el disco de respaldo y entender qué va a ocurrir. Debe poder recuperar un archivo desde la misma app sin saber qué es un manifiesto, un hash o un comando.
 
 FolderTwin protege carpetas mediante copias locales que el usuario puede ejecutar bajo demanda o programar. El nombre evoca una segunda copia; el producto también contempla versiones recuperables y no se limita al espejo. El disco de destino puede estar dentro del equipo o conectado a él. Una copia en el mismo disco físico no protege frente al fallo de ese disco.

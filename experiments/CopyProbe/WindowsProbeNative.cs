@@ -211,6 +211,22 @@ internal static class WindowsProbeNative
             throw new InvalidDataException($"«{label}» tiene flujos de datos alternativos. Requiere revisión.");
     }
 
+    internal static unsafe void RequireNtfsVolume(SafeFileHandle directory, bool writable)
+    {
+        Span<char> fileSystem = stackalloc char[261];
+        fixed (char* name = fileSystem)
+        {
+            if (!GetVolumeInformationByHandle(directory, null, 0, null, null, out uint flags, name, (uint)fileSystem.Length))
+                throw new IOException("No se pudo identificar el volumen de la carpeta.", new Win32Exception(Marshal.GetLastPInvokeError()));
+            int end = fileSystem.IndexOf('\0');
+            if (end < 0 || !((ReadOnlySpan<char>)fileSystem[..end]).Equals("NTFS", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("FolderTwin requiere un volumen local NTFS.");
+            const uint readOnlyVolume = 0x00080000;
+            if (writable && (flags & readOnlyVolume) != 0)
+                throw new InvalidDataException("El volumen de destino es de solo lectura.");
+        }
+    }
+
     internal readonly record struct DirectoryEntry(string Name, FileAttributes Attributes, long Length);
 
     internal static IEnumerable<DirectoryEntry> ReadDirectory(SafeFileHandle directory)
@@ -367,6 +383,11 @@ internal static class WindowsProbeNative
 
     [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", SetLastError = true)]
     private static extern unsafe uint GetFinalPathNameByHandle(SafeFileHandle file, char* path, uint size, uint flags);
+
+    [DllImport("kernel32.dll", EntryPoint = "GetVolumeInformationByHandleW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern unsafe bool GetVolumeInformationByHandle(SafeFileHandle file, char* volumeName, uint volumeNameSize,
+        uint* serialNumber, uint* maximumComponentLength, out uint flags, char* fileSystemName, uint fileSystemNameSize);
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct IoStatusBlock

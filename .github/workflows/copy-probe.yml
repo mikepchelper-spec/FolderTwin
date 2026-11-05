@@ -27,6 +27,8 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --uncached
       - name: Verify directory rename and junction behavior
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --paths
+      - name: Verify read-only inspection and reopening of product roots
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-roots
       - name: Verify bounded metadata inventory and partial results
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --inventory
       - name: Verify synthetic batches, partial results, and retry
