@@ -10,10 +10,12 @@ public partial class App : Application
         bool smoke = e.Args is ["--smoke"];
         bool indexScale = e.Args is ["--index-scale"];
         bool scheduleSmoke = e.Args is ["--schedule-smoke"];
+        bool productPreview = e.Args is ["--product-preview"];
+        bool productSmoke = e.Args is ["--product-smoke"];
         bool trayStartup = e.Args is ["--tray-workspace", _];
         bool scheduled = e.Args is ["--run-scheduled-version-job", _, _];
         bool worker = scheduled || e.Args is ["--run-version-job", _, _];
-        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup)
+        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !productSmoke)
         {
             Shutdown(2);
             return;
@@ -21,6 +23,21 @@ public partial class App : Application
 
         try
         {
+            if (productSmoke)
+            {
+                await ProductWindow.RunSmokeAsync();
+                Shutdown(0);
+                return;
+            }
+            if (productPreview)
+            {
+                var product = new ProductWindow();
+                MainWindow = product;
+                await product.InitializeAsync();
+                ShutdownMode = ShutdownMode.OnMainWindowClose;
+                product.Show();
+                return;
+            }
             if (scheduleSmoke)
             {
                 await ScheduleProbe.RunAsync();
@@ -73,7 +90,7 @@ public partial class App : Application
         }
         catch (Exception error)
         {
-            if (smoke || indexScale || worker || scheduleSmoke)
+            if (smoke || indexScale || worker || scheduleSmoke || productSmoke)
                 Console.Error.WriteLine(error);
             else
                 MessageBox.Show(error.Message, "FolderTwin · Laboratorio", MessageBoxButton.OK, MessageBoxImage.Error);

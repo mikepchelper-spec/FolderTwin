@@ -29,6 +29,8 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --paths
       - name: Verify read-only inspection and reopening of product roots
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-roots
+      - name: Verify durable product job registration
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-jobs
       - name: Verify bounded metadata inventory and partial results
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --inventory
       - name: Verify synthetic batches, partial results, and retry
@@ -90,6 +92,10 @@ jobs:
             Get-Content -LiteralPath $errorLog
             throw "The packaged WPF smoke test exited with $($process.ExitCode)."
           }
+          $productLog = Join-Path $env:RUNNER_TEMP 'FolderTwin-product-smoke.err'
+          $product = Start-Process -FilePath (Join-Path $outputA 'CopyLab.exe') -WorkingDirectory $outputA -ArgumentList '--product-smoke' -WindowStyle Hidden -RedirectStandardError $productLog -PassThru -Wait
+          Get-Content -LiteralPath $productLog
+          if ($product.ExitCode -ne 0) { throw "The packaged product wizard exited with $($product.ExitCode)." }
           $scheduleLog = Join-Path $env:RUNNER_TEMP 'FolderTwin-schedule-smoke.err'
           $schedule = Start-Process -FilePath (Join-Path $outputA 'CopyLab.exe') -WorkingDirectory $outputA -ArgumentList '--schedule-smoke' -WindowStyle Hidden -RedirectStandardError $scheduleLog -PassThru -Wait
           Get-Content -LiteralPath $scheduleLog

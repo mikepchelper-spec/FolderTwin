@@ -27,8 +27,7 @@ internal sealed class LocalJobRoots : IDisposable
             {
                 var origin = Inspect(SourceHandle, writable: false);
                 var target = Inspect(DestinationHandle, writable: true);
-                if (origin.Identity.AsSpan().SequenceEqual(target.Identity) ||
-                    Contains(origin.VolumePath, target.VolumePath) || Contains(target.VolumePath, origin.VolumePath))
+                if (origin.Identity.AsSpan().SequenceEqual(target.Identity) || Overlap(origin.VolumePath, target.VolumePath))
                     throw new InvalidDataException("El origen y el destino deben ser carpetas separadas.");
                 Review = new(origin, target, LabWorkspace.AvailableSpace(DestinationHandle),
                     string.Equals(Path.GetPathRoot(origin.VolumePath), Path.GetPathRoot(target.VolumePath), StringComparison.OrdinalIgnoreCase));
@@ -91,8 +90,7 @@ internal sealed class LocalJobRoots : IDisposable
         if (review.FolderId == Guid.Empty)
             throw new InvalidDataException("Falta la identidad de la carpeta dedicada.");
         string path = Path.Combine(review.Parent.VolumePath, review.FolderName);
-        if (path.Equals(review.Source.VolumePath, StringComparison.OrdinalIgnoreCase) ||
-            Contains(path, review.Source.VolumePath) || Contains(review.Source.VolumePath, path))
+        if (Overlap(path, review.Source.VolumePath))
             throw new InvalidDataException("El destino dedicado debe quedar fuera del origen.");
         return path;
     }
@@ -107,8 +105,16 @@ internal sealed class LocalJobRoots : IDisposable
         return new(path, WindowsProbeNative.DirectoryIdentity(handle));
     }
 
-    private static bool Contains(string parent, string child) =>
-        child.StartsWith(parent + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    internal static bool Overlap(string first, string second)
+    {
+        first = Path.TrimEndingDirectorySeparator(first);
+        second = Path.TrimEndingDirectorySeparator(second);
+        return first.Equals(second, StringComparison.OrdinalIgnoreCase) || Contains(first, second) || Contains(second, first);
+
+        static bool Contains(string parent, string child) =>
+            child.StartsWith(Path.EndsInDirectorySeparator(parent) ? parent : parent + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase);
+    }
 
     public void Dispose()
     {
