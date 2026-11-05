@@ -332,6 +332,7 @@ public partial class ProductWindow : Window
         int previousStep = step;
         bool wasWizard = Wizard.Visibility == Visibility.Visible;
         bool wasImport = ImportPanel.Visibility == Visibility.Visible;
+        bool wasApplication = ApplicationPanel.Visibility == Visibility.Visible;
         busy = true;
         Wizard.IsEnabled = JobListPanel.IsEnabled = RecoveryPanel.IsEnabled = ImportPanel.IsEnabled = ApplicationPanel.IsEnabled = false;
         SetStatus("Comprobando la selección…");
@@ -347,6 +348,14 @@ public partial class ProductWindow : Window
             if ((wasWizard || wasImport) && JobListPanel.Visibility == Visibility.Visible)
                 (JobList.SelectedItem is null ? (Control)NewJobButton : JobList).Focus();
             if (!wasImport && ImportPanel.Visibility == Visibility.Visible) ChooseImportDestinationButton.Focus();
+            if (!wasApplication && ApplicationPanel.Visibility == Visibility.Visible)
+                _ = Dispatcher.InvokeAsync(() =>
+                {
+                    if (busy || closed || ApplicationPanel.Visibility != Visibility.Visible) return;
+                    ApplicationPanel.UpdateLayout();
+                    System.Windows.Input.FocusManager.SetFocusedElement(this, AcceptApplicationUpdate);
+                    System.Windows.Input.Keyboard.Focus(AcceptApplicationUpdate);
+                }, DispatcherPriority.Input);
         }
     }
 

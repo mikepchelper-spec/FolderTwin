@@ -22,6 +22,7 @@ public partial class ProductWindow
             InstalledVersionChoice.ItemsSource = null;
             InstalledVersionDetail.Text = "";
             AcceptInstalledVersionRemoval.IsChecked = false;
+            SetStatus("Revisa los trabajos antes de instalar, actualizar o retirar la aplicación.");
         });
     }
 

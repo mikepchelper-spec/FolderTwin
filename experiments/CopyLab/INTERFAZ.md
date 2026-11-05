@@ -18,6 +18,8 @@ En el escritorio local se comprobaron los tres trabajos visibles a tamaño inici
 
 Los contenedores de trabajos y archivos recuperables exponen sus etiquetas en lugar del nombre de su tipo interno. Las fechas y cuarentenas usan sus etiquetas accesibles. Actualizar conserva el trabajo seleccionado. El tema claro del fixture usa la API de WPF fijada por el SDK; su diagnóstico experimental está suprimido únicamente en esa línea de desarrollo.
 
+En **Aplicación** se corrigió el estado que quedaba en «Comprobando la selección…» y se establece el foco lógico y de teclado tras mostrar el panel. En la sesión sintética del escritorio se abrió mediante Alt+P, se observó el foco visible en la aceptación, Espacio habilitó el botón y Tab pasó a **Instalar o actualizar ejecutor**. No se ejecutó la instalación mediante esta inspección. El arnés WPF comprueba el foco al abrir el panel. Esta comprobación no sustituye el recorrido con lector de pantalla.
+
 ## Regresión y límites
 
 `--product-smoke` abre una ventana real y comprueba que haya al menos una fila completa y detalles accesibles a 1040 × 740, 760 × 620 y 600 × 500. Comprueba los nombres de trabajos con el peer de UI Automation y la conservación de la selección después de actualizar. Mantiene los recorridos de copia, restauración, planes pendientes, retención, configuración y trabajadores existentes.

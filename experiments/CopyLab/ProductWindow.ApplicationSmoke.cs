@@ -56,8 +56,13 @@ public partial class ProductWindow
                     RejectMaintenance(() => ProductDeployment.RemoveSchedules(registry, review, (_, _) => { }));
             }
             window = new ProductWindow(Open, testSchedule: Configure, testPackageInstall: Prepare, testInstallations: package.Installs);
+            window.Show();
             await window.InitializeAsync();
             await Click(window, window.ManageApplicationButton);
+            await window.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            Check(System.Windows.Input.FocusManager.GetFocusedElement(window) == window.AcceptApplicationUpdate &&
+                (!window.IsActive || System.Windows.Input.Keyboard.FocusedElement == window.AcceptApplicationUpdate),
+                "Opening application management lost keyboard focus.");
             Check(window.ApplicationPanel.Visibility == Visibility.Visible && !window.InstallApplicationButton.IsEnabled &&
                 !window.RemoveApplicationSchedulesButton.IsEnabled && window.ApplicationReviewText.Text.Contains("Renamed", StringComparison.Ordinal),
                 "Application management lost the reviewed jobs or bypassed acceptance.");
