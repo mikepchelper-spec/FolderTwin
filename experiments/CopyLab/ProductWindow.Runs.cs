@@ -106,11 +106,14 @@ public partial class ProductWindow
                 Path.Combine(restoring.Target.Parent.VolumePath, restoring.Target.FolderName) : "") +
             (history.Runs.FirstOrDefault(run => run.RetryRunning)?.Retry is { } retry ? $"\nPróximo reintento · {retry.NextUtc.ToLocalTime():g}" : "") +
             (history.Unreadable > 0 ? $"\n{history.Unreadable} registros ilegibles conservados para revisión." : "");
-        RunHistoryList.ItemsSource = history.Runs.Take(30).Select(run =>
+        string[] historyLabels = history.Runs.Take(30).Select(run =>
             $"Intento {run.Intent.Sequence} · {run.Intent.StartedUtc.ToLocalTime():g} · " +
             (run.Result is { } result ? ResultText(run, result) : run.Running ? "En ejecución" : "Interrumpido") +
             (run.Restore is { } restore && run.Result?.State != ProductRunState.Confirmed ?
                 "\nCarpeta revisada · " + Path.Combine(restore.Target.Parent.VolumePath, restore.Target.FolderName) : "")).ToArray();
+        // Polling unchanged data must not recreate the focused list container every second.
+        if (RunHistoryList.ItemsSource is not string[] previousLabels || !previousLabels.SequenceEqual(historyLabels, StringComparer.Ordinal))
+            RunHistoryList.ItemsSource = historyLabels;
         PauseRunButton.IsEnabled = CancelRunButton.IsEnabled = !busy && active is not null;
         RunControlsPanel.Visibility = active is null ? Visibility.Collapsed : Visibility.Visible;
         OperationStatusText.Text = active?.Progress is { } current ?

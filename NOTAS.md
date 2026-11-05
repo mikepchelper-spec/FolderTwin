@@ -6,6 +6,7 @@ Serie candidata de FolderTwin 1.0, sin declaración de v1 definitiva. La identid
 
 - Las guías distribuidas se separan de los informes de aceptación de desarrollo. El ZIP identifica sus propias fuentes y runtime y no presenta un candidato anterior como actual.
 - Se conserva el foco al abrir recuperación y al realizar consultas consecutivas con Enter. La revisión de interfaz cubre también el retorno entre paneles, los controles de revisión y los estados sin puntos.
+- El historial conserva sus filas, selección y foco durante las consultas periódicas cuando su contenido no ha cambiado.
 
 ## Funciones disponibles
 

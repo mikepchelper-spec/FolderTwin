@@ -14,6 +14,8 @@ La auditoría encontró que el ZIP congelado de `76b7eed` incluía informes ante
 
 La revisión WPF adicional cubre ambos temas, tamaño mínimo, pasos del asistente, hora inválida, cancelación, trabajo sin puntos, recuperación vacía, retorno entre paneles y Tab en configuración/retención. Las pruebas existentes conservan trabajadores, historial, bandeja, importación, cuarentena, instalación y retirada. La aceptación y la identidad final del nuevo paquete se registrarán en ENTREGA después de compilar y probarlo.
 
+La inspección posterior del escritorio detectó recreación del historial en cada consulta de estado, aunque sus etiquetas no cambiasen. El arnés nuevo reprodujo la pérdida de la fila seleccionada y enfocada; falló antes del arreglo. La actualización ahora solo reemplaza las filas cuando cambia su contenido. Pasó la regresión acotada en claro y oscuro. `--product-surface-smoke` permite repetirla sin ejecutar de nuevo todos los motores. Esto justifica un candidato nuevo después del primer paquete de revisión `586aa58`.
+
 La [matriz de la v1](V1.md) registra el paso de la alfa de laboratorio a la aplicación distribuible. Conserva por separado la aceptación ya realizada y las validaciones externas del producto.
 
 La revisión adicional de teclado retuvo `8bde43f`: abrir recuperación y buscar podían perder el foco al deshabilitar temporalmente el panel. El candidato corregido `76b7eed` pasó la regresión WPF con ventana visible, consultas consecutivas con Enter en los temas claro y oscuro y el recorrido normal de los tres modos. Pasaron también Windows CI y el laboratorio VHDX del mismo commit. [Incidencia, paquete y reanudación](ENTREGA.md).

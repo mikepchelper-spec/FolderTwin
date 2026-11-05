@@ -2,6 +2,14 @@
 
 La ventana de producto sigue siendo una vista previa. Esta evidencia cubre la distribución del panel y parte del recorrido de escritorio. V1-10 y las comprobaciones de accesibilidad EXT-05A, EXT-05B y EXT-05C conservan sus propios criterios.
 
+## Revisión del cierre de software
+
+El goal de cierre de software permite terminar el candidato conservando pendientes las pruebas externas sin entorno. El arnés adicional comprueba claro y oscuro, tamaño mínimo, todos los pasos del asistente, hora inválida, cancelación, trabajo sin puntos, recuperación vacía, retorno entre paneles y Tab en configuración/retención, sin ejecutar acciones destructivas por el mero acceso a una pantalla. Instalación, retirada, importación, retención, bandeja y trabajadores conservan sus arneses funcionales separados.
+
+En el paquete de revisión `586aa58`, la inspección de escritorio abrió historial y ajustes. El historial recreaba sus filas en cada consulta de estado: no mantenía estable la fila seleccionada para navegar con teclado. La regresión nueva enfocó la fila y exigió el mismo contenedor, selección y foco tras consultar datos sin cambios. Falló antes del arreglo; pasó después en ambos temas. El refresco solo reemplaza las filas cuando cambia el contenido. `--product-surface-smoke` ejecuta este recorrido acotado; `--product-smoke` también lo incluye. La aceptación desde el paquete definitivo se registra aparte en ENTREGA.
+
+Los peers y la navegación programática WPF se registran como automatización, no como lector activo ni DPI real. Las observaciones de escritorio identifican su paquete y no sustituyen toda la aceptación externa.
+
 El paquete ofrece `FolderTwin.exe` como entrada pública. Sin argumentos abre los trabajos de producto; el ejecutable interno `CopyLab.exe` conserva sus protocolos y también abre producto sin argumentos. **Respaldos de alfa** y el argumento de desarrollo `--lab` dan acceso explícito al laboratorio. `--product-startup-smoke` está restringido al runner Windows hospedado: abre el ejecutable público sin argumentos con un perfil vacío, comprueba el título de trabajos y su cierre sin crear trabajos. Este ensayo comprueba el arranque, no todo el recorrido de instalación.
 
 La ventana de producto, el ejecutable y la bandeja usan `Assets/FolderTwin.ico`, con seis tamaños entre 16 y 256 píxeles. La geometría propia está en `Assets/FolderTwin.svg`; `scripts/New-AppIcon.ps1` exporta el ICO en Windows. La exportación repetida produjo los mismos bytes en el entorno de desarrollo. La distribución usa el recurso versionado, sin generarlo durante la compilación. La bandeja libera su copia del icono al cerrarse. La comprobación de escalado de Windows sigue pendiente.

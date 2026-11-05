@@ -97,7 +97,7 @@
                         <Expander Header="Carpetas del trabajo" Margin="0,4,0,4"><TextBlock x:Name="SelectedJobText" TextWrapping="Wrap" /></Expander>
                         <TextBlock Text="La pausa y la cancelación se atienden entre archivos o pasos recuperables. Puedes cerrar la ventana mientras el ejecutor sigue trabajando."
                                    TextWrapping="Wrap" Margin="0,4,0,4" />
-                        <Expander Header="Historial e incidencias" Margin="0,4,0,4">
+                        <Expander x:Name="RunHistoryPanel" Header="Historial e incidencias" Margin="0,4,0,4">
                             <ListBox x:Name="RunHistoryList" MaxHeight="180" AutomationProperties.Name="Historial del trabajo seleccionado">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" /></DataTemplate>

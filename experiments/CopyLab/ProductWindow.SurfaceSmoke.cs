@@ -8,7 +8,7 @@ namespace CopyLab;
 
 public partial class ProductWindow
 {
-    private static async Task RunSurfaceSmokeAsync()
+    internal static async Task RunSurfaceSmokeAsync()
     {
         var fixture = LabWorkspace.Create();
         ProductWindow? window = null;
@@ -63,6 +63,8 @@ public partial class ProductWindow
                 await FocusIs(window.NewJobButton);
 
                 window.SelectJob(job.Id);
+                window.RunHistoryPanel.IsExpanded = true;
+                window.RunHistoryList.BringIntoView();
                 await Click(window, window.RecoverJobButton);
                 await FocusIs(window.RecoveryDates);
                 Check(window.RecoveryFiles.Items.Count == 0 && !window.RestorePointButton.IsEnabled,
@@ -88,6 +90,19 @@ public partial class ProductWindow
                 await FocusIs(window.NewJobButton);
 
                 window.SelectJob(job.Id);
+                window.RunHistoryList.SelectedIndex = 0;
+                window.RunHistoryList.UpdateLayout();
+                var historyItem = window.RunHistoryList.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem
+                    ?? throw new InvalidOperationException("No history row was generated.");
+                window.RestoreKeyboardFocus(historyItem);
+                await FocusIs(historyItem);
+                await window.RefreshRuntimeAsync();
+                await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
+                Check(window.RunHistoryList.SelectedIndex == 0 &&
+                    ReferenceEquals(historyItem, window.RunHistoryList.ItemContainerGenerator.ContainerFromIndex(0)),
+                    "Polling an unchanged history replaced its selected keyboard row.");
+                await FocusIs(historyItem);
+                window.RunHistoryPanel.IsExpanded = false;
                 window.JobSettingsPanel.IsExpanded = true;
                 await TabFrom(window.EditJobName);
                 window.ProductRetentionPanel.IsExpanded = true;
@@ -97,7 +112,7 @@ public partial class ProductWindow
                     "Retention bypassed its review on an empty job.");
                 window.ProductRetentionPanel.IsExpanded = window.JobSettingsPanel.IsExpanded = false;
             }
-            Console.Error.WriteLine("PASS WPF light/dark, minimum size, wizard steps/error/cancel, empty recovery, application/import return focus, settings/retention Tab and review gates. This does not certify a screen reader or real DPI.");
+            Console.Error.WriteLine("PASS WPF light/dark, minimum size, wizard steps/error/cancel, empty recovery, application/import return focus, unchanged history retains its keyboard row, settings/retention Tab and review gates. This does not certify a screen reader or real DPI.");
 
             async Task FocusIs(Control control)
             {
