@@ -48,6 +48,7 @@ public partial class ProductWindow
         RefreshPendingReviewDisplay(job, executing);
         RefreshRuntimeDisplay();
         RefreshProductRetentionActions();
+        ApplicationChoiceChanged(this, new RoutedEventArgs());
         if (RecoveryPanel.Visibility == Visibility.Visible && recoveryJob?.Id == job?.Id)
         {
             bool ready = available && RecoveryDates.SelectedItem is RecoveryDate { Point.Expired: false, Point.Problem: null };

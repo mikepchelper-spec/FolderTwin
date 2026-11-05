@@ -31,6 +31,7 @@ internal sealed class WindowsSchedule : IDisposable
     internal ScheduleInfo? Read(LabWorkspace workspace, Guid id) => ReadTask(LabOwner(workspace, id));
     internal ScheduleInfo? ReadTray(LabWorkspace workspace) => ReadTask(LabOwner(workspace, ScopeId(workspace), tray: true));
     internal ScheduleInfo? ReadProduct(ProductJobRegistry registry, Guid id) => ReadTask(ProductOwner(registry, id));
+    internal ScheduleInfo? ReadProductReviewed(ProductJobRegistry registry, ProductJob job) => ReadTask(ProductOwner(registry, job));
 
     private ScheduleInfo? ReadTask(Owner owner)
     {
@@ -51,9 +52,14 @@ internal sealed class WindowsSchedule : IDisposable
     internal void RegisterProduct(ProductJobRegistry registry, Guid id, string executable, DateTime firstRun, bool daily = true)
     {
         var job = registry.Get(id);
+        RegisterProductReviewed(registry, job, executable, firstRun, daily);
+    }
+
+    internal void RegisterProductReviewed(ProductJobRegistry registry, ProductJob job, string executable, DateTime firstRun, bool daily = true)
+    {
         if (!job.Enabled || job.Retired || job.Options.DailyAt is null)
             throw new InvalidDataException("Habilita el trabajo y elige una hora antes de programarlo.");
-        Register(ProductOwner(registry, id), executable, firstRun, daily);
+        Register(ProductOwner(registry, job), executable, firstRun, daily);
     }
 
     private void Register(Owner owner, string executable, DateTime firstRun, bool daily)
@@ -88,6 +94,7 @@ internal sealed class WindowsSchedule : IDisposable
 
     internal void Remove(LabWorkspace workspace, Guid id) => Remove(LabOwner(workspace, id));
     internal void RemoveProduct(ProductJobRegistry registry, Guid id) => Remove(ProductOwner(registry, id));
+    internal void RemoveProductReviewed(ProductJobRegistry registry, ProductJob job) => Remove(ProductOwner(registry, job));
     private void Remove(Owner owner)
     {
         if (ReadTask(owner) is not null) folder.DeleteTask(owner.Name, 0);
@@ -194,11 +201,11 @@ internal sealed class WindowsSchedule : IDisposable
     }
 
     private static Owner ProductOwner(ProductJobRegistry registry, Guid id)
-    {
-        var job = registry.Get(id);
-        return new($"FolderTwin-Job-{id:N}", $"FolderTwin trabajo v1 {id:N} {registry.RegistrationStamp(id)}",
-            $"--run-scheduled-product-job \"{registry.Location}\" {id:N}", false, true, DailyAt: job.Options.DailyAt);
-    }
+        => ProductOwner(registry, registry.Get(id));
+
+    private static Owner ProductOwner(ProductJobRegistry registry, ProductJob job) =>
+        new($"FolderTwin-Job-{job.Id:N}", $"FolderTwin trabajo v1 {job.Id:N} {registry.RegistrationStamp(job.Id)}",
+            $"--run-scheduled-product-job \"{registry.Location}\" {job.Id:N}", false, true, DailyAt: job.Options.DailyAt);
 
     private static Owner LabOwner(LabWorkspace workspace, Guid id, bool tray = false)
     {

@@ -246,6 +246,7 @@ public partial class ProductWindow
             await ProductTrayProbe.RunAsync();
             await RunProductRetentionSmokeAsync();
             await RunConfigurationSmokeAsync();
+            await RunApplicationSmokeAsync();
         }
         finally
         {

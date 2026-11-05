@@ -13,6 +13,12 @@ internal sealed partial class ProductJobRegistry
     internal ProductJob UpdateSettings(Guid id, string name, TimeOnly? dailyAt, bool enabled, bool retired)
     {
         using var job = OpenJob(id);
+        using var execution = WindowsProbeNative.OpenPlainFile(job, "execution.lock", FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
+        return UpdateSettingsLocked(job, id, name, dailyAt, enabled, retired);
+    }
+
+    private ProductJob UpdateSettingsLocked(SafeFileHandle job, Guid id, string name, TimeOnly? dailyAt, bool enabled, bool retired)
+    {
         var intent = ReadIntent(job, id);
         var definition = ReadConfirmed(job, intent);
         var options = intent.Options with { Name = name, DailyAt = dailyAt };

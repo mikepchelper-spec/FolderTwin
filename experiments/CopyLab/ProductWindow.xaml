@@ -39,6 +39,7 @@
                     <Button x:Name="ProductTrayButton" Content="Minimizar a _bandeja" Click="ProductTrayClick" Margin="0,0,8,4" />
                     <Button x:Name="LegacyRecoveryButton" Content="Respaldos de _alfa" Click="LegacyRecoveryClick" Margin="0,0,8,4"
                             ToolTip="Abre las herramientas compatibles para recuperar respaldos anteriores de laboratorio. No convierte ni adopta sus datos." />
+                    <Button x:Name="ManageApplicationButton" Content="A_plicación" Click="ManageApplicationClick" Margin="0,0,8,4" />
                     <Button x:Name="ResumeRegistrationButton" Content="_Reanudar registro" Click="ResumeRegistrationClick"
                             IsEnabled="False" Margin="0,0,8,4" />
                 </WrapPanel>
@@ -156,6 +157,21 @@
                 </ScrollViewer>
                 </Grid>
             </Grid>
+
+            <ScrollViewer x:Name="ApplicationPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+                    <TextBlock Text="Aplicación y horarios" FontSize="22" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
+                    <TextBlock Text="Puedes usar la carpeta portable o preparar una copia estable para los horarios. Al actualizar, los trabajos habilitados usarán el nuevo ejecutor. Espera a que terminen los trabajadores y reintentos activos." TextWrapping="Wrap" Margin="0,8,0,12" />
+                    <TextBlock x:Name="ApplicationReviewText" TextWrapping="Wrap" />
+                    <CheckBox x:Name="AcceptApplicationUpdate" Content="He revisado los trabajos y quiero actualizar sus horarios propios" Checked="ApplicationChoiceChanged" Unchecked="ApplicationChoiceChanged" Margin="0,12,0,8" />
+                    <Button x:Name="InstallApplicationButton" Content="Instalar o actualizar _ejecutor" Click="InstallApplicationClick" IsEnabled="False" HorizontalAlignment="Left" />
+                    <TextBlock x:Name="InstalledApplicationText" TextWrapping="Wrap" Margin="0,8,0,12" />
+                    <TextBlock Text="Para retirar la aplicación, quita primero sus horarios. Los trabajos quedarán deshabilitados y podrás seguir recuperando sus respaldos. Se conservan la configuración, el historial y los datos." TextWrapping="Wrap" />
+                    <CheckBox x:Name="AcceptRemoveSchedules" Content="Deshabilitar todos los trabajos y retirar sus horarios propios" Checked="ApplicationChoiceChanged" Unchecked="ApplicationChoiceChanged" Margin="0,12,0,8" />
+                    <Button x:Name="RemoveApplicationSchedulesButton" Content="Retirar todos los _horarios" Click="RemoveApplicationSchedulesClick" IsEnabled="False" HorizontalAlignment="Left" />
+                    <Button Content="Volver a _trabajos" Click="ReturnFromApplicationClick" HorizontalAlignment="Left" Margin="0,16,0,0" />
+                </StackPanel>
+            </ScrollViewer>
 
             <ScrollViewer x:Name="ImportPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>

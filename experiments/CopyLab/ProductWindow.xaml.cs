@@ -36,6 +36,7 @@ public partial class ProductWindow : Window
     private readonly Func<bool, string?>? testConfigurationPicker;
     private readonly Func<string, Guid, System.Diagnostics.Process>? testMirrorReviewWorker;
     private readonly Func<string, Guid, Guid, System.Diagnostics.Process>? testAbandonWorker;
+    private readonly Func<string>? testPackageInstall;
     private readonly VersionIndex productIndex;
     private string? origin;
     private string? parent;
@@ -50,7 +51,8 @@ public partial class ProductWindow : Window
         Func<string, Guid, Guid, System.Diagnostics.Process>? testRestoreWorker = null,
         Func<bool, string?>? testConfigurationPicker = null,
         Func<string, Guid, System.Diagnostics.Process>? testMirrorReviewWorker = null,
-        Func<string, Guid, Guid, System.Diagnostics.Process>? testAbandonWorker = null)
+        Func<string, Guid, Guid, System.Diagnostics.Process>? testAbandonWorker = null,
+        Func<string>? testPackageInstall = null)
     {
         this.openRegistry = openRegistry ?? ProductJobRegistry.OpenLocal;
         this.testPicker = testPicker;
@@ -60,6 +62,7 @@ public partial class ProductWindow : Window
         this.testConfigurationPicker = testConfigurationPicker;
         this.testMirrorReviewWorker = testMirrorReviewWorker;
         this.testAbandonWorker = testAbandonWorker;
+        this.testPackageInstall = testPackageInstall;
         productIndex = new(() =>
         {
             using var registry = this.openRegistry();
@@ -273,6 +276,7 @@ public partial class ProductWindow : Window
         ImportPanel.Visibility = Visibility.Collapsed;
         RecoveryPanel.Visibility = Visibility.Collapsed;
         Wizard.Visibility = Visibility.Collapsed;
+        ApplicationPanel.Visibility = Visibility.Collapsed;
         JobListPanel.Visibility = Visibility.Visible;
         NewJobButton.Focus();
     }
@@ -327,14 +331,14 @@ public partial class ProductWindow : Window
         bool wasWizard = Wizard.Visibility == Visibility.Visible;
         bool wasImport = ImportPanel.Visibility == Visibility.Visible;
         busy = true;
-        Wizard.IsEnabled = JobListPanel.IsEnabled = RecoveryPanel.IsEnabled = ImportPanel.IsEnabled = false;
+        Wizard.IsEnabled = JobListPanel.IsEnabled = RecoveryPanel.IsEnabled = ImportPanel.IsEnabled = ApplicationPanel.IsEnabled = false;
         SetStatus("Comprobando la selección…");
         try { await action(); }
         catch (Exception error) when (ProductAutomation.Expected(error)) { SetStatus(error.Message); }
         finally
         {
             busy = false;
-            Wizard.IsEnabled = JobListPanel.IsEnabled = RecoveryPanel.IsEnabled = ImportPanel.IsEnabled = true;
+            Wizard.IsEnabled = JobListPanel.IsEnabled = RecoveryPanel.IsEnabled = ImportPanel.IsEnabled = ApplicationPanel.IsEnabled = true;
             ResumeRegistrationButton.IsEnabled = JobList.SelectedItem is JobRow { Pending: true };
             RefreshProductActions();
             if (Wizard.Visibility == Visibility.Visible && previousStep != step) FocusCurrentStep();

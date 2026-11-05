@@ -20,6 +20,8 @@ El paquete público usa `FolderTwin.exe`, conserva los protocolos internos y abr
 
 El instalador del ejecutor ya puede completar prefijos exactos después de una interrupción y comprobarse desde su propia versión instalada. El arnés local interrumpe archivos, manifiesto y marcador, rechaza datos diferentes y comprueba que una actualización crea otra carpeta sin modificar la anterior. La gestión unificada de la instalación y la retirada permanecen pendientes. [Procedimiento y evidencia](INSTALACION.md).
 
+La sección **Aplicación** ya revisa e instala el ejecutor, actualiza los horarios propios y permite retirarlos deshabilitando los trabajos sin borrar sus respaldos. El recorrido WPF local cubre aceptación, cambios de configuración, exclusión de trabajadores y reintentos y recuperación después de una retirada parcial. La prueba nativa incorpora un segundo paquete y la preservación de una tarea ajena, pendiente de resultado en CI. Falta la limpieza controlada de las versiones instaladas. [Instalación](INSTALACION.md).
+
 En menos de dos minutos, una persona debe poder elegir una carpeta, elegir el disco de respaldo y entender qué va a ocurrir. Debe poder recuperar un archivo desde la misma app sin saber qué es un manifiesto, un hash o un comando.
 
 FolderTwin protege carpetas mediante copias locales que el usuario puede ejecutar bajo demanda o programar. El nombre evoca una segunda copia; el producto también contempla versiones recuperables y no se limita al espejo. El disco de destino puede estar dentro del equipo o conectado a él. Una copia en el mismo disco físico no protege frente al fallo de ese disco.

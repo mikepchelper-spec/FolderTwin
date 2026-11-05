@@ -12,6 +12,7 @@ internal static class ProductScheduleProbe
             throw new InvalidOperationException("The schedule probe requires a disposable hosted Windows runner.");
         var fixture = LabWorkspace.Create();
         string? executable = null;
+        string? updatedExecutable = null;
         var jobs = new List<ProductJob>();
         string settings = Directory.CreateDirectory(Path.Combine(fixture.Root, "settings")).FullName;
         try
@@ -80,6 +81,52 @@ internal static class ProductScheduleProbe
             }
             finally { Directory.Move(detached, versioned.Destination.LastVolumePath); }
             Console.Error.WriteLine("PASS changing the hour detects stale policy; removing and disabling stops a live retry without deleting backup data.");
+            CheckForeignOwnership(registry, jobs.First(job => job.Id != versioned.Id));
+
+            string updatePackage = Directory.CreateDirectory(Path.Combine(fixture.Root, "updated-package")).FullName;
+            foreach (string path in Directory.GetFiles(AppContext.BaseDirectory, "*", SearchOption.AllDirectories))
+            {
+                string target = Path.Combine(updatePackage, Path.GetRelativePath(AppContext.BaseDirectory, path));
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Copy(path, target);
+            }
+            string updateNote = Path.Combine(updatePackage, "UPDATE-PROBE.txt");
+            File.WriteAllText(updateNote, "Synthetic package revision for native update acceptance.\n");
+            string manifest = Path.Combine(updatePackage, "SHA256SUMS.txt");
+            var lines = File.ReadAllLines(manifest).Append(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(updateNote))) + "  UPDATE-PROBE.txt")
+                .OrderBy(line => line[66..], StringComparer.Ordinal).ToArray();
+            File.WriteAllText(manifest, string.Join("\n", lines) + "\n", new System.Text.UTF8Encoding(false));
+            byte[] oldManifest = File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(executable)!, "SHA256SUMS.txt"));
+            updatedExecutable = ProductDeployment.Install(registry, registry.ReviewMaintenance(), () =>
+                LabInstallation.EnsureAt(updatePackage, Path.GetDirectoryName(Path.GetDirectoryName(executable)!)!));
+            Check(updatedExecutable != executable && LabInstallation.IsInstalledWorker(updatedExecutable, product: true) &&
+                oldManifest.AsSpan().SequenceEqual(File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(executable)!, "SHA256SUMS.txt"))),
+                "The native application update replaced its earlier installation.");
+            foreach (var job in registry.List().Jobs)
+                Check(job.Enabled ? scheduler.ReadProduct(registry, job.Id) is { Enabled: true, MeetsPolicy: true } task &&
+                    task.Executable == updatedExecutable : scheduler.ReadProduct(registry, job.Id) is null,
+                    "Updating the package lost schedule policy or re-enabled a disabled job.");
+            var updatedJob = registry.List().Jobs.First(job => job.Enabled);
+            long beforeUpdate = registry.RunHistory(updatedJob.Id).Runs[0].Intent.Sequence;
+            scheduler.RunProductNow(registry, updatedJob.Id);
+            var updatedAttempt = await WaitAsync(updatedJob, beforeUpdate);
+            Check(updatedAttempt.Result?.State == ProductRunState.Confirmed && !VersionStore.OpenProduct(updatedJob).Verify(updatedAttempt.Generation!),
+                "A task redirected to the updated runtime did not create a verified point.");
+            ProductDeployment.RemoveSchedules(registry, registry.ReviewMaintenance());
+            Check(registry.List().Jobs.All(job => !job.Enabled && scheduler.ReadProduct(registry, job.Id) is null),
+                "Application withdrawal did not remove all owned tasks and disable jobs.");
+            foreach (var job in registry.List().Jobs)
+            {
+                var store = VersionStore.OpenProduct(job);
+                string point = registry.RunHistory(job.Id).Runs.First(run => run.Intent.Operation == ProductRunOperation.Backup &&
+                    run.Result?.State == ProductRunState.Confirmed).Generation!;
+                Check(!store.Verify(point), "Withdrawing the application damaged a backup.");
+                string output = Directory.CreateDirectory(Path.Combine(fixture.Root, "restore-withdrawn-" + job.Id.ToString("N"))).FullName;
+                _ = store.Restore(point, output);
+                Check(File.ReadAllText(Path.Combine(output, "dato ñ.txt")) == "contenido del horario de producto",
+                    "A withdrawn job could no longer restore its backup.");
+            }
+            Console.Error.WriteLine("PASS native deployment installs a second verified package, redirects only enabled schedules, runs the updated worker and withdraws owned tasks while preserving restoration for all modes.");
 
             async Task<ProductRunView> WaitAsync(ProductJob job, long after, bool waiting = false, TimeSpan? limit = null)
             {
@@ -109,6 +156,8 @@ internal static class ProductScheduleProbe
             Directory.Delete(fixture.Root, recursive: true);
             if (executable is not null && LabInstallation.IsInstalledWorker(executable, product: true))
                 Directory.Delete(Path.GetDirectoryName(executable)!, recursive: true);
+            if (updatedExecutable is not null && LabInstallation.IsInstalledWorker(updatedExecutable, product: true))
+                Directory.Delete(Path.GetDirectoryName(updatedExecutable)!, recursive: true);
         }
     }
 
@@ -120,6 +169,61 @@ internal static class ProductScheduleProbe
             try { using var released = registry.AcquireScheduledLock(id); return; }
             catch (Exception error) when (VersionJob.SharingViolation(error) && timer.Elapsed < TimeSpan.FromSeconds(20))
             { await Task.Delay(250); }
+        }
+    }
+
+    private static void CheckForeignOwnership(ProductJobRegistry registry, ProductJob job)
+    {
+        var type = Type.GetTypeFromProgID("Schedule.Service") ?? throw new IOException("Scheduler unavailable.");
+        dynamic service = Activator.CreateInstance(type) ?? throw new IOException("Scheduler unavailable.");
+        dynamic? folder = null;
+        string? original = null;
+        string name = $"FolderTwin-Job-{job.Id:N}";
+        string user = System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value;
+        try
+        {
+            service.Connect(); folder = service.GetFolder("\\");
+            dynamic task = folder.GetTask(name);
+            try { original = (string)task.Xml; }
+            finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(task); }
+            var changed = System.Xml.Linq.XDocument.Parse(original);
+            System.Xml.Linq.XNamespace schema = "http://schemas.microsoft.com/windows/2004/02/mit/task";
+            changed.Root!.Element(schema + "RegistrationInfo")!.Element(schema + "Description")!.Value = "Synthetic foreign task ownership";
+            Save(changed.ToString());
+            bool installed = false;
+            Reject(() => ProductDeployment.Install(registry, registry.ReviewMaintenance(), () =>
+            { installed = true; throw new IOException("Must not prepare a package for a foreign task."); }));
+            Reject(() => ProductDeployment.RemoveSchedules(registry, registry.ReviewMaintenance()));
+            dynamic preserved = folder.GetTask(name);
+            try
+            {
+                Check(!installed && ((string)preserved.Xml).Contains("Synthetic foreign task ownership", StringComparison.Ordinal) &&
+                    registry.List().Jobs.All(item => item.Id != job.Id || item.Enabled),
+                    "Deployment changed a foreign task or its job before rejecting ownership.");
+            }
+            finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(preserved); }
+            Console.Error.WriteLine("PASS application maintenance refuses a foreign task before installing, removing tasks or disabling jobs, and preserves its definition.");
+        }
+        finally
+        {
+            try { if (original is not null) Save(original); }
+            finally
+            {
+                if (folder is not null) System.Runtime.InteropServices.Marshal.FinalReleaseComObject(folder);
+                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(service);
+            }
+        }
+
+        void Save(string xml)
+        {
+            dynamic saved = folder!.RegisterTask(name, xml, 6, user, null, 3, null);
+            System.Runtime.InteropServices.Marshal.FinalReleaseComObject(saved);
+        }
+        static void Reject(Action action)
+        {
+            try { action(); }
+            catch (Exception error) when (ProductAutomation.Expected(error)) { return; }
+            throw new InvalidOperationException("Maintenance accepted a foreign task.");
         }
     }
 
