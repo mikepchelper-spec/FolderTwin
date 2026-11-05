@@ -20,14 +20,14 @@ internal sealed partial class VersionStore
     private const string TimeFormat = "yyyyMMdd'T'HHmmssfffffff'Z'";
     private static ReadOnlySpan<byte> StoreMagic => "FTVERS02"u8;
     private static ReadOnlySpan<byte> LegacyStoreMagic => "FTVERS01"u8;
-    private readonly LabWorkspace workspace;
+    private readonly VersionScope workspace;
     private readonly DestinationBinding binding;
     private readonly bool registeredGenerations;
     internal string Destination { get; }
     internal DestinationBinding Binding => binding;
     internal bool SupportsRetention => registeredGenerations;
 
-    private VersionStore(LabWorkspace workspace, string destination, DestinationBinding binding, bool registeredGenerations)
+    private VersionStore(VersionScope workspace, string destination, DestinationBinding binding, bool registeredGenerations)
     {
         this.workspace = workspace;
         Destination = destination;
@@ -56,7 +56,7 @@ internal sealed partial class VersionStore
             record.Write(binding.Marker.ToByteArray());
             record.Flush(flushToDisk: true);
         }
-        return new(workspace, destination, binding, registeredGenerations: true);
+        return new(new VersionScope(workspace), destination, binding, registeredGenerations: true);
     }
 
     internal static VersionStore Open(LabWorkspace workspace, string destination)
@@ -76,7 +76,7 @@ internal sealed partial class VersionStore
             LastVolumePath = WindowsProbeNative.VolumePath(store.Root)
         };
         using var marker = binding.OpenVerifiedMarker(store.Root);
-        return new(workspace, destination, binding, bytes[..8].SequenceEqual(StoreMagic));
+        return new(new VersionScope(workspace), destination, binding, bytes[..8].SequenceEqual(StoreMagic));
     }
 
     internal static string NewGenerationId() =>
@@ -90,6 +90,7 @@ internal sealed partial class VersionStore
         using var scope = workspace.OpenRegisteredRoot();
         workspace.CheckRoots(source, Destination);
         using var origin = new DirectoryFence(source);
+        workspace.RequireSourceIdentity(source, origin.Root);
         using var store = new DirectoryFence(Destination);
         using var marker = binding.OpenVerifiedMarker(store.Root);
         using var operation = OpenLock(store.Root, FileAccess.ReadWrite);
@@ -99,7 +100,7 @@ internal sealed partial class VersionStore
         if (identity.AsSpan().SequenceEqual(binding.Identity))
             throw new InvalidDataException("El origen y el almacén son la misma carpeta.");
         var plan = FolderBatch.AnalyzeSource(workspace.Root, source, Destination, binding, identity, BatchCatalog.VersionMaximumEntries);
-        PendingBatch.ValidatePlan(plan, BatchCatalog.VersionMaximumEntries);
+        workspace.ValidatePlan(plan);
         FolderBatch.RequireSameInventory(plan);
         using var pending = WindowsProbeNative.OpenOrCreatePlainDirectory(store.Root, PendingDirectory);
         var files = IntentFiles(pending, generation);
@@ -108,7 +109,7 @@ internal sealed partial class VersionStore
         if (registeredGenerations)
             _ = GenerationRegistry.Read(store.Root, binding);
         LabWorkspace.RequireSpace(0, LabWorkspace.AvailableSpace(store.Root));
-        PendingBatch.SaveLocked(plan, scope.Root, files, pendingCheckpoint);
+        workspace.SaveIntent(plan, scope.Root, files, pendingCheckpoint);
         RecordExpected(store.Root, plan, generation, registryCheckpoint);
         CopyAndConfirm(store.Root, plan, generation, checkpoint, objectCheckpoint);
     }
@@ -179,8 +180,9 @@ internal sealed partial class VersionStore
 
     private BatchPlan ReadIntent(SafeFileHandle scope, SafeFileHandle store, SafeFileHandle pending, string generation)
     {
-        var plan = PendingBatch.ReadLocked(workspace.Root, Destination, scope, store, IntentFiles(pending, generation));
+        var plan = workspace.ReadIntent(scope, Destination, store, IntentFiles(pending, generation));
         workspace.CheckRoots(plan.Source, Destination);
+        workspace.ValidatePlan(plan);
         if (plan.Target.Marker != binding.Marker || plan.SourceIdentity.AsSpan().SequenceEqual(binding.Identity))
             throw new InvalidDataException("La generación pendiente pertenece a otro almacén.");
         return plan;
@@ -240,8 +242,7 @@ internal sealed partial class VersionStore
                         WindowsProbeNative.RequireSupportedData(observed.SafeFileHandle, file.RelativePath);
                         if (observed.Length != file.Length || !SHA256.HashData(observed).AsSpan().SequenceEqual(file.Hash))
                             throw new InvalidDataException($"El contenido de «{file.RelativePath}» cambió desde el análisis.");
-                        VerifiedCopy.Run(input, final, temporary, objectCheckpoint,
-                            expectedHash: file.Hash, recoveryRoot: workspace.Root);
+                        workspace.Copy(plan.Source, Destination, input, final, temporary, binding, file.Hash, objectCheckpoint);
                     }
                     else if (recovered is not (RecoveryResult.Published or RecoveryResult.AlreadyPublished))
                         throw new InvalidDataException($"El objeto {digest} requiere revisión. Estado {recovered}.");
@@ -321,14 +322,14 @@ internal sealed partial class VersionStore
             relativeFile.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal));
         VerifyObjects(store.Root, files);
         LabWorkspace.RequireSpace(files.Sum(file => file.Length), LabWorkspace.AvailableSpace(target.Root));
-        DestinationBinding.Register(target.Root);
+        var restoreBinding = DestinationBinding.Register(target.Root);
         foreach (string relative in directories)
             FolderBatch.WithDirectories(target.Root, relative, () => true);
         foreach (var file in files)
         {
             string final = Path.Combine(output, file.RelativePath);
-            VerifiedCopy.Run(ObjectPath(Digest(file)), final, FolderBatch.TemporaryPath(output, file.RelativePath),
-                expectedHash: file.Hash, recoveryRoot: workspace.Root, metadata: file.Metadata);
+            workspace.Copy(Destination, output, ObjectPath(Digest(file)), final, FolderBatch.TemporaryPath(output, file.RelativePath),
+                restoreBinding, file.Hash, metadata: file.Metadata);
         }
         foreach (var file in files)
             BatchCatalog.VerifyFile(output, file);

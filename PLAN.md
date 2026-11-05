@@ -8,7 +8,7 @@ Fecha de inicio 2026-10-29. Revisión del plan y los ensayos 2026-11-04, incluid
 
 La [matriz de la v1](V1.md) registra el paso de la alfa de laboratorio a la aplicación distribuible. Conserva por separado la aceptación ya realizada y las validaciones externas del producto.
 
-El asistente WPF de producto ya revisa origen, carpeta de destino, modo y horario propuesto, guarda identidades y permite reabrir trabajos sin los discos presentes. El registro se reanuda tras interrupciones comprobadas con datos sintéticos. Se accede como vista previa mientras se conectan los motores y los horarios. La ejecución habitual sigue en el laboratorio hasta completar esa integración.
+El asistente WPF de producto ya revisa origen, carpeta de destino, modo y horario propuesto, guarda identidades y permite reabrir trabajos sin los discos presentes. El registro se reanuda tras interrupciones comprobadas con datos sintéticos. Versionado, espejo y retención ya admiten el contexto de trabajo de producto en pruebas del motor. Se accede como vista previa mientras se conectan las acciones de interfaz y los horarios. La ejecución habitual sigue en el laboratorio hasta completar esa integración.
 
 En menos de dos minutos, una persona debe poder elegir una carpeta, elegir el disco de respaldo y entender qué va a ocurrir. Debe poder recuperar un archivo desde la misma app sin saber qué es un manifiesto, un hash o un comando.
 

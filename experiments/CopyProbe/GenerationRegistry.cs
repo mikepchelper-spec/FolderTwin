@@ -30,11 +30,16 @@ internal static class GenerationRegistry
         Guid JobId, byte[] Identity, byte[] PreviousHash);
     private sealed record Envelope(Payload Payload, byte[] Checksum);
 
-    internal static void Initialize(SafeFileHandle root, DestinationBinding binding)
+    internal static void Initialize(SafeFileHandle root, DestinationBinding binding, bool resumeInitialization = false)
     {
         byte[] genesis = Encode(new(1, 0, "initialize", "", new byte[32], binding.Marker, binding.Identity, new byte[32]));
         foreach (string name in new[] { PrimaryName, ReplicaName })
         {
+            if (resumeInitialization)
+            {
+                RetentionJournal.WriteFile(root, name, genesis);
+                continue;
+            }
             using var file = WindowsProbeNative.OpenPlainFile(root, name, FileAccess.Write, FileShare.None, FileMode.CreateNew);
             file.Write(genesis);
             file.Flush(flushToDisk: true);

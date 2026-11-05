@@ -67,7 +67,7 @@ internal sealed partial class VersionStore
         catch (FileNotFoundException)
         {
             intent = ReadMirrorSource(plan);
-            PendingBatch.SaveLocked(intent, scope, IntentFiles(pending, plan.Generation));
+            workspace.SaveIntent(intent, scope, IntentFiles(pending, plan.Generation));
         }
         if (!intent.SourceIdentity.AsSpan().SequenceEqual(plan.SourceIdentity) || Path.GetFileName(intent.Source) != plan.Source ||
             !BatchCatalog.WriteMetadata(Stream.Null, intent, plan.Generation).AsSpan().SequenceEqual(plan.DocumentHash))
@@ -158,7 +158,7 @@ internal sealed partial class VersionStore
 
     private BatchPlan ReadMirrorSource(MirrorPlan plan)
     {
-        string source = Path.Combine(workspace.Root, plan.Source);
+        string source = workspace.SourcePath(plan.Source);
         workspace.CheckRoots(source, Destination);
         using var origin = new DirectoryFence(source);
         if (!WindowsProbeNative.DirectoryIdentity(origin.Root).AsSpan().SequenceEqual(plan.SourceIdentity))

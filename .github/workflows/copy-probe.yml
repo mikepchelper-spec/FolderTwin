@@ -31,6 +31,8 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-roots
       - name: Verify durable product job registration
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-jobs
+      - name: Verify product versions, mirror, offline restoration and retention
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-store
       - name: Verify bounded metadata inventory and partial results
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --inventory
       - name: Verify synthetic batches, partial results, and retry

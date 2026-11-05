@@ -41,9 +41,23 @@ internal static class PendingBatch
     internal static void SaveLocked(BatchPlan plan, SafeFileHandle fixture, PendingFiles files,
         Action<PendingStep>? checkpoint = null)
     {
-        byte[] metadataHash = BatchCatalog.WriteMetadata(Stream.Null, plan, files.Generation);
         var location = new Location(1, WindowsProbeNative.DirectoryIdentity(fixture),
-            Path.GetRelativePath(plan.FixtureRoot, plan.Source), plan.SourceIdentity, metadataHash);
+            Path.GetRelativePath(plan.FixtureRoot, plan.Source), plan.SourceIdentity,
+            BatchCatalog.WriteMetadata(Stream.Null, plan, files.Generation));
+        SaveLocked(plan, files, location, checkpoint);
+    }
+
+    internal static void SaveProductLocked(BatchPlan plan, SafeFileHandle destination, PendingFiles files,
+        Action<PendingStep>? checkpoint = null)
+    {
+        var location = new Location(2, WindowsProbeNative.DirectoryIdentity(destination), plan.Source,
+            plan.SourceIdentity, BatchCatalog.WriteMetadata(Stream.Null, plan, files.Generation));
+        SaveLocked(plan, files, location, checkpoint);
+    }
+
+    private static void SaveLocked(BatchPlan plan, PendingFiles files, Location location, Action<PendingStep>? checkpoint)
+    {
+        byte[] metadataHash = location.MetadataHash;
         byte[] encoded = JsonSerializer.SerializeToUtf8Bytes(new Envelope(location,
             SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(location, Json))), Json);
         if (encoded.Length > MaximumLocationBytes)
@@ -143,18 +157,46 @@ internal static class PendingBatch
         return (source, location.SourceIdentity);
     }
 
+    internal static BatchPlan ReadProductLocked(ProductJob job, SafeFileHandle scope, SafeFileHandle root, PendingFiles files)
+    {
+        var location = ReadProductLocation(job, scope, files);
+        using var file = WindowsProbeNative.OpenPlainFile(files.Parent, files.Metadata, FileAccess.Read, FileShare.Read);
+        var metadata = BatchCatalog.Parse(file, files.Generation);
+        if (!metadata.DocumentHash.AsSpan().SequenceEqual(location.MetadataHash) || metadata.Binding.Marker != job.Destination.Marker ||
+            !metadata.Binding.Identity.AsSpan().SequenceEqual(job.Destination.Identity))
+            throw new InvalidDataException("El catálogo pendiente no corresponde al trabajo.");
+        using var marker = job.Destination.OpenVerifiedMarker(root);
+        return new(job.Destination.LastVolumePath, job.Source.VolumePath, job.Destination.LastVolumePath,
+            location.SourceIdentity, job.Destination, metadata.Directories, metadata.Files);
+    }
+
+    internal static (string Source, byte[] Identity) ReadProductRegisteredSource(ProductJob job, SafeFileHandle scope,
+        PendingFiles files, byte[] documentHash)
+    {
+        var location = ReadProductLocation(job, scope, files);
+        using var file = WindowsProbeNative.OpenPlainFile(files.Parent, files.Metadata, FileAccess.Read, FileShare.Read);
+        if (!location.MetadataHash.AsSpan().SequenceEqual(documentHash) || file.Length is < 1 or > BatchCatalog.VersionMaximumBytes ||
+            !SHA256.HashData(file).AsSpan().SequenceEqual(documentHash))
+            throw new InvalidDataException("El descriptor de origen no coincide con el catálogo esperado.");
+        return (job.Source.VolumePath, location.SourceIdentity);
+    }
+
+    private static Location ReadProductLocation(ProductJob job, SafeFileHandle scope, PendingFiles files)
+    {
+        var location = ReadEnvelope(files);
+        if (location.Version != 2 || !WindowsProbeNative.DirectoryIdentity(scope).AsSpan().SequenceEqual(location.FixtureIdentity) ||
+            !location.FixtureIdentity.AsSpan().SequenceEqual(job.Destination.Identity) ||
+            !location.SourceIdentity.AsSpan().SequenceEqual(job.Source.Identity) ||
+            !location.SourceRelative.Equals(job.Source.VolumePath, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("El descriptor pendiente no corresponde al origen y al destino del trabajo.");
+        return location;
+    }
+
     private static (Location Location, string Source) ReadLocation(string fixtureRoot, string destination, SafeFileHandle fixture,
         PendingFiles files)
     {
-        Envelope envelope;
-        using (var file = WindowsProbeNative.OpenPlainFile(files.Parent, files.Location, FileAccess.Read, FileShare.Read))
-            envelope = JsonSerializer.Deserialize<Envelope>(ReadLocationBytes(file), Json)
-                ?? throw new InvalidDataException("Falta el descriptor de ejecución.");
-        var location = envelope.Payload;
-        if (location.Version != 1 || location.FixtureIdentity is not { Length: 24 } || location.SourceIdentity is not { Length: 24 } ||
-            location.MetadataHash is not { Length: 32 } || envelope.Checksum is not { Length: 32 } ||
-            !SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(location, Json)).AsSpan().SequenceEqual(envelope.Checksum) ||
-            !WindowsProbeNative.DirectoryIdentity(fixture).AsSpan().SequenceEqual(location.FixtureIdentity))
+        var location = ReadEnvelope(files);
+        if (location.Version != 1 || !WindowsProbeNative.DirectoryIdentity(fixture).AsSpan().SequenceEqual(location.FixtureIdentity))
             throw new InvalidDataException("Descriptor de ejecución dañado o de otro laboratorio.");
         _ = new UTF8Encoding(false, true).GetByteCount(location.SourceRelative);
         if (Path.IsPathRooted(location.SourceRelative))
@@ -162,6 +204,20 @@ internal static class PendingBatch
         string source = Path.Combine(fixtureRoot, location.SourceRelative);
         FolderBatch.ValidateRoots(fixtureRoot, source, destination);
         return (location, source);
+    }
+
+    private static Location ReadEnvelope(PendingFiles files)
+    {
+        Envelope envelope;
+        using (var file = WindowsProbeNative.OpenPlainFile(files.Parent, files.Location, FileAccess.Read, FileShare.Read))
+            envelope = JsonSerializer.Deserialize<Envelope>(ReadLocationBytes(file), Json)
+                ?? throw new InvalidDataException("Falta el descriptor de ejecución.");
+        var location = envelope.Payload;
+        if (location.FixtureIdentity is not { Length: 24 } || location.SourceIdentity is not { Length: 24 } ||
+            location.MetadataHash is not { Length: 32 } || envelope.Checksum is not { Length: 32 } ||
+            !SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(location, Json)).AsSpan().SequenceEqual(envelope.Checksum))
+            throw new InvalidDataException("Descriptor de ejecución dañado o de otro laboratorio.");
+        return location;
     }
 
     internal static BatchResult Resume(string fixtureRoot, string destination, CancellationToken cancellationToken = default,

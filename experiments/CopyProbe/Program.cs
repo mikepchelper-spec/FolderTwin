@@ -21,6 +21,8 @@ if (args is ["--product-roots"])
     return LocalJobRootsProbe.Run();
 if (args is ["--product-jobs"])
     return ProductJobRegistryProbe.Run();
+if (args is ["--product-store"])
+    return ProductStoreProbe.Run();
 if (args is ["--inventory"])
     return InventoryProbe.Run();
 if (args is ["--batch"])

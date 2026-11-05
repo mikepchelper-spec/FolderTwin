@@ -122,7 +122,7 @@ internal sealed partial class VersionStore
             var catalog = ReadPoint(root, id, requireBoth: true);
             if (!catalog.DocumentHash.AsSpan().SequenceEqual(hash))
                 throw new InvalidDataException("Un catálogo esperado falta, difiere o está dañado. La limpieza queda suspendida.");
-            var source = PendingBatch.ReadRegisteredSource(workspace.Root, Destination, scope.Root, IntentFiles(pending, id), hash);
+            var source = workspace.ReadRegisteredSource(Destination, scope.Root, IntentFiles(pending, id), hash);
             workspace.CheckRoots(source.Source, Destination);
             if (source.Identity.AsSpan().SequenceEqual(binding.Identity))
                 throw new InvalidDataException("La identidad de origen no corresponde al catálogo esperado.");

@@ -40,9 +40,10 @@ internal sealed partial class VersionStore
             throw new InvalidDataException("El umbral de cambios debe estar entre 1 y 100 por ciento.");
         var registry = GenerationRegistry.Read(root, binding);
         using var origin = new DirectoryFence(source);
+        workspace.RequireSourceIdentity(source, origin.Root);
         byte[] sourceIdentity = WindowsProbeNative.DirectoryIdentity(origin.Root);
         var sourcePlan = FolderBatch.AnalyzeSource(workspace.Root, source, Destination, binding, sourceIdentity, BatchCatalog.VersionMaximumEntries);
-        PendingBatch.ValidatePlan(sourcePlan, BatchCatalog.VersionMaximumEntries);
+        workspace.ValidatePlan(sourcePlan);
         FolderBatch.RequireSameInventory(sourcePlan);
         generation ??= NewGenerationId();
         byte[] hash = BatchCatalog.WriteMetadata(Stream.Null, sourcePlan, generation, out int catalogBytes);
