@@ -16,6 +16,12 @@ internal static class WindowsProbeNative
     internal static SafeFileHandle OpenPlainDirectory(SafeFileHandle parent, string name) =>
         OpenRelative(parent, name, 0x01 | 0x80, FileShare.ReadWrite, 1, directory: true);
 
+    internal static SafeFileHandle OpenDirectoryForDeletion(SafeFileHandle parent, string name)
+    {
+        DirectoryFence.CheckName(name);
+        return OpenRelative(parent, name, 0x01 | 0x80 | 0x00010000, FileShare.ReadWrite, 1, directory: true);
+    }
+
     internal static SafeFileHandle OpenOrCreatePlainDirectory(SafeFileHandle parent, string name)
     {
         DirectoryFence.CheckName(name);
@@ -317,6 +323,17 @@ internal static class WindowsProbeNative
         int status = NtSetInformationFile(file, out _, [1], 1, 13);
         if (status != 0)
             throw new IOException("No se pudo purgar el archivo de cuarentena.", new Win32Exception(RtlNtStatusToDosError(status)));
+    }
+
+    internal static void DeleteEmptyDirectory(SafeFileHandle directory)
+    {
+        RequirePlain(directory, directory: true);
+        if (ReadDirectory(directory).Any(entry => entry.Name is not ("." or "..")))
+            throw new InvalidDataException("La carpeta contiene datos inesperados. Se conserva para revisión.");
+        RequireSupportedData(directory, "carpeta retirada");
+        int status = NtSetInformationFile(directory, out _, [1], 1, 13);
+        if (status != 0)
+            throw new IOException("No se pudo retirar una carpeta vacía.", new Win32Exception(RtlNtStatusToDosError(status)));
     }
 
     [StructLayout(LayoutKind.Sequential)]

@@ -39,6 +39,8 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --registry
       - name: Verify retention, recoverable quarantine and deferred purge
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --retention
+      - name: Verify protected mirror previews, interruptions and recovery
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --mirror
       - name: Measure retention across eight generations with an absent source
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --retention-scale
       - name: Verify persistent headless version jobs

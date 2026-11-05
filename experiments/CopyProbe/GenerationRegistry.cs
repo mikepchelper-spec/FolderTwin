@@ -6,7 +6,7 @@ using Microsoft.Win32.SafeHandles;
 
 internal enum RegistryStep { PrimaryPartial, PrimaryFlushed, ReplicaPartial, ReplicaFlushed }
 internal sealed record RegistryState(Dictionary<string, byte[]> Generations, HashSet<string> Expired,
-    long NextSequence, byte[] LastHash, string[] RegistrationOrder);
+    long NextSequence, byte[] LastHash, string[] RegistrationOrder, string? MirrorGeneration);
 
 // Replicated append-only expectations, separate from the manifests being retained.
 // Repair only an exact prefix of the event supplied by the caller's durable plan.
@@ -61,6 +61,9 @@ internal static class GenerationRegistry
         bool expired, Action<RegistryStep>? checkpoint = null) =>
         Append(root, binding, expired ? "expire" : "retain", generation, documentHash, checkpoint);
 
+    internal static void SetMirror(SafeFileHandle root, DestinationBinding binding, string generation, byte[] documentHash,
+        Action<RegistryStep>? checkpoint = null) => Append(root, binding, "mirror", generation, documentHash, checkpoint);
+
     // Only a durable journal may supply the missing transitions. This prefix is
     // never sufficient authority for copying, retention selection or deletion.
     internal static RegistryState ReadCommonPrefix(SafeFileHandle root, DestinationBinding binding)
@@ -100,7 +103,7 @@ internal static class GenerationRegistry
             if (!prior.AsSpan().SequenceEqual(hash))
                 throw new InvalidDataException("El registro ya contiene otro catálogo para esta generación.");
             bool alreadyApplied = kind == "register" || kind == "expire" && state.Expired.Contains(generation) ||
-                kind == "retain" && !state.Expired.Contains(generation);
+                kind == "retain" && !state.Expired.Contains(generation) || kind == "mirror" && state.MirrorGeneration == generation;
             if (alreadyApplied)
             {
                 if (prefix != first.Length || prefix != second.Length)
@@ -110,6 +113,8 @@ internal static class GenerationRegistry
         }
         else if (kind != "register")
             throw new InvalidDataException("La generación que se quiere expirar no está registrada.");
+        if (kind == "expire" && state.MirrorGeneration == generation || kind == "mirror" && state.Expired.Contains(generation))
+            throw new InvalidDataException("La generación actual del espejo debe permanecer retenida.");
         byte[] expected = Encode(new(1, state.NextSequence, kind, generation, hash,
             binding.Marker, binding.Identity, state.LastHash));
         if (prefix + expected.Length > MaximumBytes)
@@ -166,6 +171,7 @@ internal static class GenerationRegistry
         var generations = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         var expired = new HashSet<string>(StringComparer.Ordinal);
         var registrationOrder = new List<string>();
+        string? mirror = null;
         long sequence = 0;
         byte[] previous = new byte[32];
         while (!bytes.IsEmpty)
@@ -205,8 +211,14 @@ internal static class GenerationRegistry
                         throw new InvalidDataException("La transición no corresponde al catálogo registrado.");
                     if (payload.Kind == "expire")
                     {
-                        if (!expired.Add(payload.Generation))
+                        if (mirror == payload.Generation || !expired.Add(payload.Generation))
                             throw new InvalidDataException("La generación ya estaba expirada.");
+                    }
+                    else if (payload.Kind == "mirror")
+                    {
+                        if (mirror == payload.Generation || expired.Contains(payload.Generation))
+                            throw new InvalidDataException("La referencia actual del espejo no es válida.");
+                        mirror = payload.Generation;
                     }
                     else if (payload.Kind != "retain" || !expired.Remove(payload.Generation))
                         throw new InvalidDataException("La transición de retención no es válida.");
@@ -216,6 +228,6 @@ internal static class GenerationRegistry
             sequence++;
             bytes = bytes[(end + 1)..];
         }
-        return new(generations, expired, sequence, previous, registrationOrder.ToArray());
+        return new(generations, expired, sequence, previous, registrationOrder.ToArray(), mirror);
     }
 }

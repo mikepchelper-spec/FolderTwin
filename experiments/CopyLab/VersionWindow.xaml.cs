@@ -64,6 +64,7 @@ public partial class VersionWindow : Window
         {
             store = await Task.Run(() => create ? VersionStore.Initialize(workspace, selected) : VersionStore.Open(workspace, selected));
             source = null;
+            ResetMirrorReview();
             retentionReview = null;
             RetentionText.Text = "";
             AcceptRetention.IsChecked = AcceptPurge.IsChecked = false;
@@ -88,6 +89,7 @@ public partial class VersionWindow : Window
         {
             workspace.CheckRoots(selected, current.Destination);
             source = selected;
+            ResetMirrorReview();
             backgroundJob = null;
             JobChoice.SelectedItem = null;
             SourceText.Text = selected;
@@ -185,6 +187,7 @@ public partial class VersionWindow : Window
 
     private void SelectJob(VersionJobInfo job)
     {
+        ResetMirrorReview();
         backgroundJob = job.Id;
         source = Path.Combine(workspace.Root, job.Source);
         SourceText.Text = "Origen registrado · " + source;
@@ -296,6 +299,7 @@ public partial class VersionWindow : Window
             SelectJob(chosen);
         await ShowScheduleAsync();
         await ShowRetentionAsync();
+        await ShowMirrorAsync();
     }
 
     private void TimelineChanged(object sender, SelectionChangedEventArgs e)
@@ -504,6 +508,7 @@ public partial class VersionWindow : Window
         ParentButton.IsEnabled = confirmed && directory.Length != 0;
         Files.IsEnabled = confirmed;
         RefreshRetentionActions();
+        RefreshMirrorActions();
     }
 
     private static bool IsExpected(Exception error) => error is IOException or InvalidDataException or

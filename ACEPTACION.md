@@ -25,7 +25,7 @@ Estado revisado desde `718391c`. Esta matriz distingue pruebas de software con d
 | Catálogos duplicados, truncado, conflictos y hashes inválidos | `BatchCatalog`; `--catalog`, `--versions` | Verificado; una réplica válida permite recuperación con aviso. |
 | Recuperación independiente sin SQLite ni origen | `--recover-version`; `VersionProbe` lanza otro proceso | Verificado incluso con una réplica dañada. |
 | Índice reconstruible, carpetas, cambios y archivo eliminado | `VersionIndex`, `VersionBrowser`, WPF | Verificado con índice perdido/dañado; navegación con 329.000 filas en workflow de distribución. |
-| Comparación cuyo punto anterior expiró | `VersionWindow` y retención | Corregido y verificado localmente en WPF: muestra expiración y bloquea recuperar el eliminado hasta deshacer la cuarentena. Pendiente de confirmar en CI de este hito. |
+| Comparación cuyo punto anterior expiró | `VersionWindow` y retención | Corregido y verificado localmente en WPF: muestra expiración y bloquea recuperar el eliminado hasta deshacer la cuarentena. Validación Windows 41951815462 aprobada. |
 | Escala y distribución de objetos | `--version-scale`, workflow `object-layout.yml`; PLAN | 329.000 rutas y comparación completa de un millón de objetos documentadas. Distribución de un nivel decidida. |
 
 ## Etapa 4 — Automatización
@@ -36,7 +36,7 @@ Estado revisado desde `718391c`. Esta matriz distingue pruebas de software con d
 | Identidades, secuencia y conservación de fallos por trabajo | `VersionJob`; `JobProbe`, `TrayProbe` | Verificado; el reloj atrasado no reordena el historial. |
 | Horario con instalación estable y definición comprobada | `LabInstallation`, `WindowsSchedule`; `--schedule-smoke` desde paquete | Verificado con disparador real próximo, actualización diaria y retirada. |
 | No solapar y no apropiarse de tareas ajenas | Bloqueos de trabajo/almacén, política IgnoreNew, comprobación de propietario/acción | Pruebas de bloqueo en `--jobs` y definición en ScheduleProbe; ampliar cruce de disparadores manuales/programados si falta evidencia directa. |
-| Destino ausente/reconectado y reintentos finitos | `VersionJob`, Programador, laboratorio de volumen | `--jobs` verifica ausencia/sustitución, vuelta de las raíces registradas, nuevo punto íntegro y conservación de incidentes; también bloquea el trabajador durante una operación manual. La ampliación pasó localmente; pendiente CI. Los reintentos del Programador son configuración comprobada, no un ensayo completo de cinco minutos. |
+| Destino ausente/reconectado y reintentos finitos | `VersionJob`, Programador, laboratorio de volumen | `--jobs` verifica ausencia/sustitución, vuelta de las raíces registradas, nuevo punto íntegro y conservación de incidentes; también bloquea el trabajador durante una operación manual. Validación Windows 41951815462 aprobada. Los reintentos del Programador son configuración comprobada, no un ensayo completo de cinco minutos. |
 | Bandeja opcional, edad, avisos deduplicados y ejecutar ahora | `LabTray`, `TraySnapshot`, `TrayProbe` | Verificado con varios trabajos y punto expirado; entrega visible de notificaciones depende del entorno. |
 | Inicio de sesión y horario perdido tras suspensión/reinicio | Tarea de usuario interactivo, StartWhenAvailable para hora | Definición verificada. Ciclo real en VM/equipo pendiente; sin sesión iniciada esta modalidad no ejecuta. |
 | Impacto antes de ajustar prioridad | Mediciones de copia, índice y bandeja en PLAN | No se aplicaron ajustes propios. Carga interactiva HDD/SSD y CPUs distintas pendiente externa. |
@@ -51,9 +51,9 @@ Estado revisado desde `718391c`. Esta matriz distingue pruebas de software con d
 | Cuarentena, diario, deshacer y gracia desde finalización | `RetentionJournal`, `RetentionCleanup`; `--retention` | Verificado por transición, reanudación tardía y proceso terminado con origen ausente. |
 | Purga posterior, nuevos referentes y coordinación con restauración | Bloqueo común, auditoría nueva y rescate de objetos | Verificado en `--retention`; no es reversible una vez iniciada la purga. |
 | Retención con varias generaciones grandes | `--retention-scale` | Verificado: ocho × 4.096 archivos. Pendiente: varias generaciones de aproximadamente 329.000 rutas con recursos acotados y contadores. |
-| Espejo navegable, altas/reemplazos/retiradas y conflictos | Motor pendiente | Implementar con revisión, conservación anterior, diario y reanudación. |
-| Origen ausente, parcial, vacío y cambios masivos en espejo | Motor pendiente | Probar rechazo, revisión adicional y umbral configurable antes de permitir retiradas. |
-| Espejo coordinado con respaldo, restauración y GC | Motor pendiente | Proteger referencias vigentes y operaciones pendientes; ensayar interrupciones y recuperación en WPF. |
+| Espejo navegable, altas/reemplazos/retiradas y conflictos | `MirrorPreview`, `MirrorExecution`, `MirrorJournal`; `--mirror`, WPF | Motor y flujo local aprobados. Confirmar en CI. |
+| Origen ausente, parcial, vacío y cambios masivos en espejo | `MirrorProbe.CheckGuards` y WPF | Rechazo de origen ausente, sustituido o bloqueado y revisión adicional de vacío y cambios masivos verificados localmente. |
+| Espejo coordinado con respaldo, restauración y GC | Registro replicado, bloqueo común y referencias al espejo | Verificado localmente con reanudación sin origen, conservación de la fecha anterior y limpieza bloqueada mientras queda una operación pendiente. |
 
 ## Entrega y comprobaciones externas
 

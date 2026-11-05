@@ -70,6 +70,8 @@ internal sealed partial class VersionStore
         string[] active = inventory.Registry.RegistrationOrder.Where(id => !inventory.Registry.Expired.Contains(id)).ToArray();
         var keep = active.GroupBy(id => inventory.Sources[id], StringComparer.Ordinal)
             .SelectMany(group => policy.Select(group.ToArray(), now)).ToHashSet(StringComparer.Ordinal);
+        if (inventory.Registry.MirrorGeneration is { } current)
+            keep.Add(current);
         string[] expire = active.Where(id => !keep.Contains(id)).ToArray();
         var referenced = new HashSet<string>(keep.SelectMany(id => inventory.Catalogs[id].Files.Select(Digest)), StringComparer.Ordinal);
         string[] candidates = expire.SelectMany(id => inventory.Catalogs[id].Files.Select(Digest))
@@ -82,6 +84,7 @@ internal sealed partial class VersionStore
     {
         if (!registeredGenerations)
             throw new InvalidDataException("El almacén anterior no tiene registro durable para retención.");
+        RequireNoPendingMirror(root);
         var registry = GenerationRegistry.Read(root, binding);
         using var pending = WindowsProbeNative.OpenPlainDirectory(root, PendingDirectory);
         foreach (var entry in WindowsProbeNative.ReadDirectory(pending).Where(entry => entry.Name is not ("." or "..")))
