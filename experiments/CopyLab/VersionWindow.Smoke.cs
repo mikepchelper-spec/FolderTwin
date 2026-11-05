@@ -127,6 +127,7 @@ public partial class VersionWindow
             Directory.Delete(workspace.Root, recursive: true); // The test owns every entry in this workspace.
         }
         await RunBackgroundSmokeAsync();
+        await RunRetentionSmokeAsync();
 
         string NewFolder(string name) => Directory.CreateDirectory(Path.Combine(workspace.Root, name)).FullName;
         static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

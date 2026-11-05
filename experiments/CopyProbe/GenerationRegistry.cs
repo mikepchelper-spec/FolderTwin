@@ -6,7 +6,7 @@ using Microsoft.Win32.SafeHandles;
 
 internal enum RegistryStep { PrimaryPartial, PrimaryFlushed, ReplicaPartial, ReplicaFlushed }
 internal sealed record RegistryState(Dictionary<string, byte[]> Generations, HashSet<string> Expired,
-    long NextSequence, byte[] LastHash);
+    long NextSequence, byte[] LastHash, string[] RegistrationOrder);
 
 // Replicated append-only expectations, separate from the manifests being retained.
 // Repair only an exact prefix of the event supplied by the caller's durable plan.
@@ -60,6 +60,21 @@ internal static class GenerationRegistry
     internal static void SetExpired(SafeFileHandle root, DestinationBinding binding, string generation, byte[] documentHash,
         bool expired, Action<RegistryStep>? checkpoint = null) =>
         Append(root, binding, expired ? "expire" : "retain", generation, documentHash, checkpoint);
+
+    // Only a durable journal may supply the missing transitions. This prefix is
+    // never sufficient authority for copying, retention selection or deletion.
+    internal static RegistryState ReadCommonPrefix(SafeFileHandle root, DestinationBinding binding)
+    {
+        using var primary = WindowsProbeNative.OpenPlainFile(root, PrimaryName, FileAccess.Read, FileShare.Read);
+        using var replica = WindowsProbeNative.OpenPlainFile(root, ReplicaName, FileAccess.Read, FileShare.Read);
+        byte[] first = ReadBytes(primary);
+        byte[] second = ReadBytes(replica);
+        int prefix = 0;
+        for (int i = 0; i < Math.Min(first.Length, second.Length) && first[i] == second[i]; i++)
+            if (first[i] == 10)
+                prefix = i + 1;
+        return Parse(first.AsSpan(0, prefix), binding);
+    }
 
     private static void Append(SafeFileHandle root, DestinationBinding binding, string kind, string generation, byte[] hash,
         Action<RegistryStep>? checkpoint)
@@ -150,6 +165,7 @@ internal static class GenerationRegistry
             throw new InvalidDataException("El registro de generaciones quedó incompleto.");
         var generations = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         var expired = new HashSet<string>(StringComparer.Ordinal);
+        var registrationOrder = new List<string>();
         long sequence = 0;
         byte[] previous = new byte[32];
         while (!bytes.IsEmpty)
@@ -180,6 +196,7 @@ internal static class GenerationRegistry
                 {
                     if (!generations.TryAdd(payload.Generation, payload.DocumentHash))
                         throw new InvalidDataException("Una generación está registrada dos veces.");
+                    registrationOrder.Add(payload.Generation);
                 }
                 else
                 {
@@ -199,6 +216,6 @@ internal static class GenerationRegistry
             sequence++;
             bytes = bytes[(end + 1)..];
         }
-        return new(generations, expired, sequence, previous);
+        return new(generations, expired, sequence, previous, registrationOrder.ToArray());
     }
 }

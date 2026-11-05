@@ -35,6 +35,11 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
                 var catalogs = store.ReadCatalogs(generation, null);
                 if (catalogs.Current.Degraded)
                     attention.Add($"{job.Id:N}-replica");
+                if (store.SupportsRetention && store.RegisteredGenerations().Expired.Contains(generation))
+                {
+                    attention.Add($"{job.Id:N}-expired");
+                    continue;
+                }
                 dates.Add(confirmed.FinishedUtc);
             }
             catch (Exception error) when (error is System.ComponentModel.Win32Exception { NativeErrorCode: 32 } ||

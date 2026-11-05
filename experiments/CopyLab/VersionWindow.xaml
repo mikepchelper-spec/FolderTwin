@@ -38,6 +38,32 @@
             </WrapPanel>
             </StackPanel>
             </Expander>
+            <Expander Header="Retención y cuarentena" Margin="0,0,0,8">
+                <StackPanel>
+                    <TextBlock Text="La limpieza es manual. Revisa qué fechas expirarán; la cuarentena no libera espacio." TextWrapping="Wrap" Margin="0,6,0,6" />
+                    <WrapPanel>
+                        <TextBlock Text="Días" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBox x:Name="RetentionDays" Text="30" Width="45" AutomationProperties.Name="Días de retención diaria" Margin="0,0,8,0" />
+                        <TextBlock Text="Semanas" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBox x:Name="RetentionWeeks" Text="8" Width="45" AutomationProperties.Name="Semanas de retención semanal" Margin="0,0,8,0" />
+                        <TextBlock Text="Meses" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBox x:Name="RetentionMonths" Text="12" Width="45" AutomationProperties.Name="Meses de retención mensual" Margin="0,0,8,0" />
+                        <TextBlock Text="Gracia (días)" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBox x:Name="RetentionGrace" Text="7" Width="45" AutomationProperties.Name="Días de gracia antes de purgar" Margin="0,0,8,0" />
+                        <Button x:Name="PreviewRetentionButton" Content="Revisar retención" Click="PreviewRetentionClick" />
+                    </WrapPanel>
+                    <TextBlock x:Name="RetentionText" TextWrapping="Wrap" Margin="0,6,0,6" />
+                    <CheckBox x:Name="AcceptRetention" Content="He revisado las fechas que expirarán" Checked="RetentionChoiceChanged" Unchecked="RetentionChoiceChanged" Margin="0,0,0,6" />
+                    <Button x:Name="ApplyRetentionButton" Content="Mover a cuarentena" Click="ApplyRetentionClick" HorizontalAlignment="Left" Margin="0,0,0,6" />
+                    <ComboBox x:Name="RetentionChoice" DisplayMemberPath="Label" SelectionChanged="RetentionChoiceChanged" AutomationProperties.Name="Operaciones de cuarentena" Margin="0,0,0,6" />
+                    <WrapPanel>
+                        <Button x:Name="ResumeRetentionButton" Content="Reanudar movimientos" Click="ResumeRetentionClick" Margin="0,0,8,6" />
+                        <Button x:Name="UndoRetentionButton" Content="Deshacer cuarentena" Click="UndoRetentionClick" Margin="0,0,8,6" />
+                    </WrapPanel>
+                    <CheckBox x:Name="AcceptPurge" Content="Entiendo que la purga borra datos y no se puede deshacer" Checked="RetentionChoiceChanged" Unchecked="RetentionChoiceChanged" Margin="0,0,0,6" />
+                    <Button x:Name="PurgeRetentionButton" Content="Purgar tras el plazo de gracia" Click="PurgeRetentionClick" HorizontalAlignment="Left" />
+                </StackPanel>
+            </Expander>
             <TextBlock x:Name="JobsText" TextWrapping="Wrap" Margin="0,0,0,10" />
         </StackPanel>
         </ScrollViewer>

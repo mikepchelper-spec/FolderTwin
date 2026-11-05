@@ -46,6 +46,8 @@ Usa `-- --versions` para probar dos generaciones con objetos SHA-256 compartidos
 
 Usa `-- --registry` para probar el registro replicado de generaciones de los almacenes nuevos. Comprueba escrituras parciales, reanudación desde el plan, discrepancias entre réplicas y recuperación independiente con el registro dañado. Los almacenes anteriores conservan su lector y sus operaciones.
 
+Usa `-- --retention` para probar la selección diaria/semanal/mensual por origen, las referencias compartidas, la cuarentena recuperable y la purga diferida. Incluye interrupciones y la terminación de un trabajador real con reanudación sin origen. En **Versiones → Retención y cuarentena**, revisa la política y las fechas antes de mover objetos. La limpieza es manual; la purga exige otra revisión, aceptación explícita y el plazo de gracia. [Protocolo y límites](experiments/CopyProbe/RETENCION.md).
+
 El comando `--recover-version` permite recuperar un punto del laboratorio desde otro proceso, con el origen ausente y sin índice local. Sus cuatro argumentos y comprobaciones están en la [guía del almacén](experiments/CopyProbe/VERSIONES.md).
 
 Usa `-- --version-scale 10240 32` para medir 10.240 archivos sintéticos con 32 contenidos distintos. El ensayo registra tiempo, E/S y memoria, verifica todos los objetos y restaura una ruta de muestra tras apartar el origen. [Método y resultados](PLAN.md#mediciones-del-versionado).

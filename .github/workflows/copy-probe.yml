@@ -37,6 +37,8 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --versions
       - name: Verify replicated generation expectations and interrupted registry writes
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --registry
+      - name: Verify retention, recoverable quarantine and deferred purge
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --retention
       - name: Verify persistent headless version jobs
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --jobs
       - name: Verify versioning above the initial catalog entry limit

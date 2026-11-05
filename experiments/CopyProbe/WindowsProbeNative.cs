@@ -309,6 +309,16 @@ internal static class WindowsProbeNative
         }
     }
 
+    internal static void DeletePlainFile(SafeFileHandle file)
+    {
+        RequirePlain(file, directory: false);
+        // FILE_DISPOSITION_INFORMATION.DeleteFile = TRUE. DELETE access is required;
+        // the caller holds the store lock and an exclusive, verified file handle.
+        int status = NtSetInformationFile(file, out _, [1], 1, 13);
+        if (status != 0)
+            throw new IOException("No se pudo purgar el archivo de cuarentena.", new Win32Exception(RtlNtStatusToDosError(status)));
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct AttributeTag
     {

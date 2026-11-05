@@ -4,10 +4,10 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Win32.SafeHandles;
 
-internal sealed record VersionPoint(string Id, DateTimeOffset CreatedUtc, int FileCount, bool Degraded, string? Problem = null);
+internal sealed record VersionPoint(string Id, DateTimeOffset CreatedUtc, int FileCount, bool Degraded, string? Problem = null, bool Expired = false);
 internal sealed record PendingVersion(string Id, string Source, int FileCount);
 
-internal sealed class VersionStore
+internal sealed partial class VersionStore
 {
     private const string StoreName = ".foldertwin-version-store";
     private const string PrimaryDirectory = "manifests";
@@ -25,6 +25,7 @@ internal sealed class VersionStore
     private readonly bool registeredGenerations;
     internal string Destination { get; }
     internal DestinationBinding Binding => binding;
+    internal bool SupportsRetention => registeredGenerations;
 
     private VersionStore(LabWorkspace workspace, string destination, DestinationBinding binding, bool registeredGenerations)
     {
@@ -212,9 +213,18 @@ internal sealed class VersionStore
                 string final = ObjectPath(digest);
                 using var bucket = WindowsProbeNative.OpenOrCreatePlainDirectory(algorithm, digest[..2]);
                 if (!WindowsProbeNative.PlainFileExists(bucket, digest))
+                    _ = RescueQuarantinedObject(store, digest, file);
+                if (!WindowsProbeNative.PlainFileExists(bucket, digest))
                 {
                     string temporary = Path.Combine(Path.GetDirectoryName(final)!, FolderBatch.ControlPrefix + digest + ".tmp");
                     var recovered = CopyRecovery.Recover(workspace.Root, temporary, final, expectedHash: file.Hash);
+                    if (recovered == RecoveryResult.MissingData && WasPurged(store, digest))
+                    {
+                        // Preserve old copy receipts; a documented purge authorizes a new
+                        // copy attempt with a generation-specific receipt, never a blind reset.
+                        temporary = Path.Combine(Path.GetDirectoryName(final)!, FolderBatch.ControlPrefix + digest + "-" + generation + ".tmp");
+                        recovered = CopyRecovery.Recover(workspace.Root, temporary, final, expectedHash: file.Hash);
+                    }
                     if (recovered == RecoveryResult.NoReceipt)
                     {
                         if (origin is null)
@@ -247,6 +257,12 @@ internal sealed class VersionStore
         using var store = new DirectoryFence(Destination);
         using var marker = binding.OpenVerifiedMarker(store.Root);
         using var operation = OpenLock(store.Root, FileAccess.Read);
+        var expired = new HashSet<string>(StringComparer.Ordinal);
+        if (registeredGenerations)
+        {
+            try { expired = GenerationRegistry.Read(store.Root, binding).Expired; }
+            catch (Exception error) when (VersionJob.Expected(error)) { /* Recovery remains independent of the retention registry. */ }
+        }
         using var commits = WindowsProbeNative.OpenPlainDirectory(store.Root, CommitDirectory);
         return WindowsProbeNative.ReadDirectory(commits)
             .Where(entry => entry.Name.EndsWith(".commit", StringComparison.Ordinal))
@@ -258,7 +274,7 @@ internal sealed class VersionStore
                 try
                 {
                     var catalog = ReadPoint(store.Root, id);
-                    return new VersionPoint(id, date, catalog.Files.Length, catalog.Degraded);
+                    return new VersionPoint(id, date, catalog.Files.Length, catalog.Degraded, Expired: expired.Contains(id));
                 }
                 catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or
                     ArgumentException or JsonException or Win32Exception)

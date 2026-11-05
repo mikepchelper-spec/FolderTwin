@@ -63,6 +63,12 @@ internal static class TrayProbe
             await tray.RefreshAsync();
             if (tray.NotificationCount != 2 || !tray.StatusText.Contains("requieren atención", StringComparison.Ordinal))
                 throw new InvalidOperationException("The tray hid the loss of a catalog replica.");
+            var firstStore = VersionStore.Open(workspace, Path.Combine(workspace.Root, "primero versiones"));
+            firstStore.CreatePoint(sourceMissing, VersionStore.NewGenerationId());
+            _ = firstStore.BeginRetention(firstStore.PreviewRetention(new(1, 0, 0, 1)));
+            await tray.RefreshAsync();
+            if (tray.NotificationCount != 3 || !TraySnapshot.Read(workspace).Attention.Contains($"{jobs[0]:N}-expired"))
+                throw new InvalidOperationException("The tray counted an expired job point as a retained backup.");
             var startup = new MainWindow(smoke: true);
             try
             {

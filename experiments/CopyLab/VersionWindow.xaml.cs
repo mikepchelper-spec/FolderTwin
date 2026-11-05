@@ -19,6 +19,7 @@ public partial class VersionWindow : Window
         public string Label => Confirmed switch
         {
             { Problem: not null } => $"{Date} · requiere revisión",
+            { Expired: true } => $"{Date} · expirado · revisar cuarentena",
             { } point => $"{Date} · {point.FileCount:N0} archivos" + (point.Degraded ? " · una réplica" : ""),
             _ => $"{Date} · pendiente · {Pending!.FileCount:N0} archivos"
         };
@@ -63,6 +64,9 @@ public partial class VersionWindow : Window
         {
             store = await Task.Run(() => create ? VersionStore.Initialize(workspace, selected) : VersionStore.Open(workspace, selected));
             source = null;
+            retentionReview = null;
+            RetentionText.Text = "";
+            AcceptRetention.IsChecked = AcceptPurge.IsChecked = false;
             backgroundJob = null;
             SourceText.Text = "Elige un origen para crear otro punto.";
             StoreText.Text = store.Destination;
@@ -291,6 +295,7 @@ public partial class VersionWindow : Window
         if (chosen is not null)
             SelectJob(chosen);
         await ShowScheduleAsync();
+        await ShowRetentionAsync();
     }
 
     private void TimelineChanged(object sender, SelectionChangedEventArgs e)
@@ -477,6 +482,7 @@ public partial class VersionWindow : Window
             return;
         var row = Timeline.SelectedItem as PointRow;
         bool confirmed = !busy && row?.Confirmed is { Problem: null };
+        bool retained = confirmed && row?.Confirmed?.Expired == false;
         var entry = Files.SelectedItem as VersionEntry;
         NewStoreButton.IsEnabled = OpenStoreButton.IsEnabled = Timeline.IsEnabled = !busy;
         ChooseSourceButton.IsEnabled = RefreshButton.IsEnabled = !busy && store is not null;
@@ -488,12 +494,13 @@ public partial class VersionWindow : Window
         TrayAtLogin.IsEnabled = ApplyStartupButton.IsEnabled = !busy && persistent;
         JobChoice.IsEnabled = !busy && store is not null;
         ResumeButton.IsEnabled = !busy && row?.Pending is not null;
-        VerifyButton.IsEnabled = RestorePointButton.IsEnabled = confirmed;
-        RestoreFileButton.IsEnabled = confirmed && entry is { IsDirectory: false };
+        VerifyButton.IsEnabled = RestorePointButton.IsEnabled = retained;
+        RestoreFileButton.IsEnabled = retained && entry is { IsDirectory: false };
         OnlyChanges.IsEnabled = confirmed && previous?.Confirmed is { Problem: null };
         OpenDirectoryButton.IsEnabled = confirmed && entry is { IsDirectory: true };
         ParentButton.IsEnabled = confirmed && directory.Length != 0;
         Files.IsEnabled = confirmed;
+        RefreshRetentionActions();
     }
 
     private static bool IsExpected(Exception error) => error is IOException or InvalidDataException or
