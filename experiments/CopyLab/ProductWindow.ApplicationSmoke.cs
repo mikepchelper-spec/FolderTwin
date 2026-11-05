@@ -103,6 +103,46 @@ public partial class ProductWindow
         }
     }
 
+    private static async Task RunRefreshOverlapSmokeAsync()
+    {
+        var fixture = LabWorkspace.Create();
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        int hold = 0;
+        ProductWindow? window = null;
+        try
+        {
+            string settings = Directory.CreateDirectory(Path.Combine(fixture.Root, "settings")).FullName;
+            ProductJobRegistry Open()
+            {
+                if (Interlocked.Exchange(ref hold, 0) == 1)
+                {
+                    entered.Set();
+                    if (!release.Wait(TimeSpan.FromSeconds(10))) throw new IOException("The synthetic query was not released.");
+                }
+                return new(settings);
+            }
+            window = new ProductWindow(Open);
+            await window.InitializeAsync();
+            hold = 1;
+            Task first = window.RefreshRuntimeAsync();
+            Check(await Task.Run(() => entered.Wait(TimeSpan.FromSeconds(5))), "The synthetic refresh did not enter its query.");
+            Task second = window.RefreshRuntimeAsync();
+            Check(!second.IsCompleted, "An explicit refresh returned a stale snapshot while another query was active.");
+            release.Set();
+            await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(10));
+            Check(!window.polling, "Queued refresh did not finish its fresh query.");
+            Console.Error.WriteLine("PASS an explicit runtime refresh waits for an in-flight query and obtains its own fresh snapshot.");
+        }
+        finally
+        {
+            release.Set();
+            window?.Close();
+            using (fixture.OpenRegisteredRoot()) { }
+            Directory.Delete(fixture.Root, recursive: true);
+        }
+    }
+
     private static void RejectMaintenance(Action action)
     {
         try { action(); }

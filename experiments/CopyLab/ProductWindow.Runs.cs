@@ -47,7 +47,14 @@ public partial class ProductWindow
 
     private async Task RefreshRuntimeAsync()
     {
-        if (polling || closed) return;
+        if (closed) return;
+        // Explicit callers need a fresh snapshot even when the timer already
+        // started a query. The timer itself skips overlap in PollRuntimeAsync.
+        while (polling)
+        {
+            await Task.Delay(20);
+            if (closed) return;
+        }
         polling = true;
         try
         {

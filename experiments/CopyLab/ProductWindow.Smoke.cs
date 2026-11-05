@@ -247,6 +247,7 @@ public partial class ProductWindow
             await RunProductRetentionSmokeAsync();
             await RunConfigurationSmokeAsync();
             await RunApplicationSmokeAsync();
+            await RunRefreshOverlapSmokeAsync();
         }
         finally
         {

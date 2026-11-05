@@ -6,7 +6,7 @@ namespace CopyLab;
 
 internal enum InstallStep { FilePartial, FileVerified, RecordPartial, Confirmed }
 
-internal static class LabInstallation
+internal static partial class LabInstallation
 {
     private const string ManifestName = "SHA256SUMS.txt";
     private const string MarkerName = ".foldertwin-install-v1";
@@ -45,6 +45,7 @@ internal static class LabInstallation
         WindowsProbeNative.RequireNtfsVolume(apps.Root, writable: true);
         using var installLock = WindowsProbeNative.OpenPlainFile(apps.Root, name + ".lock", FileAccess.ReadWrite,
             FileShare.None, FileMode.OpenOrCreate);
+        RequireNoRemoval(apps.Root, name);
         using var directory = WindowsProbeNative.OpenOrCreatePlainDirectory(apps.Root, name);
         string target = Path.Combine(installationRoot, name);
         var allowed = files.Keys.Append(ManifestName).Append(MarkerName).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -112,32 +113,35 @@ internal static class LabInstallation
         return Path.Combine(target, "CopyLab.exe");
 
         void WriteOrVerify(string fileName, byte[] expected)
+            => WriteOrVerifyRecord(directory, fileName, expected, () => checkpoint?.Invoke(InstallStep.RecordPartial, fileName));
+    }
+
+    private static void WriteOrVerifyRecord(Microsoft.Win32.SafeHandles.SafeFileHandle directory, string fileName, byte[] expected, Action? partial = null)
+    {
+        using (var output = WindowsProbeNative.OpenPlainFile(directory, fileName, FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate))
         {
-            using (var output = WindowsProbeNative.OpenPlainFile(directory, fileName, FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate))
+            if (output.Length > expected.Length) throw new InvalidDataException("El registro de instalación tiene un tamaño inesperado.");
+            byte[] prior = new byte[(int)output.Length];
+            output.ReadExactly(prior);
+            if (!expected.AsSpan(0, prior.Length).SequenceEqual(prior))
+                throw new InvalidDataException("El registro parcial de instalación tiene otro contenido.");
+            int middle = expected.Length / 2;
+            if (output.Length < middle)
             {
-                if (output.Length > expected.Length) throw new InvalidDataException("El registro de instalación tiene un tamaño inesperado.");
-                byte[] prior = new byte[(int)output.Length];
-                output.ReadExactly(prior);
-                if (!expected.AsSpan(0, prior.Length).SequenceEqual(prior))
-                    throw new InvalidDataException("El registro parcial de instalación tiene otro contenido.");
-                int middle = expected.Length / 2;
-                if (output.Length < middle)
-                {
-                    output.Write(expected.AsSpan((int)output.Length, middle - (int)output.Length));
-                    output.Flush(flushToDisk: true);
-                    checkpoint?.Invoke(InstallStep.RecordPartial, fileName);
-                }
-                output.Write(expected.AsSpan((int)output.Length));
+                output.Write(expected.AsSpan((int)output.Length, middle - (int)output.Length));
                 output.Flush(flushToDisk: true);
+                partial?.Invoke();
             }
-            using var input = WindowsProbeNative.OpenPlainFile(directory, fileName, FileAccess.Read, FileShare.Read);
-            if (input.Length != expected.Length)
-                throw new InvalidDataException("El registro de instalación requiere revisión.");
-            byte[] actual = new byte[expected.Length];
-            input.ReadExactly(actual);
-            if (!actual.AsSpan().SequenceEqual(expected))
-                throw new InvalidDataException("El registro de instalación no coincide con el paquete.");
+            output.Write(expected.AsSpan((int)output.Length));
+            output.Flush(flushToDisk: true);
         }
+        using var input = WindowsProbeNative.OpenPlainFile(directory, fileName, FileAccess.Read, FileShare.Read);
+        if (input.Length != expected.Length)
+            throw new InvalidDataException("El registro de instalación requiere revisión.");
+        byte[] actual = new byte[expected.Length];
+        input.ReadExactly(actual);
+        if (!actual.AsSpan().SequenceEqual(expected))
+            throw new InvalidDataException("El registro de instalación no coincide con el paquete.");
     }
 
     internal static bool IsInstalledWorker(string executable, bool product = false)

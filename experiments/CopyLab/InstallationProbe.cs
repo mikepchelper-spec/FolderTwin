@@ -54,6 +54,58 @@ internal static class InstallationProbe
             Check(File.ReadAllBytes(binary).AsSpan().SequenceEqual(original), "A corrupt update changed the earlier installation.");
         }
         Console.Error.WriteLine("PASS installation resumes exact file and metadata prefixes, reuses its verified package, rejects corruption and foreign files, and updates beside the prior version without overwriting it.");
+        CheckRemoval();
+    }
+
+    private static void CheckRemoval()
+    {
+        foreach (var boundary in Enum.GetValues<InstallRemovalStep>())
+        {
+            using var fixture = new Fixture();
+            string executable = LabInstallation.EnsureAt(fixture.Package, fixture.Installs);
+            string fingerprint = Path.GetFileName(Path.GetDirectoryName(executable)!);
+            var review = LabInstallation.ReviewRemovalAt(fixture.Installs, fingerprint);
+            string preserved = Path.Combine(fixture.Workspace.Root, "preserved-backup.txt");
+            File.WriteAllText(preserved, "must remain");
+            bool reached = false;
+            Reject(() => LabInstallation.RemoveAt(fixture.Installs, review, step =>
+            {
+                if (step != boundary) return;
+                reached = true;
+                throw new IOException("Synthetic interrupted package removal.");
+            }));
+            Check(reached, "The requested removal boundary was not reached: " + boundary);
+            var reopened = LabInstallation.ReviewRemovalAt(fixture.Installs, fingerprint);
+            LabInstallation.RemoveAt(fixture.Installs, reopened);
+            LabInstallation.RemoveAt(fixture.Installs, reopened);
+            Check(!Directory.Exists(Path.GetDirectoryName(executable)) && File.ReadAllText(preserved) == "must remain",
+                "Package removal did not resume or touched data outside its installation.");
+            string reinstalled = LabInstallation.EnsureAt(fixture.Package, fixture.Installs);
+            Check(reinstalled == executable && !LabInstallation.ReviewRemovalAt(fixture.Installs, fingerprint).Identity.AsSpan().SequenceEqual(review.Identity),
+                "A completed removal could not be reinstalled with a new directory identity.");
+            fixture.Verify(reinstalled);
+            Reject(() => LabInstallation.RemoveAt(fixture.Installs, review));
+            fixture.Verify(reinstalled);
+        }
+        using (var fixture = new Fixture())
+        {
+            string executable = LabInstallation.EnsureAt(fixture.Package, fixture.Installs);
+            string root = Path.GetDirectoryName(executable)!;
+            var review = LabInstallation.ReviewRemovalAt(fixture.Installs, Path.GetFileName(root));
+            using (var busy = new FileStream(Path.Combine(root, "CopyLab.dll"), FileMode.Open, FileAccess.Read, FileShare.Read))
+                Reject(() => LabInstallation.RemoveAt(fixture.Installs, review));
+            fixture.Verify(executable);
+            string foreign = Path.Combine(root, "foreign.txt");
+            File.WriteAllText(foreign, "preserve foreign data");
+            Reject(() => LabInstallation.RemoveAt(fixture.Installs, review));
+            Check(File.ReadAllText(foreign) == "preserve foreign data", "Removal deleted foreign data.");
+            fixture.Verify(executable);
+            File.Delete(foreign);
+            File.WriteAllText(Path.Combine(root, "docs", "Guía ñ.txt"), "changed installed guide");
+            Reject(() => LabInstallation.RemoveAt(fixture.Installs, review));
+            Check(File.Exists(executable), "A contradictory installation was partly deleted.");
+        }
+        Console.Error.WriteLine("PASS package removal checks all handles and hashes before deleting, rejects busy/foreign/changed files, resumes every journal boundary, preserves other data, and permits reinstall without reusing old removal authority.");
     }
 
     private sealed class Fixture : IDisposable

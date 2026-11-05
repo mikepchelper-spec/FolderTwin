@@ -309,6 +309,12 @@ internal static class WindowsProbeNative
     }
 
     internal static void RenameNew(SafeFileHandle file, SafeFileHandle directory, string destinationName)
+        => RenamePlainNew(file, directory, destinationName, directorySource: false);
+
+    internal static void RenameDirectoryNew(SafeFileHandle source, SafeFileHandle directory, string destinationName)
+        => RenamePlainNew(source, directory, destinationName, directorySource: true);
+
+    private static void RenamePlainNew(SafeFileHandle file, SafeFileHandle directory, string destinationName, bool directorySource)
     {
         const int fileRenameInformation = 10;
         // Leave ReplaceIfExists zero and resolve the name against the pinned directory handle.
@@ -323,7 +329,7 @@ internal static class WindowsProbeNative
         {
             directory.DangerousAddRef(ref acquired);
             RequirePlain(directory, directory: true);
-            RequirePlain(file, directory: false);
+            RequirePlain(file, directory: directorySource);
             nint directoryHandle = directory.DangerousGetHandle();
             MemoryMarshal.Write(request.AsSpan(IntPtr.Size), in directoryHandle);
             int status = NtSetInformationFile(file, out _, request, (uint)request.Length, fileRenameInformation);
