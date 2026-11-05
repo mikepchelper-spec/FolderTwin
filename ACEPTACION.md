@@ -1,5 +1,7 @@
 # Aceptación del piloto controlado
 
+Esta matriz conserva la aceptación de la alfa de laboratorio. La aceptación actual del producto y del candidato distribuible está en [V1.md](V1.md) y [ENTREGA.md](ENTREGA.md).
+
 Estado revisado desde `718391c`. Esta matriz distingue pruebas de software con datos sintéticos de comprobaciones externas. «Verificado» significa que el arnés indicado cubre el caso y pasó en la [validación Windows 41950591185](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41950591185); no acredita durabilidad física ni habilita datos personales. Los cambios siguientes deben actualizar sus filas y evidencia.
 
 ## Etapa 2 — Copia y recuperación

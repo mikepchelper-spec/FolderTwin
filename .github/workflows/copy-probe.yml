@@ -95,7 +95,7 @@ jobs:
             throw 'Independent builds produced different file hashes.'
           }
           Write-Host "Matching portable distributions. SHA256SUMS.txt SHA-256 $($first.Hash)"
-          foreach ($guide in @('GUIA.md', 'NOTAS.md', 'INSTALACION.md', 'PILOTO.md', 'V1.md', 'NOMBRES.md', 'global.json', 'LICENSE')) {
+          foreach ($guide in @('GUIA.md', 'NOTAS.md', 'INSTALACION.md', 'PILOTO.md', 'V1.md', 'ENTREGA.md', 'NOMBRES.md', 'global.json', 'LICENSE')) {
             $packaged = Join-Path $outputA $guide
             if (-not (Test-Path -LiteralPath $packaged) -or
                 (Get-FileHash -LiteralPath $packaged).Hash -ne (Get-FileHash -LiteralPath (Join-Path $sourceA $guide)).Hash) {

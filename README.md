@@ -2,7 +2,7 @@
 
 *Copias locales. Versiones recuperables.*
 
-App de respaldo para Windows 11 x64. La vista previa de v1 permite crear trabajos, copiar, verificar y recuperar desde una interfaz WPF. El desarrollo y el piloto controlado usan datos sintéticos; la aceptación final sigue abierta.
+App de respaldo para Windows 11 x64. El candidato de v1 permite crear trabajos, copiar, verificar y recuperar desde una interfaz WPF. El paquete reproducible de `8bde43f` pasó CI y el recorrido interactivo de los tres modos en un perfil de producto vacío. La repetición VHDX, el piloto y las validaciones externas indicadas siguen pendientes. [Artefacto y evidencia](ENTREGA.md).
 
 ## Leer primero
 
@@ -13,21 +13,22 @@ Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 - [Notas de versión](NOTAS.md): funciones de la vista previa, actualización y pendientes antes de cerrar v1.
 - [Matriz de aceptación](ACEPTACION.md): requisitos de las etapas 2 a 5, evidencia y validaciones pendientes del piloto.
 - [Alcance y aceptación de la v1](V1.md): trabajo de producto, criterios de salida y comprobaciones externas.
+- [Entrega del candidato](ENTREGA.md): ZIP y hashes comprobados, resultados del escritorio y punto exacto de reanudación.
 - [Guía del piloto](PILOTO.md): preparación, observación, recuperación y criterios de detención.
 - [Recuperar respaldos anteriores](COMPATIBILIDAD.md): acceso desde la interfaz, formatos admitidos y límites.
 - [Instalación y actualización](INSTALACION.md): paquete portable, ejecutor estable, reanudación y trabajo pendiente.
 - [Investigación](INVESTIGACION.md): necesidades observadas, documentación técnica y fuentes.
 - [Nombres](NOMBRES.md): elección, alternativas anteriores y estado de la comprobación de disponibilidad.
 
-La vista previa de la v1 registra y ejecuta los tres modos desde WPF, verifica el contenido y lo recupera en una carpeta nueva. El respaldo, la verificación, la restauración y el análisis del espejo usan un ejecutor separado con progreso, pausa, cancelación e historial por trabajo. El acumulativo conserva los exclusivos del destino y detiene conflictos externos. La recuperación permite elegir fecha, buscar, navegar por carpetas, revisar cambios y recuperar un archivo eliminado desde el punto anterior disponible. Permite editar nombre y hora, deshabilitar y retirar trabajos conservando sus respaldos. Los horarios diarios y reintentos pasaron la prueba nativa desde el paquete. La bandeja opcional reúne los tres modos, su antigüedad e incidencias y permite ejecutar respaldos. La retención manual permite revisar, poner en cuarentena, deshacer y purgar tras la gracia. Permite exportar e importar configuración con revisión de identidades y activación explícita. Los recorridos de configuración pasaron desde el paquete; la distribución final y el resto de la integración de producto siguen pendientes. Usa solo carpetas desechables con datos sintéticos. [Estado y recorrido de prueba](V1.md).
+La v1 registra y ejecuta los tres modos desde WPF, verifica el contenido y lo recupera en una carpeta nueva. El respaldo, la verificación, la restauración y el análisis del espejo usan un ejecutor separado con progreso, pausa, cancelación e historial por trabajo. El acumulativo conserva los exclusivos del destino y detiene conflictos externos. La recuperación permite elegir fecha, buscar, navegar por carpetas, revisar cambios y recuperar un archivo eliminado desde el punto anterior disponible. Permite editar nombre y hora, deshabilitar y retirar trabajos conservando sus respaldos. Los horarios diarios y reintentos pasaron la prueba nativa desde el paquete. La bandeja opcional reúne los tres modos, su antigüedad e incidencias y permite ejecutar respaldos. La retención manual permite revisar, poner en cuarentena, deshacer y purgar tras la gracia. Permite exportar e importar configuración con revisión de identidades y activación explícita. La integración, compatibilidad e instalación, actualización y retirada del candidato pasaron desde el paquete. Usa solo carpetas desechables con datos sintéticos hasta cerrar la aceptación. [Estado y recorrido de prueba](V1.md).
 
 La vista previa permite revisar y conservar un plan completo de versionado que ya no coincida con el origen, sin presentarlo como respaldo correcto ni borrar datos. Sus trabajadores y pruebas WPF locales cubren pausa, cancelación, cierre de interfaz y reanudación sin origen. La retención revisa los objetos parciales con cuarentena. Para borradores y diarios de acumulativo o espejo, la v1 conserva el trabajo retirado y continúa en otro destino dedicado; el anterior conserva su espacio, datos e incidencias. [Recorrido y límites](experiments/CopyProbe/PENDIENTES.md).
 
-El panel de producto separa lista y detalles, y los apila en ventanas estrechas. Hay una sesión sintética reproducible para revisar el escritorio sin abrir la configuración habitual. La observación local cubrió los temas y parte de la navegación; el lector de pantalla, el escalado y el recorrido del paquete final siguen pendientes. [Prueba de interfaz](experiments/CopyLab/INTERFAZ.md).
+El panel de producto separa lista y detalles, y los apila en ventanas estrechas. Hay una sesión sintética reproducible para revisar el escritorio sin abrir la configuración habitual. El artefacto descargado completó también el recorrido normal de los tres modos, verificación, incidencia y recuperación. El recorrido completo de accesibilidad, lector y escalado sigue pendiente. [Prueba de interfaz](experiments/CopyLab/INTERFAZ.md).
 
 ## Paquete portable de Windows
 
-Abre un resultado de [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml) para `main` y descarga el artefacto `FolderTwin-win-x64-<commit>`. Extrae todo el contenido y abre `FolderTwin.exe` para acceder a tus trabajos. El paquete incluye .NET, código fuente, licencias y documentación. Las compilaciones de desarrollo se identifican por su commit. [Guía de uso](GUIA.md) · [Notas](NOTAS.md) · [Matriz de v1](V1.md).
+Para el piloto usa el [resultado elegido de 8bde43f](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42068611369) y su artefacto `FolderTwin-win-x64-8bde43f8b2cb8ba161938edb0b21c58502d73446`, con los hashes de ENTREGA. Extrae todo el contenido y abre `FolderTwin.exe` para acceder a tus trabajos. El paquete incluye .NET, código fuente, licencias y documentación. [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml) conserva también compilaciones posteriores de desarrollo: no sustituyen automáticamente al candidato comprobado. [Guía de uso](GUIA.md) · [Notas](NOTAS.md) · [Matriz de v1](V1.md).
 
 Para producir el paquete desde el código, instala el SDK indicado en [global.json](global.json) y ejecuta en PowerShell 7 para Windows:
 

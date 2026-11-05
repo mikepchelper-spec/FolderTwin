@@ -1,6 +1,6 @@
-# Notas de la vista previa de FolderTwin 1.0
+# Notas del candidato de FolderTwin 1.0
 
-Estado: desarrollo de v1. Este documento acompaña al paquete reproducible del commit que contiene estas notas; todavía no anuncia una versión final ni un candidato con aceptación completa. La [matriz de v1](V1.md) contiene los requisitos y evidencia. Consulta [GUIA.md](GUIA.md) para operar desde la interfaz y [PILOTO.md](PILOTO.md) para registrar el ensayo.
+Estado: candidato a lanzamiento, sin anunciar v1 final. Se conserva el paquete de `8bde43f` ya comprobado y su identidad en [ENTREGA.md](ENTREGA.md); estas notas del repositorio incorporan evidencia posterior a la compilación. La [matriz de v1](V1.md) distingue los requisitos de software, la repetición VHDX en cola y las validaciones externas. Consulta [GUIA.md](GUIA.md) para operar desde la interfaz y [PILOTO.md](PILOTO.md) para registrar el ensayo.
 
 ## Funciones disponibles
 
@@ -24,12 +24,13 @@ Los almacenes nuevos y anteriores conservan lectores explícitos. No se permite 
 
 ## Pendientes antes de cerrar v1
 
-- Aceptación desde el paquete de la resolución de planes mediante conservación del trabajo retirado y creación de otro destino. Sus doce casos WPF pasaron localmente. No se descartan borradores ni diarios dentro del almacén anterior; conserva su espacio y sus restricciones de limpieza.
-- Aceptación integrada desde el artefacto final y recorrido interactivo completo desde una instalación limpia.
-- Revisión final de identidad, textos, accesibilidad y escalado.
+- Resultado de la repetición VHDX `42068399899`, actualmente en cola. La ejecución anterior aprobada corresponde al mismo motor sin cambios; no se sustituye la conclusión pendiente.
+- Recorrido completo de accesibilidad, lector activo y escalado real de Windows. El recorrido funcional de los tres modos en perfil de producto vacío pasó desde el artefacto descargado; no acredita otra cuenta o equipo.
 - Piloto de 7–14 días y validaciones externas de USB NTFS físico, ciclos de Windows, otra cuenta o equipo y proveedor de nube real.
 
 Estos puntos se mantienen abiertos hasta contar con evidencia. Los ensayos con VHDX, fallos inyectados y procesos terminados se registran por separado y no aprueban el comportamiento de un disco físico. El corte eléctrico físico queda excluido.
+
+Los doce casos WPF de resolución de planes, instalación, actualización, retirada y recuperación posterior pasaron desde el paquete del candidato. Los borradores y diarios conservados no se descartan dentro del almacén anterior: mantienen su espacio y restricciones de limpieza.
 
 ## Límites del alcance
 
