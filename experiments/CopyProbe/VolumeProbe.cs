@@ -181,25 +181,29 @@ internal static class VolumeProbe
         string temporary = Path.Combine(destinationRoot, draft);
         byte[] hash = SHA256.HashData("verified across two volumes"u8);
         WriteNew(source, "verified across two volumes"u8);
-        using var roots = new LocalJobRoots(sourceRoot, destinationRoot);
         try
         {
-            VerifiedCopy.RunBound(roots, binding, name, name, draft, hash, (step, _) =>
+            using var roots = new LocalJobRoots(sourceRoot, destinationRoot);
+            try
             {
-                if (step == CopyStep.Verified)
-                    throw new InjectedFailure();
-            });
-            throw new InvalidOperationException("The cross-volume transfer did not stop at its verification boundary.");
+                VerifiedCopy.RunBound(roots, binding, name, name, draft, hash, (step, _) =>
+                {
+                    if (step == CopyStep.Verified)
+                        throw new InjectedFailure();
+                });
+                throw new InvalidOperationException("The cross-volume transfer did not stop at its verification boundary.");
+            }
+            catch (InjectedFailure)
+            {
+                Check(!File.Exists(final), "The interrupted cross-volume copy was published.");
+            }
+            Check(CopyRecovery.Recover(destinationRoot, temporary, final, binding, hash) == RecoveryResult.Published,
+                "The cross-volume copy could not recover on the destination volume.");
+            CheckHash(final, hash);
+            CheckHash(source, hash);
+            Console.WriteLine("PASS verified transfer across two NTFS volumes recovered at the destination without changing the source.");
         }
-        catch (InjectedFailure)
-        {
-            Check(!File.Exists(final), "The interrupted cross-volume copy was published.");
-        }
-        Check(CopyRecovery.Recover(destinationRoot, temporary, final, binding, hash) == RecoveryResult.Published,
-            "The cross-volume copy could not recover on the destination volume.");
-        CheckHash(final, hash);
-        CheckHash(source, hash);
-        Console.WriteLine("PASS verified transfer across two NTFS volumes recovered at the destination without changing the source.");
+        finally { File.Delete(source); }
     }
 
     private static void WriteNew(string path, ReadOnlySpan<byte> bytes)
