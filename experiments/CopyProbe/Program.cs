@@ -25,6 +25,8 @@ if (args is ["--workspace"])
     return WorkspaceProbe.Run();
 if (args is ["--versions"])
     return VersionProbe.Run();
+if (args is ["--registry"])
+    return RegistryProbe.Run();
 if (args is ["--version-scale", var fileCount, var objectCount] &&
     int.TryParse(fileCount, out int files) && int.TryParse(objectCount, out int objects) &&
     files is >= 1 and <= 329_000 && objects >= 1 && objects <= files)

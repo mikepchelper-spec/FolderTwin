@@ -235,11 +235,21 @@ La bandeja, el horario real, la aceptación del motor y las dos compilaciones re
 
 ### Trabajo pendiente para completar el piloto
 
-- Revisar la automatización de extremo a extremo. El arranque opcional del monitor al iniciar sesión está implementado y pendiente de verificar en CI. El modo de horario actual requiere sesión iniciada. El inicio real de sesión y la recuperación de horarios perdidos tras apagar, suspender o reiniciar Windows necesitan el entorno de VM indicado en el plan. Mantener separadas esas pruebas de la validación ya realizada con un disparador de hora próxima.
+- Revisar la automatización de extremo a extremo en el entorno del piloto. El registro y retirada del arranque opcional del monitor pasaron en Windows. El modo de horario actual requiere sesión iniciada. El inicio real de sesión y la recuperación de horarios perdidos tras apagar, suspender o reiniciar Windows necesitan el entorno de VM indicado en el plan. Mantener separadas esas pruebas de la validación ya realizada con un disparador de hora próxima.
 - Implementar la etapa 5, empezando por el registro durable de generaciones esperadas y expiradas. El almacén actual aún descubre las confirmaciones existentes al enumerar su directorio. Esa enumeración no basta para autorizar limpieza.
 - Añadir la política revisable de retención, el cálculo de referencias, el diario de cuarentena y la purga posterior con plazo de gracia. Detener la limpieza si falta un manifiesto esperado, hay un conflicto, una operación pendiente o una referencia retenida que no se puede verificar.
 - Incorporar el espejo protegido con previsualización, conservación de lo retirado y protección ante origen ausente, vacío, incompleto o con cambios masivos. Probar recuperación tras interrupciones y coordinación con restauración y limpieza antes de habilitar retiradas.
 - Preparar la guía final del piloto, el paquete reproducible final y la matriz de aceptación por requisito. Registrar las comprobaciones de nube real, USB físico, otra cuenta o equipo, reinicio, suspensión, pantallas y notificaciones que requieran un entorno adicional.
+
+El inicio opcional de la bandeja pasó junto al resto de los ensayos desde el paquete reproducible. La comprobación normaliza las identidades de cuenta a SID y aplica `StartWhenAvailable` a los disparadores de hora. El disparador de inicio de sesión se registra por separado con el usuario y demora previstos. [Validación de ambas tareas](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41945164895).
+
+### Base de la etapa 5
+
+Los nuevos almacenes usan `FTVERS02` y dos registros JSONL de generaciones esperadas, separados de los catálogos. Después de guardar el plan pendiente y antes de copiar objetos, registran el ID y el hash completo del documento en las dos réplicas. El registro encadena los eventos por secuencia y SHA-256 y distingue registro, expiración y conservación. La lectura exige réplicas completas e iguales. La reanudación puede completar únicamente el prefijo exacto de un evento conocido por su plan, sin truncar contenido contradictorio. [Formato del registro](experiments/CopyProbe/VERSIONES.md#registro-de-generaciones).
+
+`--registry` interrumpe las cuatro fases de escritura, comprueba que aún no se hayan copiado objetos y reanuda desde el plan guardado. También interrumpe expiraciones, vuelve a conservar una generación, rechaza un registro de otro almacén y comprueba que la pérdida de ambos manifiestos no borre la expectativa registrada. Un registro dañado impide nuevas escrituras de generaciones y queda para revisión, mientras la verificación y restauración de los puntos confirmados mantienen sus lectores independientes.
+
+El formato anterior `FTVERS01` se sigue leyendo y puede crear puntos nuevos. Su enumeración existente no se adopta como registro de expectativas y no autoriza limpieza. Todavía faltan la previsualización de retención, el cálculo y comprobación de referencias, el diario de cuarentena, la purga con plazo de gracia y el espejo protegido.
 
 | Etapa | Entrega | Para pasar a la siguiente |
 |---|---|---|

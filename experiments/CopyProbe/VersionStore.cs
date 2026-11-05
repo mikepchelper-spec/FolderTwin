@@ -18,17 +18,20 @@ internal sealed class VersionStore
     private const string ObjectDirectory = "objects";
     private const string Algorithm = "sha256";
     private const string TimeFormat = "yyyyMMdd'T'HHmmssfffffff'Z'";
-    private static ReadOnlySpan<byte> StoreMagic => "FTVERS01"u8;
+    private static ReadOnlySpan<byte> StoreMagic => "FTVERS02"u8;
+    private static ReadOnlySpan<byte> LegacyStoreMagic => "FTVERS01"u8;
     private readonly LabWorkspace workspace;
     private readonly DestinationBinding binding;
+    private readonly bool registeredGenerations;
     internal string Destination { get; }
     internal DestinationBinding Binding => binding;
 
-    private VersionStore(LabWorkspace workspace, string destination, DestinationBinding binding)
+    private VersionStore(LabWorkspace workspace, string destination, DestinationBinding binding, bool registeredGenerations)
     {
         this.workspace = workspace;
         Destination = destination;
         this.binding = binding;
+        this.registeredGenerations = registeredGenerations;
     }
 
     internal static VersionStore Initialize(LabWorkspace workspace, string destination)
@@ -45,13 +48,14 @@ internal sealed class VersionStore
                 using (WindowsProbeNative.OpenOrCreatePlainDirectory(store.Root, directory)) { }
             using (var objects = WindowsProbeNative.OpenOrCreatePlainDirectory(store.Root, ObjectDirectory))
             using (WindowsProbeNative.OpenOrCreatePlainDirectory(objects, Algorithm)) { }
+            GenerationRegistry.Initialize(store.Root, binding);
             using var record = WindowsProbeNative.OpenPlainFile(store.Root, StoreName, FileAccess.Write, FileShare.None, FileMode.CreateNew);
             record.Write(StoreMagic);
             record.Write(binding.Identity);
             record.Write(binding.Marker.ToByteArray());
             record.Flush(flushToDisk: true);
         }
-        return new(workspace, destination, binding);
+        return new(workspace, destination, binding, registeredGenerations: true);
     }
 
     internal static VersionStore Open(LabWorkspace workspace, string destination)
@@ -63,7 +67,7 @@ internal sealed class VersionStore
         using var record = WindowsProbeNative.OpenPlainFile(store.Root, StoreName, FileAccess.Read, FileShare.Read);
         Span<byte> bytes = stackalloc byte[48];
         if (record.ReadAtLeast(bytes, bytes.Length, false) != bytes.Length || record.ReadByte() != -1 ||
-            !bytes[..8].SequenceEqual(StoreMagic))
+            !bytes[..8].SequenceEqual(StoreMagic) && !bytes[..8].SequenceEqual(LegacyStoreMagic))
             throw new InvalidDataException("El registro del almacén de versiones está dañado.");
         var binding = new DestinationBinding
         {
@@ -71,14 +75,15 @@ internal sealed class VersionStore
             LastVolumePath = WindowsProbeNative.VolumePath(store.Root)
         };
         using var marker = binding.OpenVerifiedMarker(store.Root);
-        return new(workspace, destination, binding);
+        return new(workspace, destination, binding, bytes[..8].SequenceEqual(StoreMagic));
     }
 
     internal static string NewGenerationId() =>
         DateTimeOffset.UtcNow.ToString(TimeFormat, CultureInfo.InvariantCulture) + "-" + Guid.NewGuid().ToString("N");
 
     internal void CreatePoint(string source, string generation, Action<CatalogStep>? checkpoint = null,
-        Action<PendingStep>? pendingCheckpoint = null, Action<CopyStep, string>? objectCheckpoint = null)
+        Action<PendingStep>? pendingCheckpoint = null, Action<CopyStep, string>? objectCheckpoint = null,
+        Action<RegistryStep>? registryCheckpoint = null)
     {
         _ = GenerationTime(generation);
         using var scope = workspace.OpenRegisteredRoot();
@@ -99,8 +104,11 @@ internal sealed class VersionStore
         var files = IntentFiles(pending, generation);
         if (WindowsProbeNative.PlainFileExists(pending, files.Location))
             throw new InvalidDataException("Ya hay un plan para esa generación. Usa reintentar.");
+        if (registeredGenerations)
+            _ = GenerationRegistry.Read(store.Root, binding);
         LabWorkspace.RequireSpace(0, LabWorkspace.AvailableSpace(store.Root));
         PendingBatch.SaveLocked(plan, scope.Root, files, pendingCheckpoint);
+        RecordExpected(store.Root, plan, generation, registryCheckpoint);
         CopyAndConfirm(store.Root, plan, generation, checkpoint, objectCheckpoint);
     }
 
@@ -147,7 +155,25 @@ internal sealed class VersionStore
             VerifyObjects(store.Root, ReadPoint(store.Root, generation).Files);
             return;
         }
+        RecordExpected(store.Root, plan, generation);
         CopyAndConfirm(store.Root, plan, generation, checkpoint, objectCheckpoint: null);
+    }
+
+    private void RecordExpected(SafeFileHandle root, BatchPlan plan, string generation, Action<RegistryStep>? checkpoint = null)
+    {
+        if (registeredGenerations)
+            GenerationRegistry.Register(root, binding, generation, BatchCatalog.WriteMetadata(Stream.Null, plan, generation), checkpoint);
+    }
+
+    internal RegistryState RegisteredGenerations()
+    {
+        if (!registeredGenerations)
+            throw new InvalidDataException("Este almacén anterior no tiene un registro de generaciones que autorice limpieza.");
+        using var scope = workspace.OpenRegisteredRoot();
+        using var store = new DirectoryFence(Destination);
+        using var marker = binding.OpenVerifiedMarker(store.Root);
+        using var operation = OpenLock(store.Root, FileAccess.Read);
+        return GenerationRegistry.Read(store.Root, binding);
     }
 
     private BatchPlan ReadIntent(SafeFileHandle scope, SafeFileHandle store, SafeFileHandle pending, string generation)
