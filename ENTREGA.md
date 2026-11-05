@@ -1,6 +1,6 @@
 # Candidato de FolderTwin 1.0
 
-Estado del 5 de noviembre de 2026: **candidato a lanzamiento con validaciones pendientes**. El objetivo de v1 continúa abierto. Este registro se escribió después de comprobar el artefacto y complementa las notas y la matriz incluidas al compilarlo. El ZIP queda congelado; agregar evidencia no cambia sus bytes.
+Estado del 5 de noviembre de 2026: **candidato 8bde43f retenido por un fallo de foco de teclado**. La revisión adicional en tema claro reprodujo pérdida de foco al abrir recuperación y después de buscar con Enter. La regresión automatizada reproduce el fallo y la corrección está en aceptación. No iniciar el piloto con ese paquete. El ZIP anterior se conserva como evidencia y no se modifica; seleccionar un nuevo candidato tras comprobar la corrección. El objetivo de v1 continúa abierto.
 
 ## Artefacto elegido
 
@@ -18,7 +18,7 @@ Estado del 5 de noviembre de 2026: **candidato a lanzamiento con validaciones pe
 
 El paquete incluye ejecutables, runtime 10.0.14, código fuente del commit, licencia GPL, licencias de .NET, guía, instalación, compatibilidad, notas y procedimiento del piloto. No requiere instalar .NET por separado. Las notas dentro del ZIP reflejan el estado anterior a esta aceptación; este registro y la [matriz actual](V1.md) describen sus resultados posteriores. Los artefactos de Actions caducan a los 30 días: conservar el ZIP y este registro durante todo el piloto.
 
-El [borrador de lanzamiento v1.0.0-rc.1](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/untagged-d02dfe0f3b34f94691a1) conserva el mismo ZIP, su checksum, el manifiesto y este registro como archivos separados. GitHub confirmó el digest del ZIP y el del manifiesto tras subirlos. Está marcado como borrador y prelanzamiento; no se publicó una versión final. Las actualizaciones del registro no modifican el ZIP congelado.
+El borrador **v1.0.0-rc.1**, ID `435666824`, en [Releases](https://github.com/mikepchelper-spec/FolderTwin/releases) conserva el mismo ZIP, su checksum, el manifiesto y el registro como archivos separados. GitHub confirmó el digest del ZIP y el del manifiesto tras subirlos. Está marcado como borrador, prelanzamiento y retenido por la revisión de teclado; no se publicó una versión final. Las actualizaciones del registro no modifican el ZIP congelado. Se usa la lista de Releases porque la URL temporal del borrador cambió al editar sus notas.
 
 ## Aceptación del paquete
 
@@ -46,9 +46,10 @@ Se cerró la aplicación y se conservaron únicamente los tres trabajos sintéti
 
 ## Punto exacto de reanudación
 
-1. Consultar la ejecución **42068399899**, sin crear otra por falta temporal de salida. Incorporar su conclusión y registros. Si falla, preservar el fallo, corregir y seleccionar otro candidato con nueva aceptación.
-2. Seguir [PILOTO.md](PILOTO.md) con este ZIP durante 7–14 días y registrar fecha real de inicio, modos, horarios, verificaciones, restauraciones e incidencias. No contar tiempo de desarrollo como observación.
-3. Completar EXT-02, EXT-03A/B/C, EXT-04A/B y EXT-05A/B/C: USB físico, sesión, reinicio, suspensión, otra cuenta/equipo, proveedor real de nube y accesibilidad. Cada fila indica el entorno y la evidencia necesaria. No reiniciar ni cerrar la sesión del equipo de trabajo para obtener esos resultados.
-4. Resolver los fallos encontrados y repetir sus pruebas. Declarar v1 final solo tras cerrar la matriz obligatoria. Una ausencia de evidencia mantiene el estado de candidato.
+1. Completar la aceptación de la corrección de foco: recuperación debe enfocar la fecha después de habilitar el panel y la búsqueda con Enter debe conservar el buscador para la siguiente consulta. Repetir el recorrido de teclado desde el paquete nuevo antes de seleccionarlo como candidato. El ZIP de la tabla permanece como evidencia del estado anterior.
+2. Consultar la ejecución **42068399899**, sin crear otra por falta temporal de salida. Incorporar su conclusión y registros. Si falla, preservar el fallo y corregirlo.
+3. Seguir [PILOTO.md](PILOTO.md) con el nuevo candidato aceptado durante 7–14 días y registrar fecha real de inicio, modos, horarios, verificaciones, restauraciones e incidencias. No contar tiempo de desarrollo como observación.
+4. Completar EXT-02, EXT-03A/B/C, EXT-04A/B y EXT-05A/B/C: USB físico, sesión, reinicio, suspensión, otra cuenta/equipo, proveedor real de nube y accesibilidad. Cada fila indica el entorno y la evidencia necesaria. No reiniciar ni cerrar la sesión del equipo de trabajo para obtener esos resultados.
+5. Resolver los fallos encontrados y repetir sus pruebas. Declarar v1 final solo tras cerrar la matriz obligatoria. Una ausencia de evidencia mantiene el estado de candidato.
 
 El reinicio abrupto en VM se registra separado del corte de proceso. El corte eléctrico físico está excluido. Pruebas VHDX, nombres accesibles por UI Automation y tamaños de ventana WPF no sustituyen USB físico, lector activo o DPI real.

@@ -2,7 +2,7 @@
 
 *Copias locales. Versiones recuperables.*
 
-App de respaldo para Windows 11 x64. El candidato de v1 permite crear trabajos, copiar, verificar y recuperar desde una interfaz WPF. El paquete reproducible de `8bde43f` pasó CI y el recorrido interactivo de los tres modos en un perfil de producto vacío. La repetición VHDX, el piloto y las validaciones externas indicadas siguen pendientes. [Artefacto y evidencia](ENTREGA.md).
+App de respaldo para Windows 11 x64. La v1 permite crear trabajos, copiar, verificar y recuperar desde una interfaz WPF. El paquete reproducible de `8bde43f` pasó CI y el recorrido funcional de los tres modos, pero queda retenido: una revisión adicional de teclado encontró pérdida de foco en recuperación y búsqueda. La corrección está en aceptación antes de elegir otro candidato. La repetición VHDX, el piloto y las validaciones externas siguen pendientes. [Artefacto, incidencia y reanudación](ENTREGA.md).
 
 ## Leer primero
 
@@ -28,7 +28,7 @@ El panel de producto separa lista y detalles, y los apila en ventanas estrechas.
 
 ## Paquete portable de Windows
 
-Para el piloto usa el [resultado elegido de 8bde43f](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42068611369) y su artefacto `FolderTwin-win-x64-8bde43f8b2cb8ba161938edb0b21c58502d73446`, con los hashes de ENTREGA. El [borrador de lanzamiento](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/untagged-d02dfe0f3b34f94691a1) conserva una copia exacta. Extrae todo el contenido y abre `FolderTwin.exe` para acceder a tus trabajos. El paquete incluye .NET, código fuente, licencias y documentación. [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml) conserva también compilaciones posteriores de desarrollo: no sustituyen automáticamente al candidato comprobado. [Guía de uso](GUIA.md) · [Notas](NOTAS.md) · [Matriz de v1](V1.md).
+El [paquete anterior de 8bde43f](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42068611369) y su copia en el borrador de [Releases](https://github.com/mikepchelper-spec/FolderTwin/releases) se conservan como evidencia; no iniciar el piloto con él mientras siga retenido por la revisión de teclado. ENTREGA identifica el estado y la nueva aceptación pendiente. La entrada de producto es `FolderTwin.exe`, sin argumentos, después de extraer todo el contenido. El paquete incluye .NET, código fuente, licencias y documentación. [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml) conserva las compilaciones de desarrollo: no sustituyen automáticamente al candidato comprobado. [Guía de uso](GUIA.md) · [Notas](NOTAS.md) · [Matriz de v1](V1.md).
 
 Para producir el paquete desde el código, instala el SDK indicado en [global.json](global.json) y ejecuta en PowerShell 7 para Windows:
 

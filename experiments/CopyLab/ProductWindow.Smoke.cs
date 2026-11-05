@@ -1,6 +1,8 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace CopyLab;
 
@@ -21,6 +23,7 @@ public partial class ProductWindow
             var window = new ProductWindow(Open, _ => picks.Dequeue(), testSchedule: (_, _, _) => { });
             try
             {
+                window.Show();
                 await window.InitializeAsync();
                 Check(window.EmptyJobsText.Visibility == Visibility.Visible, "The empty job list was not visible.");
                 foreach (var mode in Enum.GetValues<ProductBackupMode>())
@@ -71,6 +74,20 @@ public partial class ProductWindow
                 await Click(window, window.RecoverJobButton);
                 Check(window.RecoveryDates.Items.Count == 1 && window.RecoveryFiles.Items.Count == 2,
                     "Cumulative recovery did not expose the current accumulated content.");
+                await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                Check(FocusManager.GetFocusedElement(window) == window.RecoveryDates &&
+                    (!window.IsActive || Keyboard.FocusedElement == window.RecoveryDates),
+                    "Opening recovery lost keyboard focus on the date selector.");
+                Keyboard.Focus(window.RecoverySearch);
+                window.RecoverySearch.Text = "no existe en este respaldo";
+                window.RecoverySearch.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice,
+                    PresentationSource.FromVisual(window)!, Environment.TickCount, Key.Enter) { RoutedEvent = Keyboard.KeyDownEvent });
+                await window.activeTask;
+                await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                Check(window.RecoveryFiles.Items.Count == 0 && window.RecoveryPageText.Text == "Sin resultados." &&
+                    FocusManager.GetFocusedElement(window) == window.RecoverySearch &&
+                    (!window.IsActive || Keyboard.FocusedElement == window.RecoverySearch),
+                    "An Enter search lost its empty result or keyboard focus for the next query.");
                 await Click(window, window.VerifyPointButton);
                 Check(window.StatusText.Text.StartsWith("Verificación completa", StringComparison.Ordinal), window.StatusText.Text);
                 File.WriteAllText(Path.Combine(accumulated.MirrorCurrentPath, "exclusivo.txt"), "edición posterior");
@@ -243,6 +260,7 @@ public partial class ProductWindow
             finally { reopened.Close(); }
             Console.Error.WriteLine("PASS WPF executes and recovers all three modes, preserves cumulative extras, retries busy files and reviews mass mirror changes.");
             Console.Error.WriteLine("PASS product recovery pages files, browses folders, searches Unicode, restores a deleted file and tolerates a corrupt local index.");
+            Console.Error.WriteLine("PASS WPF opens recovery with keyboard focus on its date and retains search focus after an empty Enter query.");
             Console.Error.WriteLine("PASS WPF edits name and hour, rejects invalid time, disables, retires and reactivates while keeping recovery and data identity; native schedule operations are injected separately.");
             await RunWorkerSmokeAsync();
             await RunRestoreWorkerSmokeAsync();

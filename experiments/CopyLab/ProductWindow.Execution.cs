@@ -112,7 +112,6 @@ public partial class ProductWindow
             RecoveryDates.ItemsSource = points.Select(point => new RecoveryDate(point)).ToArray();
             RecoveryDates.SelectedIndex = 0;
             await LoadRecoveryPointAsync();
-            RecoveryDates.Focus();
         });
     }
 

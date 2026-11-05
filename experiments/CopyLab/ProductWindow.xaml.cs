@@ -4,6 +4,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Automation.Peers;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using Microsoft.Win32;
 
@@ -344,6 +345,8 @@ public partial class ProductWindow : Window
         bool wasWizard = Wizard.Visibility == Visibility.Visible;
         bool wasImport = ImportPanel.Visibility == Visibility.Visible;
         bool wasApplication = ApplicationPanel.Visibility == Visibility.Visible;
+        bool wasRecovery = RecoveryPanel.Visibility == Visibility.Visible;
+        var previousFocus = Keyboard.FocusedElement as Control;
         busy = true;
         Wizard.IsEnabled = JobListPanel.IsEnabled = RecoveryPanel.IsEnabled = ImportPanel.IsEnabled = ApplicationPanel.IsEnabled = false;
         SetStatus("Comprobando la selección…");
@@ -356,19 +359,22 @@ public partial class ProductWindow : Window
             ResumeRegistrationButton.IsEnabled = JobList.SelectedItem is JobRow { Pending: true };
             RefreshProductActions();
             if (Wizard.Visibility == Visibility.Visible && previousStep != step) FocusCurrentStep();
-            if ((wasWizard || wasImport) && JobListPanel.Visibility == Visibility.Visible)
-                (JobList.SelectedItem is null ? (Control)NewJobButton : JobList).Focus();
-            if (!wasImport && ImportPanel.Visibility == Visibility.Visible) ChooseImportDestinationButton.Focus();
-            if (!wasApplication && ApplicationPanel.Visibility == Visibility.Visible)
-                _ = Dispatcher.InvokeAsync(() =>
-                {
-                    if (busy || closed || ApplicationPanel.Visibility != Visibility.Visible) return;
-                    ApplicationPanel.UpdateLayout();
-                    System.Windows.Input.FocusManager.SetFocusedElement(this, AcceptApplicationUpdate);
-                    System.Windows.Input.Keyboard.Focus(AcceptApplicationUpdate);
-                }, DispatcherPriority.Input);
+            else if ((wasWizard || wasImport) && JobListPanel.Visibility == Visibility.Visible)
+                RestoreKeyboardFocus(JobList.SelectedItem is null ? NewJobButton : JobList);
+            else if (!wasImport && ImportPanel.Visibility == Visibility.Visible) RestoreKeyboardFocus(ChooseImportDestinationButton);
+            else if (!wasApplication && ApplicationPanel.Visibility == Visibility.Visible) RestoreKeyboardFocus(AcceptApplicationUpdate);
+            else if (!wasRecovery && RecoveryPanel.Visibility == Visibility.Visible) RestoreKeyboardFocus(RecoveryDates);
+            else if (previousFocus is not null) RestoreKeyboardFocus(previousFocus);
         }
     }
+
+    private void RestoreKeyboardFocus(Control target) => _ = Dispatcher.InvokeAsync(() =>
+    {
+        if (busy || closed || !target.IsVisible || !target.IsEnabled || Window.GetWindow(target) != this) return;
+        target.UpdateLayout();
+        FocusManager.SetFocusedElement(this, target);
+        Keyboard.Focus(target);
+    }, DispatcherPriority.Input);
 
     private void SetStatus(string text)
     {
