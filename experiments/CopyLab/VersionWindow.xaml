@@ -70,7 +70,7 @@
                     <WrapPanel>
                         <Button x:Name="CreateMirrorButton" Content="Preparar espejo" Click="CreateMirrorClick" Margin="0,0,8,6" />
                         <TextBlock Text="Umbral de cambios (%)" VerticalAlignment="Center" Margin="0,0,6,6" />
-                        <TextBox x:Name="MirrorThreshold" Text="25" Width="48" Margin="0,0,8,6" AutomationProperties.Name="Porcentaje de cambios que exige revisión adicional" />
+                        <TextBox x:Name="MirrorThreshold" Text="25" Width="48" Margin="0,0,8,6" TextChanged="MirrorChoiceChanged" AutomationProperties.Name="Porcentaje de cambios que exige revisión adicional" />
                         <Button x:Name="ReviewMirrorButton" Content="Revisar espejo" Click="ReviewMirrorClick" Margin="0,0,8,6" />
                         <Button x:Name="OpenMirrorFolderButton" Content="Ver carpeta actual" Click="OpenMirrorFolderClick" Margin="0,0,0,6" />
                     </WrapPanel>

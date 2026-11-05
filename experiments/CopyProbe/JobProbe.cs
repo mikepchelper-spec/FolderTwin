@@ -78,6 +78,7 @@ internal static class JobProbe
                 "A damaged diagnostic record hid other results or was overwritten.");
             Console.WriteLine("PASS per-job locking, unavailable roots, substituted identities and damaged history are reported without changing the backup.");
             CheckTerminatedWorker(workspace, source);
+            CheckWorkerImpact(workspace);
             return 0;
         }
         finally
@@ -148,6 +149,48 @@ internal static class JobProbe
             throw new TimeoutException("The job worker did not finish.");
         }
         Check(child.ExitCode == expectedExit, "The job worker failed. " + child.StandardError.ReadToEnd());
+    }
+
+    private static void CheckWorkerImpact(LabWorkspace workspace)
+    {
+        const int count = 1024;
+        string source = Directory.CreateDirectory(Path.Combine(workspace.Root, "origen medición")).FullName;
+        string target = Directory.CreateDirectory(Path.Combine(workspace.Root, "destino medición")).FullName;
+        var data = new byte[4096];
+        for (int index = 0; index < count; index++)
+        {
+            data[0] = (byte)(index % 32);
+            File.WriteAllBytes(Path.Combine(source, $"archivo {index:D4}.bin"), data);
+        }
+        var store = VersionStore.Initialize(workspace, target);
+        Guid job = VersionJob.Create(workspace, source, target);
+        var timer = Stopwatch.StartNew();
+        using var child = StartChild(workspace.Root, job, interrupt: false);
+        // Keep a process handle through exit for CPU and I/O accounting.
+        _ = child.Handle;
+        long sampledPeak = 0;
+        while (!child.WaitForExit(50))
+        {
+            if (timer.Elapsed > TimeSpan.FromSeconds(60))
+            {
+                child.Kill();
+                child.WaitForExit(15000);
+                throw new TimeoutException("The impact worker did not finish.");
+            }
+            try
+            {
+                child.Refresh();
+                sampledPeak = Math.Max(sampledPeak, child.PeakWorkingSet64);
+            }
+            catch (InvalidOperationException) when (child.HasExited) { break; }
+        }
+        timer.Stop();
+        Check(child.ExitCode == 0, "The impact worker failed. " + child.StandardError.ReadToEnd());
+        var io = VersionScaleProbe.ReadCounters(child);
+        Console.WriteLine(FormattableString.Invariant(
+            $"Worker impact: files={count}; seconds={timer.Elapsed.TotalSeconds:F3}; cpu_seconds={child.TotalProcessorTime.TotalSeconds:F3}; read_bytes={io.ReadBytes}; write_bytes={io.WriteBytes}; sampled_peak_working_set_bytes={sampledPeak}."));
+        var point = store.ListPoints().Single();
+        Check(point.FileCount == count && !store.Verify(point.Id), "The measured worker did not confirm its full point.");
     }
 
     private static Process StartChild(string root, Guid id, bool interrupt)

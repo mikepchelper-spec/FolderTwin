@@ -75,7 +75,7 @@ internal static class MirrorJournal
             throw new InvalidDataException("El plan del espejo está dañado.");
         var plan = JsonSerializer.Deserialize<MirrorPlan>(bytes.AsSpan(32), Json)
             ?? throw new InvalidDataException("Falta el plan del espejo.");
-        if (plan.Version != 1 || plan.Generation != generation || plan.Marker != binding.Marker ||
+        if (plan.Version is not (1 or 2) || plan.Generation != generation || plan.Marker != binding.Marker ||
             plan.StoreIdentity is not { Length: 24 } || !plan.StoreIdentity.AsSpan().SequenceEqual(binding.Identity) ||
             plan.CurrentIdentity is not { Length: 24 } || !plan.CurrentIdentity.AsSpan().SequenceEqual(currentIdentity) ||
             plan.SourceIdentity is not { Length: 24 } || plan.DocumentHash is not { Length: 32 } || plan.PreviousHash is not { Length: 32 } ||

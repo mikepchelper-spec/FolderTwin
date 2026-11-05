@@ -5,8 +5,10 @@ using Microsoft.Win32.SafeHandles;
 internal sealed partial class VersionStore
 {
     internal string BeginMirror(MirrorPreview review, bool emptyReviewed = false, bool massReviewed = false,
-        Action<MirrorStep>? checkpoint = null, Action<RegistryStep>? registryCheckpoint = null)
+        Action<MirrorStep>? checkpoint = null, Action<RegistryStep>? registryCheckpoint = null,
+        Action<RegistryStep>? beginRegistryCheckpoint = null)
     {
+        _ = GenerationTime(review.Generation);
         using var scope = workspace.OpenRegisteredRoot();
         workspace.CheckRoots(review.SourcePlan.Source, Destination);
         using var root = new DirectoryFence(Destination);
@@ -21,17 +23,17 @@ internal sealed partial class VersionStore
             throw new InvalidDataException("El origen, el espejo o su registro cambiaron desde la revisión. Repite el análisis.");
         if (fresh.RequiresEmptyReview && !emptyReviewed || fresh.RequiresMassReview && !massReviewed)
             throw new InvalidDataException("Revisa expresamente el origen vacío o el alcance de los cambios antes de actualizar el espejo.");
-        LabWorkspace.RequireSpace(checked(fresh.SourcePlan.Bytes + fresh.StageBytes), LabWorkspace.AvailableSpace(root.Root));
+        LabWorkspace.RequireSpace(fresh.EstimatedBytes, fresh.AvailableBytes);
         using var mirror = MirrorJournal.Open(root.Root, binding, out var currentIdentity);
         using var operations = WindowsProbeNative.OpenPlainDirectory(mirror, MirrorJournal.OperationsName);
         using var directory = WindowsProbeNative.OpenOrCreatePlainDirectory(operations, review.Generation);
         LabWorkspace.RequireEmpty(directory);
-        var plan = new MirrorPlan(1, review.Generation, hash, fresh.Previous, fresh.PreviousHash,
+        var plan = new MirrorPlan(2, review.Generation, hash, fresh.Previous, fresh.PreviousHash,
             Path.GetFileName(fresh.SourcePlan.Source), fresh.SourcePlan.SourceIdentity, currentIdentity,
             binding.Marker, binding.Identity, fresh.MaximumChangePercent, emptyReviewed, massReviewed);
         RetentionJournal.WriteFile(directory, "plan", MirrorJournal.Encode(plan));
         checkpoint?.Invoke(MirrorStep.Planned);
-        ContinueMirror(scope.Root, root.Root, directory, plan, checkpoint, registryCheckpoint);
+        ContinueMirror(scope.Root, root.Root, directory, plan, checkpoint, registryCheckpoint, beginRegistryCheckpoint);
         return plan.Generation;
     }
 
@@ -48,11 +50,11 @@ internal sealed partial class VersionStore
         var plan = MirrorJournal.Read(directory, generation, binding, currentIdentity);
         if (ReadMirrorOperations(root.Root).Any(item => !item.Applied && item.Generation != generation))
             throw new InvalidDataException("Hay otra actualización de espejo pendiente.");
-        ContinueMirror(scope.Root, root.Root, directory, plan, checkpoint, registryCheckpoint);
+        ContinueMirror(scope.Root, root.Root, directory, plan, checkpoint, registryCheckpoint, beginRegistryCheckpoint: null);
     }
 
     private void ContinueMirror(SafeFileHandle scope, SafeFileHandle root, SafeFileHandle directory, MirrorPlan plan,
-        Action<MirrorStep>? checkpoint, Action<RegistryStep>? registryCheckpoint)
+        Action<MirrorStep>? checkpoint, Action<RegistryStep>? registryCheckpoint, Action<RegistryStep>? beginRegistryCheckpoint)
     {
         if (MirrorJournal.HasState(directory, plan, "applied"))
             return;
@@ -102,21 +104,30 @@ internal sealed partial class VersionStore
         try { registry = GenerationRegistry.Read(root, binding); }
         catch (Exception error) when (VersionJob.Expected(error))
         {
-            // A split final publication can only be repaired after the complete
-            // new tree is verified, without making any further data changes.
-            RequireMirrorContents(after, plan.CurrentIdentity);
-            GenerationRegistry.SetMirror(root, binding, plan.Generation, plan.DocumentHash, registryCheckpoint);
+            var prefix = GenerationRegistry.ReadCommonPrefix(root, binding);
+            if (prefix.PendingMirrorGeneration == plan.Generation || plan.Version == 1)
+            {
+                RequireMirrorContents(after, plan.CurrentIdentity);
+                GenerationRegistry.SetMirror(root, binding, plan.Generation, plan.DocumentHash, registryCheckpoint, legacy: plan.Version == 1);
+            }
+            else
+            {
+                RequireMirrorContents(before, plan.CurrentIdentity);
+                GenerationRegistry.SetMirrorPending(root, binding, plan.Generation, plan.DocumentHash, beginRegistryCheckpoint);
+            }
             registry = GenerationRegistry.Read(root, binding);
         }
         if (registry.MirrorGeneration != plan.Previous && registry.MirrorGeneration != plan.Generation)
             throw new InvalidDataException("Otra actualización cambió el punto actual del espejo.");
         if (registry.MirrorGeneration != plan.Generation)
         {
-            RequireRecoverableMirrorState(directory, plan, before, after);
-            ApplyMirrorFiles(directory, plan, before, after, checkpoint);
+            var presentDirectories = RequireRecoverableMirrorState(directory, plan, before, after);
+            if (plan.Version == 2)
+                GenerationRegistry.SetMirrorPending(root, binding, plan.Generation, plan.DocumentHash, beginRegistryCheckpoint);
+            ApplyMirrorFiles(directory, plan, before, after, presentDirectories, checkpoint);
             RequireMirrorContents(after, plan.CurrentIdentity);
             checkpoint?.Invoke(MirrorStep.CurrentVerified);
-            GenerationRegistry.SetMirror(root, binding, plan.Generation, plan.DocumentHash, registryCheckpoint);
+            GenerationRegistry.SetMirror(root, binding, plan.Generation, plan.DocumentHash, registryCheckpoint, legacy: plan.Version == 1);
         }
         RequireMirrorContents(after, plan.CurrentIdentity);
         checkpoint?.Invoke(MirrorStep.Registered);
@@ -172,7 +183,7 @@ internal sealed partial class VersionStore
         return (before?.Files ?? []).Where(file => !next.TryGetValue(file.RelativePath, out var updated) || !SameMirrorFile(file, updated));
     }
 
-    private void RequireRecoverableMirrorState(SafeFileHandle directory, MirrorPlan plan, CatalogSnapshot? before, CatalogSnapshot after)
+    private HashSet<string> RequireRecoverableMirrorState(SafeFileHandle directory, MirrorPlan plan, CatalogSnapshot? before, CatalogSnapshot after)
     {
         var current = FolderBatch.AnalyzeSource(workspace.Root, MirrorCurrentPath, Destination, binding, plan.CurrentIdentity,
             BatchCatalog.VersionMaximumEntries);
@@ -208,6 +219,7 @@ internal sealed partial class VersionStore
             if (!promoted)
                 VerifyStaged(staged, MirrorToken(next.RelativePath), next);
         }
+        return current.Directories.ToHashSet(StringComparer.Ordinal);
     }
 
     private static void VerifyStaged(SafeFileHandle directory, string token, BatchFile file)
@@ -252,7 +264,7 @@ internal sealed partial class VersionStore
     }
 
     private void ApplyMirrorFiles(SafeFileHandle directory, MirrorPlan plan, CatalogSnapshot? before, CatalogSnapshot after,
-        Action<MirrorStep>? checkpoint)
+        HashSet<string> presentDirectories, Action<MirrorStep>? checkpoint)
     {
         var wanted = after.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
         var previous = before?.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
@@ -279,7 +291,7 @@ internal sealed partial class VersionStore
             .OrderByDescending(path => path.Count(c => c == Path.DirectorySeparatorChar)).ThenByDescending(path => path, StringComparer.Ordinal))
         {
             // A prior pass may already have replaced an ancestor with a file.
-            if (!OldDirectoryStillPresent(relative))
+            if (!presentDirectories.Contains(relative))
                 continue;
             string path = Path.Combine(MirrorCurrentPath, relative);
             using (var parent = new DirectoryFence(MirrorCurrentPath, path))
@@ -309,21 +321,6 @@ internal sealed partial class VersionStore
             checkpoint?.Invoke(MirrorStep.Promoted);
         }
 
-        bool OldDirectoryStillPresent(string relative)
-        {
-            // Walk exact names. A case-only rename has two distinct catalog
-            // names but Windows would open either spelling through a handle.
-            string ancestor = MirrorCurrentPath;
-            foreach (string name in relative.Split(Path.DirectorySeparatorChar))
-            {
-                using var parent = new DirectoryFence(ancestor);
-                var entry = WindowsProbeNative.ReadDirectory(parent.Root).FirstOrDefault(item => item.Name == name);
-                if (entry.Name is null || !entry.Attributes.HasFlag(FileAttributes.Directory))
-                    return false;
-                ancestor = Path.Combine(ancestor, name);
-            }
-            return true;
-        }
     }
 
     private bool MirrorFileMatches(BatchFile expected)

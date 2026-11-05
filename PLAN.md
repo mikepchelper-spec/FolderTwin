@@ -233,6 +233,10 @@ El ensayo WPF crea dos trabajos, consulta ambos puntos, retira un origen y compr
 
 La bandeja, el horario real, la aceptación del motor y las dos compilaciones reproducibles pasaron juntos desde el paquete portable. [Validación integrada](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41943191276).
 
+La acción del Programador verificó un punto tras un disparador de hora próximo. Después, el arnés invocó la tarea registrada con el destino apartado, con una operación manual que ocupaba el almacén y finalmente con el destino restaurado y el bloqueo libre. El último intento confirmó un punto verificable y el historial conservó ambos incidentes. El intervalo de cinco minutos y el máximo de tres reinicios se comprobaron en la definición de Windows. [Ejecución desde paquete](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41957255606) y [API de ejecución de una tarea registrada](https://learn.microsoft.com/en-us/windows/win32/api/taskschd/nf-taskschd-iregisteredtask-run).
+
+En la ejecución local de `--jobs`, un trabajador independiente con prioridad normal leyó 1.024 archivos de 4 KiB con 32 contenidos distintos. Confirmó un punto completo en 2,873 s, con 2,578 s de CPU, 5.861.518 bytes leídos y 794.511 escritos según contadores de proceso. El máximo residente observado en muestras cada 50 ms fue 46.264.320 bytes. La prueba no mide latencia de otras aplicaciones ni E/S física. Se mantiene la prioridad normal hasta disponer de mediciones con carga interactiva.
+
 ### Trabajo pendiente para completar el piloto
 
 La [matriz de aceptación](ACEPTACION.md) cruza los requisitos de las etapas 2 a 5 con implementación, arnés y comprobaciones pendientes. La auditoría no considera la copia inicial como modo acumulativo actualizado ni el catálogo de un punto expirado como prueba de que sus datos siguen disponibles.

@@ -9,7 +9,7 @@ Estado revisado desde `718391c`. Esta matriz distingue pruebas de software con d
 | Elegir carpetas y revisar recuento, bytes y capacidad | `LabWorkspace`, `MainWindow`; `--workspace`, WPF `--smoke` | Verificado en espacios registrados y dedicados. |
 | Origen intacto, destinos solapados o sustituidos rechazados | `DirectoryFence`, `DestinationBinding`; `--workspace`, `--paths` | Verificado por software; cambio de letra también en laboratorio de volumen desechable documentado en PLAN. |
 | Archivos nuevos, Unicode, vacíos, carpetas vacías y rutas largas | `FolderBatch`, `VerifiedCopy`; prueba base, `--batch`, `--paths`, WPF | Verificado dentro de la matriz de metadatos soportados. |
-| Copia parcial, incidencia por ruta y reintento | `PendingBatch`, historial; `--batch`, `--workspace`, WPF | Verificado. La copia plana actual confirma un lote inicial; no implementa todavía actualizaciones acumulativas de un lote confirmado. Auditar este hueco junto al motor de espejo, sin presentar el lote inicial como ese modo completo. |
+| Copia parcial, incidencia por ruta y reintento | `PendingBatch`, historial; `--batch`, `--workspace`, WPF | Verificado para el lote inicial de etapa 2. El modo acumulativo con actualización de un lote ya confirmado sigue como capacidad de producto de la sección 2 del plan. |
 | Escritor abierto y diagnóstico orientativo | Lectura compartida sin escritores, `FileUseDiagnostics`; prueba base y WPF | Verificado con escritor sintético y fallback; no se cierran aplicaciones. |
 | Inventario incompleto, límites, offline, enlaces y datos no soportados | `FolderInventory`; `--inventory`, `--batch`, `--workspace` | Verificado mediante atributos y fallos sintéticos. Nube real y ACL de otra cuenta requieren entorno externo. |
 | Cancelar, pausar entre archivos, progreso y cerrar/reabrir | `MainWindow`, `PendingBatch`; `--resume`, WPF | Verificado; la confirmación ya iniciada puede terminar. |
@@ -35,11 +35,11 @@ Estado revisado desde `718391c`. Esta matriz distingue pruebas de software con d
 | Ejecutor independiente y cierre de UI | `VersionJob`, `LabWorker`; `--jobs`, WPF | Verificado con trabajador real y recuperación tras terminarlo. |
 | Identidades, secuencia y conservación de fallos por trabajo | `VersionJob`; `JobProbe`, `TrayProbe` | Verificado; el reloj atrasado no reordena el historial. |
 | Horario con instalación estable y definición comprobada | `LabInstallation`, `WindowsSchedule`; `--schedule-smoke` desde paquete | Verificado con disparador real próximo, actualización diaria y retirada. |
-| No solapar y no apropiarse de tareas ajenas | Bloqueos de trabajo/almacén, política IgnoreNew, comprobación de propietario/acción | Pruebas de bloqueo en `--jobs` y definición en ScheduleProbe; ampliar cruce de disparadores manuales/programados si falta evidencia directa. |
-| Destino ausente/reconectado y reintentos finitos | `VersionJob`, Programador, laboratorio de volumen | `--jobs` verifica ausencia/sustitución, vuelta de las raíces registradas, nuevo punto íntegro y conservación de incidentes; también bloquea el trabajador durante una operación manual. Validación Windows 41951815462 aprobada. Los reintentos del Programador son configuración comprobada, no un ensayo completo de cinco minutos. |
+| No solapar y no apropiarse de tareas ajenas | Bloqueos de trabajo/almacén, política IgnoreNew, comprobación de propietario/acción | `--jobs` cubre instancias concurrentes. El Programador invocó un trabajador mientras una operación manual tenía el almacén ocupado y registró el estado sin modificar el punto. [CI](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41957255606). |
+| Destino ausente/reconectado y reintentos finitos | `VersionJob`, Programador, laboratorio de volumen | El trabajador registra ausencia o sustitución, confirma un punto tras el retorno y conserva las incidencias. También se probó el reintento a demanda desde la tarea registrada. La definición comprueba tres reinicios a intervalos de cinco minutos. [CI](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41957255606). |
 | Bandeja opcional, edad, avisos deduplicados y ejecutar ahora | `LabTray`, `TraySnapshot`, `TrayProbe` | Verificado con varios trabajos y punto expirado; entrega visible de notificaciones depende del entorno. |
 | Inicio de sesión y horario perdido tras suspensión/reinicio | Tarea de usuario interactivo, StartWhenAvailable para hora | Definición verificada. Ciclo real en VM/equipo pendiente; sin sesión iniciada esta modalidad no ejecuta. |
-| Impacto antes de ajustar prioridad | Mediciones de copia, índice y bandeja en PLAN | No se aplicaron ajustes propios. Carga interactiva HDD/SSD y CPUs distintas pendiente externa. |
+| Impacto antes de ajustar prioridad | `JobProbe.CheckWorkerImpact`, contadores del trabajador y métricas de copia, índice y bandeja | Medido localmente con 1.024 archivos. Prioridad normal. Carga interactiva HDD/SSD y CPUs distintas pendiente externa. |
 
 ## Etapa 5 — Retención y espejo
 
@@ -51,16 +51,16 @@ Estado revisado desde `718391c`. Esta matriz distingue pruebas de software con d
 | Cuarentena, diario, deshacer y gracia desde finalización | `RetentionJournal`, `RetentionCleanup`; `--retention` | Verificado por transición, reanudación tardía y proceso terminado con origen ausente. |
 | Purga posterior, nuevos referentes y coordinación con restauración | Bloqueo común, auditoría nueva y rescate de objetos | Verificado en `--retention`; no es reversible una vez iniciada la purga. |
 | Retención con varias generaciones grandes | `--retention-scale` | Verificado: ocho × 4.096 archivos. Pendiente: varias generaciones de aproximadamente 329.000 rutas con recursos acotados y contadores. |
-| Espejo navegable, altas/reemplazos/retiradas y conflictos | `MirrorPreview`, `MirrorExecution`, `MirrorJournal`; `--mirror`, WPF | Motor y flujo local aprobados. Confirmar en CI. |
+| Espejo navegable, altas/reemplazos/retiradas y conflictos | `MirrorPreview`, `MirrorExecution`, `MirrorJournal`, `--mirror`, WPF | Motor y flujo portable aprobados. La ampliación de recuentos y espacio pasó localmente. [CI del espejo](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41956914031). |
 | Origen ausente, parcial, vacío y cambios masivos en espejo | `MirrorProbe.CheckGuards` y WPF | Rechazo de origen ausente, sustituido o bloqueado y revisión adicional de vacío y cambios masivos verificados localmente. |
-| Espejo coordinado con respaldo, restauración y GC | Registro replicado, bloqueo común y referencias al espejo | Verificado localmente con reanudación sin origen, conservación de la fecha anterior y limpieza bloqueada mientras queda una operación pendiente. |
+| Espejo coordinado con respaldo, restauración y GC | Registro replicado, bloqueo común y referencias al espejo | La ampliación pasó pruebas locales con terminación de trabajador, restauración sin origen y pérdida del diario detectada desde el registro. Pendiente CI del estado final. |
 
 ## Entrega y comprobaciones externas
 
 | Requisito | Evidencia actual | Pendiente |
 |---|---|---|
 | Distribución portable reproducible y runtime incluido | Workflow `copy-probe.yml`: dos árboles limpios, SHA256SUMS idénticos, WPF y Programador desde paquete | Repetir para el estado final, conservar artefacto y commit. |
-| Instalación, configuración, copia, recuperación e incidencias | ALFA, VERSIONES y RETENCION | Unificar procedimiento de piloto y diagnóstico, incluir espejo, criterios de aceptación y detención y observación de 7–14 días. |
+| Instalación, configuración, copia, recuperación e incidencias | PILOTO, ALFA, ESPEJO, VERSIONES y RETENCION | Guía incluida en el paquete. Define 7–14 días de observación, restauraciones, diagnóstico y detención. [Compilación portable](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41957255606). |
 | Limpieza de repo, privacidad y conservación de cambios del usuario | Estado inicial limpio; AGENTS exige revisión previa a publicar | Revisar en cada hito y al cierre. Artefactos fuera del repositorio. |
 | USB NTFS físico, nube real, 4Kn físico, otra cuenta/equipo, sesión, reinicio, suspensión, DPI y notificaciones | Solo ensayos sintéticos o definiciones donde se indica | Registrar como validación externa; no bloquear trabajo de software independiente ni declararlas superadas. |
 

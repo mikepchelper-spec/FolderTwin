@@ -35,7 +35,9 @@ public partial class VersionWindow
             var preview = await Task.Run(() => current.PreviewMirror(origin, threshold));
             mirrorReview = preview;
             MirrorText.Text = $"{preview.Added:N0} archivos nuevos, {preview.Replaced:N0} reemplazos, {preview.Removed:N0} retiradas, " +
-                $"{preview.Conflicts.Length:N0} conflictos. Se prepararán {preview.StageBytes:N0} bytes para publicar. " +
+                $"{preview.Conflicts.Length:N0} conflictos. Carpetas nuevas: {preview.AddedDirectories:N0}. " +
+                $"Carpetas retiradas: {preview.RemovedDirectories:N0}. Se prepararán {preview.StageBytes:N0} bytes. " +
+                $"Estimación de datos: {preview.EstimatedBytes:N0} bytes más reserva. Disponible: {preview.AvailableBytes:N0} bytes. " +
                 $"Umbral revisado: {preview.MaximumChangePercent} %." +
                 (preview.Conflicts.Length == 0 ? "" : "\nConflictos: " + string.Join(", ", preview.Conflicts.Take(10))) +
                 (preview.RequiresEmptyReview ? "\nEl origen está vacío." : "") +
@@ -47,7 +49,7 @@ public partial class VersionWindow
     private void ApplyMirrorClick(object sender, RoutedEventArgs e)
     {
         if (busy || store is not { } current || mirrorReview is not { } preview || source != preview.SourcePlan.Source ||
-            AcceptMirror.IsChecked != true || preview.Conflicts.Length != 0)
+            AcceptMirror.IsChecked != true || preview.Conflicts.Length != 0 || !MatchesMirrorThreshold(preview))
             return;
         bool empty = AcceptEmptyMirror.IsChecked == true;
         bool mass = AcceptMassMirror.IsChecked == true;
@@ -127,11 +129,15 @@ public partial class VersionWindow
         OpenMirrorFolderButton.IsEnabled = ready && mirrorConfigured && pendingMirror is null;
         ResumeMirrorButton.IsEnabled = ready && pendingMirror is not null;
         AcceptMirror.IsEnabled = ReviewMirrorButton.IsEnabled && mirrorReview is { Conflicts.Length: 0 } review &&
-            review.SourcePlan.Source == source;
+            review.SourcePlan.Source == source && MatchesMirrorThreshold(review);
         AcceptEmptyMirror.IsEnabled = AcceptMirror.IsEnabled && mirrorReview?.RequiresEmptyReview == true;
         AcceptMassMirror.IsEnabled = AcceptMirror.IsEnabled && mirrorReview?.RequiresMassReview == true;
         ApplyMirrorButton.IsEnabled = AcceptMirror.IsEnabled && AcceptMirror.IsChecked == true &&
             (!AcceptEmptyMirror.IsEnabled || AcceptEmptyMirror.IsChecked == true) &&
             (!AcceptMassMirror.IsEnabled || AcceptMassMirror.IsChecked == true);
     }
+
+    private bool MatchesMirrorThreshold(MirrorPreview preview) =>
+        int.TryParse(MirrorThreshold.Text, NumberStyles.None, CultureInfo.InvariantCulture, out int threshold) &&
+        threshold == preview.MaximumChangePercent;
 }

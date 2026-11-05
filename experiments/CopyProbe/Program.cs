@@ -31,6 +31,8 @@ if (args is ["--retention"])
     return RetentionProbe.Run();
 if (args is ["--mirror"])
     return MirrorProbe.Run();
+if (args is ["--interrupt-mirror-child", var mirrorRoot])
+    return MirrorProbe.InterruptChild(mirrorRoot);
 if (args is ["--retention-scale"])
     return RetentionScaleProbe.Run();
 if (args is ["--retention-scale", "329000"])

@@ -2,8 +2,9 @@ using System.Security.Cryptography;
 using Microsoft.Win32.SafeHandles;
 
 internal sealed record MirrorPreview(string Generation, BatchPlan SourcePlan, string? Previous, byte[] PreviousHash,
-    byte[] RegistryHash, byte[] CurrentIdentity, int Added, int Replaced, int Removed, string[] Conflicts,
-    long StageBytes, int MaximumChangePercent, bool RequiresEmptyReview, bool RequiresMassReview);
+    byte[] RegistryHash, byte[] CurrentIdentity, int Added, int Replaced, int Removed, int AddedDirectories, int RemovedDirectories,
+    string[] Conflicts, long StageBytes, long EstimatedBytes, ulong AvailableBytes, int MaximumChangePercent,
+    bool RequiresEmptyReview, bool RequiresMassReview);
 
 internal sealed partial class VersionStore
 {
@@ -54,10 +55,14 @@ internal sealed partial class VersionStore
         int added = desired.Keys.Count(path => !previous.ContainsKey(path));
         int replaced = desired.Values.Count(file => previous.TryGetValue(file.RelativePath, out var old) && !SameMirrorFile(old, file));
         int removed = previous.Keys.Count(path => !desired.ContainsKey(path));
+        int addedDirectories = sourcePlan.Directories.Except(before?.Directories ?? [], StringComparer.Ordinal).Count();
+        int removedDirectories = (before?.Directories ?? []).Except(sourcePlan.Directories, StringComparer.Ordinal).Count();
         long stageBytes = desired.Values.Where(file => !previous.TryGetValue(file.RelativePath, out var old) || !SameMirrorFile(old, file)).Sum(file => file.Length);
-        bool mass = previous.Count > 0 && (long)(replaced + removed) * 100 >= (long)previous.Count * maximumChangePercent;
+        long previousEntries = previous.Count + (before?.Directories.Length ?? 0);
+        bool mass = previousEntries > 0 && (replaced + removed + removedDirectories) * 100L >= previousEntries * maximumChangePercent;
         return new(generation, sourcePlan, registry.MirrorGeneration, before?.DocumentHash ?? new byte[32], registry.LastHash,
-            currentIdentity, added, replaced, removed, conflicts, stageBytes, maximumChangePercent,
+            currentIdentity, added, replaced, removed, addedDirectories, removedDirectories, conflicts, stageBytes,
+            checked(sourcePlan.Bytes + stageBytes), LabWorkspace.AvailableSpace(root), maximumChangePercent,
             sourcePlan.Files.Length == 0 && sourcePlan.Directories.Length == 0, mass);
     }
 
@@ -114,6 +119,8 @@ internal sealed partial class VersionStore
             var pending = operations.Where(item => !item.Applied).ToArray();
             if (pending.Length > 1)
                 throw new InvalidDataException("Hay varios diarios del espejo pendientes.");
+            if (pending.Length == 0 && GenerationRegistry.Read(store.Root, binding).PendingMirrorGeneration is not null)
+                throw new InvalidDataException("Falta el diario de una actualización registrada del espejo.");
             return (true, pending.SingleOrDefault());
         }
         catch (FileNotFoundException) when (operations.Length == 0) { return (false, null); }
@@ -126,7 +133,8 @@ internal sealed partial class VersionStore
         try { presence = WindowsProbeNative.OpenPlainDirectory(root, MirrorJournal.DirectoryName); }
         catch (FileNotFoundException)
         {
-            if (GenerationRegistry.Read(root, binding).MirrorGeneration is not null)
+            var registry = GenerationRegistry.Read(root, binding);
+            if (registry.MirrorGeneration is not null || registry.PendingMirrorGeneration is not null)
                 throw new InvalidDataException("Falta el espejo registrado. La limpieza queda suspendida.");
             return [];
         }
@@ -147,7 +155,8 @@ internal sealed partial class VersionStore
 
     private void RequireNoPendingMirror(SafeFileHandle root)
     {
-        if (ReadMirrorOperations(root).Any(operation => !operation.Applied))
+        if (ReadMirrorOperations(root).Any(operation => !operation.Applied) ||
+            GenerationRegistry.Read(root, binding).PendingMirrorGeneration is not null)
             throw new InvalidDataException("Hay una actualización de espejo pendiente. Reanúdala antes de continuar.");
     }
 }

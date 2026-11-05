@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Reflection;
+
 internal static class MirrorProbe
 {
     internal static int Run()
@@ -39,27 +42,107 @@ internal static class MirrorProbe
         }
         Console.WriteLine("PASS mirror reopens at every transition, completes without the source after ready, and restores retired content.");
 
+        foreach (bool begin in new[] { true, false })
         foreach (var boundary in Enum.GetValues<RegistryStep>())
         {
             using var fixture = new Fixture();
             fixture.Change();
             var review = fixture.Store.PreviewMirror(fixture.Source);
             bool reached = false;
-            Reject(() => fixture.Store.BeginMirror(review, massReviewed: true, registryCheckpoint: step =>
+            Action<RegistryStep> interrupt = step =>
             {
                 if (step != boundary) return;
                 reached = true;
                 throw new IOException("Injected mirror registry interruption.");
-            }));
+            };
+            Reject(() => fixture.Store.BeginMirror(review, massReviewed: true,
+                registryCheckpoint: begin ? null : interrupt, beginRegistryCheckpoint: begin ? interrupt : null));
             Check(reached, "The mirror registry append was not interrupted.");
             Directory.Move(fixture.Source, Path.Combine(fixture.Workspace.Root, "fuera"));
             fixture.Store.ResumeMirror(review.Generation);
             fixture.VerifyUpdated();
         }
-        Console.WriteLine("PASS the completed mirror repairs the exact split registry publication with source absent.");
+        Console.WriteLine("PASS the mirror repairs the exact split registry events for start and completion with source absent.");
         CheckGuards();
         CheckReadyConflict();
+        CheckMissingJournal();
+        CheckTerminatedWorker();
         return 0;
+    }
+
+    private static void CheckMissingJournal()
+    {
+        using var fixture = new Fixture();
+        fixture.Change();
+        var review = fixture.Store.PreviewMirror(fixture.Source);
+        Reject(() => fixture.Store.BeginMirror(review, massReviewed: true, checkpoint: step =>
+        {
+            if (step == MirrorStep.Retired) throw new IOException("Injected after retirement.");
+        }));
+        Check(fixture.Store.RegisteredGenerations().PendingMirrorGeneration == review.Generation,
+            "A file was retired before the mirrored intent was registered.");
+        string journal = Path.Combine(fixture.Destination, "mirror", "operations", review.Generation);
+        string moved = Path.Combine(fixture.Workspace.Root, "apartado");
+        Directory.Move(journal, moved);
+        Reject(() => fixture.Store.PreviewRetention(new(1, 0, 0, 1)));
+        Reject(() => fixture.Store.MirrorStatus());
+        Directory.Move(moved, journal);
+        fixture.Store.ResumeMirror(review.Generation);
+        Check(fixture.Store.RegisteredGenerations().PendingMirrorGeneration is null,
+            "A completed operation left a pending mirror reference.");
+        Console.WriteLine("PASS the replicated intent blocks cleanup when the pending mirror journal disappears.");
+    }
+
+    internal static int InterruptChild(string root)
+    {
+        var workspace = LabWorkspace.Open(root);
+        var store = VersionStore.Open(workspace, Path.Combine(root, "almacén"));
+        var review = store.PreviewMirror(Path.Combine(root, "origen"));
+        store.BeginMirror(review, massReviewed: true, checkpoint: step =>
+        {
+            if (step != MirrorStep.Retired)
+                return;
+            Console.WriteLine("READY");
+            Console.Out.Flush();
+            Console.ReadLine();
+        });
+        return 0;
+    }
+
+    private static void CheckTerminatedWorker()
+    {
+        using var fixture = new Fixture();
+        fixture.Change();
+        string executable = Environment.ProcessPath ?? throw new InvalidOperationException("Executable unavailable.");
+        var start = new ProcessStartInfo(executable)
+        {
+            UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true,
+            RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+            start.ArgumentList.Add(Assembly.GetExecutingAssembly().Location);
+        start.ArgumentList.Add("--interrupt-mirror-child");
+        start.ArgumentList.Add(fixture.Workspace.Root);
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start mirror worker.");
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        try
+        {
+            string? line = process.StandardOutput.ReadLineAsync(deadline.Token).AsTask().GetAwaiter().GetResult();
+            Check(line == "READY", "The child did not retire a file.");
+            process.Kill();
+            Check(process.WaitForExit(15000), "The child did not exit.");
+        }
+        finally
+        {
+            if (!process.HasExited) { process.Kill(); process.WaitForExit(15000); }
+        }
+        Directory.Move(fixture.Source, Path.Combine(fixture.Workspace.Root, "origen apartado"));
+        var reopened = VersionStore.Open(LabWorkspace.Open(fixture.Workspace.Root), fixture.Destination);
+        string pending = reopened.ListMirrorOperations().Single(item => !item.Applied).Generation;
+        reopened.Restore(fixture.First, fixture.Folder("restauración durante interrupción"));
+        reopened.ResumeMirror(pending);
+        fixture.VerifyUpdated();
+        Console.WriteLine("PASS terminating the mirror worker during retirement preserves independent restore and allows resumption without source.");
     }
 
     private static void CheckReadyConflict()
@@ -104,6 +187,13 @@ internal static class MirrorProbe
         Reject(() => fixture.Store.BeginMirror(stale, true, true));
         using (var writer = new FileStream(changed, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
             Reject(() => fixture.Store.PreviewMirror(fixture.Source));
+        string linked = Path.Combine(fixture.Source, "no enumerar");
+        string external = fixture.Folder("fuera del origen");
+        File.WriteAllText(Path.Combine(external, "conservar.txt"), "afuera");
+        PathProbe.CreateJunction(linked, external);
+        Reject(() => fixture.Store.PreviewMirror(fixture.Source));
+        Directory.Delete(linked);
+        Check(File.ReadAllText(Path.Combine(external, "conservar.txt")) == "afuera", "The mirror touched the junction target.");
         string away = Path.Combine(fixture.Workspace.Root, "fuera");
         Directory.Move(fixture.Source, away);
         Reject(() => fixture.Store.PreviewMirror(fixture.Source));
