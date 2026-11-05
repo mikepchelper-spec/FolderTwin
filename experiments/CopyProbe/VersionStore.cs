@@ -99,6 +99,7 @@ internal sealed partial class VersionStore
         using var store = new DirectoryFence(Destination);
         using var marker = binding.OpenVerifiedMarker(store.Root);
         using var operation = OpenLock(store.Root, FileAccess.ReadWrite);
+        RequireNoAbandonInProgress(store.Root);
         if (IsCommitted(store.Root, generation))
             throw new InvalidDataException("La generación ya está confirmada.");
         byte[] identity = WindowsProbeNative.DirectoryIdentity(origin.Root);
@@ -112,7 +113,10 @@ internal sealed partial class VersionStore
         if (WindowsProbeNative.PlainFileExists(pending, files.Location))
             throw new InvalidDataException("Ya hay un plan para esa generación. Usa reintentar.");
         if (registeredGenerations)
-            _ = GenerationRegistry.Read(store.Root, binding);
+        {
+            if (GenerationRegistry.Read(store.Root, binding).Abandoned.ContainsKey(generation))
+                throw new InvalidDataException("El plan se conservó como abandonado. Inicia una generación nueva.");
+        }
         LabWorkspace.RequireSpace(0, LabWorkspace.AvailableSpace(store.Root));
         workspace.SaveIntent(plan, scope.Root, files, pendingCheckpoint);
         RecordExpected(store.Root, plan, generation, registryCheckpoint);
@@ -128,11 +132,12 @@ internal sealed partial class VersionStore
         using var pending = OpenPending(store.Root);
         if (pending is null)
             return [];
+        var abandoned = registeredGenerations ? GenerationRegistry.ReadCommonPrefix(store.Root, binding).Abandoned.Keys.ToHashSet(StringComparer.Ordinal) : [];
         return WindowsProbeNative.ReadDirectory(pending)
             .Where(entry => entry.Name.EndsWith(LocationSuffix, StringComparison.Ordinal))
             .Select(entry => entry.Name[..^LocationSuffix.Length])
             .OrderDescending(StringComparer.Ordinal)
-            .Where(id => !IsCommitted(store.Root, id))
+            .Where(id => !IsCommitted(store.Root, id) && !abandoned.Contains(id))
             .Select(id =>
             {
                 var plan = ReadIntent(scope.Root, store.Root, pending, id);
@@ -149,6 +154,9 @@ internal sealed partial class VersionStore
         using var store = new DirectoryFence(Destination);
         using var marker = binding.OpenVerifiedMarker(store.Root);
         using var operation = OpenLock(store.Root, FileAccess.ReadWrite);
+        RequireNoAbandonInProgress(store.Root);
+        if (registeredGenerations && GenerationRegistry.ReadCommonPrefix(store.Root, binding).Abandoned.ContainsKey(generation))
+            throw new InvalidDataException("El plan se conservó como abandonado. Inicia una generación nueva.");
         bool committed = IsCommitted(store.Root, generation);
         if (committed && expectedSourceIdentity is null)
         {

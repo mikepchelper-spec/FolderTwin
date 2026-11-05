@@ -98,6 +98,7 @@ internal static partial class ProductRunner
                 string? previous = run.Previous.Runs.Where(item => item.Intent.Operation == ProductRunOperation.Backup)
                     .TakeWhile(item => item.Result?.State != ProductRunState.Confirmed)
                     .FirstOrDefault(item => item.Generation is not null)?.Generation;
+                if (previous is not null && store.IsAbandonedGeneration(previous)) previous = null;
                 string generation = pending.SingleOrDefault()?.Id ?? previous ?? VersionStore.NewGenerationId();
                 run.SetGeneration(generation);
                 if (pending.Length == 1 || store.ListPoints().Any(point => point.Id == generation))

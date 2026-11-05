@@ -14,6 +14,7 @@ internal sealed partial class VersionStore
         using var root = new DirectoryFence(Destination);
         using var marker = binding.OpenVerifiedMarker(root.Root);
         using var operation = OpenLock(root.Root, FileAccess.ReadWrite);
+        RequireNoAbandonInProgress(root.Root);
         var fresh = BuildMirrorPreview(scope.Root, root.Root, review.SourcePlan.Source, review.MaximumChangePercent, review.Generation);
         if (!fresh.RegistryHash.AsSpan().SequenceEqual(review.RegistryHash) || fresh.Previous != review.Previous ||
             !fresh.CurrentIdentity.AsSpan().SequenceEqual(review.CurrentIdentity) || fresh.Conflicts.Length != 0 ||
@@ -47,6 +48,7 @@ internal sealed partial class VersionStore
         using var root = new DirectoryFence(Destination);
         using var marker = binding.OpenVerifiedMarker(root.Root);
         using var operation = OpenLock(root.Root, FileAccess.ReadWrite);
+        RequireNoAbandonInProgress(root.Root);
         using var mirror = MirrorJournal.Open(root.Root, binding, out var currentIdentity);
         using var operations = WindowsProbeNative.OpenPlainDirectory(mirror, MirrorJournal.OperationsName);
         using var directory = WindowsProbeNative.OpenPlainDirectory(operations, generation);

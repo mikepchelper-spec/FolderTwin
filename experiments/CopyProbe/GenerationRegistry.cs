@@ -6,7 +6,8 @@ using Microsoft.Win32.SafeHandles;
 
 internal enum RegistryStep { PrimaryPartial, PrimaryFlushed, ReplicaPartial, ReplicaFlushed }
 internal sealed record RegistryState(Dictionary<string, byte[]> Generations, HashSet<string> Expired,
-    long NextSequence, byte[] LastHash, string[] RegistrationOrder, string? MirrorGeneration, string? PendingMirrorGeneration);
+    long NextSequence, byte[] LastHash, string[] RegistrationOrder, string? MirrorGeneration, string? PendingMirrorGeneration,
+    Dictionary<string, byte[]> Abandoned);
 
 // Replicated append-only expectations, separate from the manifests being retained.
 // Repair only an exact prefix of the event supplied by the caller's durable plan.
@@ -73,6 +74,12 @@ internal static class GenerationRegistry
     internal static void SetMirrorPending(SafeFileHandle root, DestinationBinding binding, string generation, byte[] documentHash,
         Action<RegistryStep>? checkpoint = null) => Append(root, binding, "mirror-begin", generation, documentHash, checkpoint);
 
+    internal static RegistryState PreviewRegistration(SafeFileHandle root, DestinationBinding binding, string generation, byte[] hash) =>
+        Append(root, binding, "register", generation, hash, null, validateOnly: true);
+
+    internal static void Abandon(SafeFileHandle root, DestinationBinding binding, string generation, byte[] hash,
+        Action<RegistryStep>? checkpoint = null) => Append(root, binding, "abandon", generation, hash, checkpoint);
+
     // Only a durable journal may supply the missing transitions. This prefix is
     // never sufficient authority for copying, retention selection or deletion.
     internal static RegistryState ReadCommonPrefix(SafeFileHandle root, DestinationBinding binding)
@@ -88,14 +95,14 @@ internal static class GenerationRegistry
         return Parse(first.AsSpan(0, prefix), binding);
     }
 
-    private static void Append(SafeFileHandle root, DestinationBinding binding, string kind, string generation, byte[] hash,
-        Action<RegistryStep>? checkpoint, bool legacyMirror = false)
+    private static RegistryState Append(SafeFileHandle root, DestinationBinding binding, string kind, string generation, byte[] hash,
+        Action<RegistryStep>? checkpoint, bool legacyMirror = false, bool validateOnly = false)
     {
         _ = VersionStore.GenerationTime(generation);
         if (hash.Length != 32)
             throw new InvalidDataException("Hash de generación no válido.");
-        using var primary = WindowsProbeNative.OpenPlainFile(root, PrimaryName, FileAccess.ReadWrite, FileShare.None);
-        using var replica = WindowsProbeNative.OpenPlainFile(root, ReplicaName, FileAccess.ReadWrite, FileShare.None);
+        using var primary = WindowsProbeNative.OpenPlainFile(root, PrimaryName, validateOnly ? FileAccess.Read : FileAccess.ReadWrite, FileShare.None);
+        using var replica = WindowsProbeNative.OpenPlainFile(root, ReplicaName, validateOnly ? FileAccess.Read : FileAccess.ReadWrite, FileShare.None);
         byte[] first = ReadBytes(primary);
         byte[] second = ReadBytes(replica);
         int shared = 0;
@@ -107,6 +114,12 @@ internal static class GenerationRegistry
             shared++;
         }
         var state = Parse(first.AsSpan(0, prefix), binding);
+        if (state.Abandoned.TryGetValue(generation, out var abandoned))
+        {
+            if (kind != "abandon" || !abandoned.AsSpan().SequenceEqual(hash) || prefix != first.Length || prefix != second.Length)
+                throw new InvalidDataException("La generación abandonada no se puede reutilizar ni cambiar.");
+            return state;
+        }
         if (state.Generations.TryGetValue(generation, out var prior))
         {
             if (!prior.AsSpan().SequenceEqual(hash))
@@ -118,7 +131,7 @@ internal static class GenerationRegistry
             {
                 if (prefix != first.Length || prefix != second.Length)
                     throw new InvalidDataException("Otra transición del registro sigue pendiente.");
-                return;
+                return state;
             }
         }
         else if (kind != "register")
@@ -129,14 +142,22 @@ internal static class GenerationRegistry
         if (kind == "mirror-begin" && (state.PendingMirrorGeneration is not null || state.MirrorGeneration == generation) ||
             kind == "mirror" && state.PendingMirrorGeneration != generation && !(legacyMirror && state.PendingMirrorGeneration is null))
             throw new InvalidDataException("La actualización del espejo no coincide con el registro replicado.");
-        byte[] expected = Encode(new(1, state.NextSequence, kind, generation, hash,
+        if (kind == "abandon" && (state.MirrorGeneration == generation || state.PendingMirrorGeneration == generation || state.Expired.Contains(generation)))
+            throw new InvalidDataException("La generación está vinculada a otra operación y no se puede abandonar.");
+        byte[] expected = Encode(new(kind == "abandon" ? 2 : 1, state.NextSequence, kind, generation, hash,
             binding.Marker, binding.Identity, state.LastHash));
         if (prefix + expected.Length > MaximumBytes)
             throw new InvalidDataException("El registro de generaciones alcanzó su límite.");
         RequirePrefix(first.AsSpan(prefix));
         RequirePrefix(second.AsSpan(prefix));
+        byte[] completed = new byte[prefix + expected.Length];
+        first.AsSpan(0, prefix).CopyTo(completed);
+        expected.CopyTo(completed, prefix);
+        var finalState = Parse(completed, binding);
+        if (validateOnly) return finalState;
         Complete(primary, first.Length - prefix, RegistryStep.PrimaryPartial, RegistryStep.PrimaryFlushed);
         Complete(replica, second.Length - prefix, RegistryStep.ReplicaPartial, RegistryStep.ReplicaFlushed);
+        return finalState;
 
         void RequirePrefix(ReadOnlySpan<byte> observed)
         {
@@ -184,6 +205,7 @@ internal static class GenerationRegistry
             throw new InvalidDataException("El registro de generaciones quedó incompleto.");
         var generations = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         var expired = new HashSet<string>(StringComparer.Ordinal);
+        var abandoned = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         var registrationOrder = new List<string>();
         string? mirror = null;
         string? pendingMirror = null;
@@ -198,7 +220,7 @@ internal static class GenerationRegistry
             var envelope = JsonSerializer.Deserialize<Envelope>(bytes[..end], Json)
                 ?? throw new InvalidDataException("Falta un registro de generación.");
             var payload = envelope.Payload;
-            if (payload is null || payload.Version != 1 || payload.Sequence != sequence ||
+            if (payload is null || payload.Version != (payload.Kind == "abandon" ? 2 : 1) || payload.Sequence != sequence ||
                 payload.JobId != binding.Marker || payload.Identity is not { Length: 24 } ||
                 !payload.Identity.AsSpan().SequenceEqual(binding.Identity) ||
                 payload.DocumentHash is not { Length: 32 } || payload.PreviousHash is not { Length: 32 } ||
@@ -215,7 +237,7 @@ internal static class GenerationRegistry
                 _ = VersionStore.GenerationTime(payload.Generation);
                 if (payload.Kind == "register")
                 {
-                    if (!generations.TryAdd(payload.Generation, payload.DocumentHash))
+                    if (abandoned.ContainsKey(payload.Generation) || !generations.TryAdd(payload.Generation, payload.DocumentHash))
                         throw new InvalidDataException("Una generación está registrada dos veces.");
                     registrationOrder.Add(payload.Generation);
                 }
@@ -224,7 +246,15 @@ internal static class GenerationRegistry
                     if (!generations.TryGetValue(payload.Generation, out var hash) ||
                         !hash.AsSpan().SequenceEqual(payload.DocumentHash))
                         throw new InvalidDataException("La transición no corresponde al catálogo registrado.");
-                    if (payload.Kind == "expire")
+                    if (payload.Kind == "abandon")
+                    {
+                        if (mirror == payload.Generation || pendingMirror == payload.Generation || expired.Contains(payload.Generation) ||
+                            !abandoned.TryAdd(payload.Generation, payload.DocumentHash))
+                            throw new InvalidDataException("El abandono contradice otra transición del registro.");
+                        generations.Remove(payload.Generation);
+                        registrationOrder.Remove(payload.Generation);
+                    }
+                    else if (payload.Kind == "expire")
                     {
                         if (mirror == payload.Generation || pendingMirror == payload.Generation || !expired.Add(payload.Generation))
                             throw new InvalidDataException("La generación ya estaba expirada.");
@@ -252,6 +282,6 @@ internal static class GenerationRegistry
             sequence++;
             bytes = bytes[(end + 1)..];
         }
-        return new(generations, expired, sequence, previous, registrationOrder.ToArray(), mirror, pendingMirror);
+        return new(generations, expired, sequence, previous, registrationOrder.ToArray(), mirror, pendingMirror, abandoned);
     }
 }

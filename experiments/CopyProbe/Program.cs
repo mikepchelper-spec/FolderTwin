@@ -23,6 +23,10 @@ if (args is ["--product-jobs"])
     return ProductJobRegistryProbe.Run();
 if (args is ["--product-config"])
     return ProductConfigurationProbe.Run();
+if (args is ["--version-abandon"])
+    return VersionAbandonProbe.Run();
+if (args is ["--held-abandon-version-child", var abandonRoot, var abandonJob, var abandonGeneration] && Guid.TryParseExact(abandonJob, "N", out var abandonJobId))
+    return VersionAbandonProbe.HeldChild(abandonRoot, abandonJobId, abandonGeneration);
 if (args is ["--run-product-job", var productRegistry, var productId] && Guid.TryParseExact(productId, "N", out var productJobId))
     return ProductRunner.RunCommand(productRegistry, productJobId);
 if (args is ["--run-product-job", var approvedRegistry, var approvedJob, var approval] &&

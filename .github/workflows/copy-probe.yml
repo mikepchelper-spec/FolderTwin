@@ -43,6 +43,8 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-restore
       - name: Verify durable controllable mirror analysis and bound approvals
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-mirror-review
+      - name: Verify recoverable abandonment of incomplete version generations
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --version-abandon
       - name: Verify bounded metadata inventory and partial results
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --inventory
       - name: Verify synthetic batches, partial results, and retry

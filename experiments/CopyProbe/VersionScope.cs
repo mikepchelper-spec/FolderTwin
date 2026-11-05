@@ -8,6 +8,7 @@ internal sealed class VersionScope
     private readonly ProductJob? job;
     internal string Root => lab?.Root ?? job!.Destination.LastVolumePath;
     internal bool IsAccumulative => job?.Options.Mode == ProductBackupMode.Accumulative;
+    internal bool IsProductVersion => job?.Options.Mode == ProductBackupMode.Versions;
 
     internal VersionScope(LabWorkspace lab) => this.lab = lab;
     internal VersionScope(ProductJob job) => this.job = job;

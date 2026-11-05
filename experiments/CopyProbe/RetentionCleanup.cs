@@ -216,7 +216,7 @@ internal sealed partial class VersionStore
         first.Expire.SequenceEqual(second.Expire) && first.Objects.SequenceEqual(second.Objects);
 
     private static HashSet<string> ActiveReferences(RetentionInventory inventory) =>
-        inventory.References.Where(pair => !inventory.Registry.Expired.Contains(pair.Key))
+        inventory.References.Where(pair => inventory.Registry.Generations.ContainsKey(pair.Key) && !inventory.Registry.Expired.Contains(pair.Key))
             .SelectMany(pair => pair.Value).ToHashSet(StringComparer.Ordinal);
 
     private static void ValidatePlanReferences(RetentionPlan plan, RetentionInventory inventory)

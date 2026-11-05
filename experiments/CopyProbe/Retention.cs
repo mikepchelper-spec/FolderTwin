@@ -51,7 +51,7 @@ internal sealed record RetentionPreview(RetentionPolicy Policy, DateTimeOffset R
 internal sealed partial class VersionStore
 {
     private sealed record RetentionInventory(RegistryState Registry, Dictionary<string, HashSet<string>> References,
-        Dictionary<string, BatchFile> Objects, Dictionary<string, string> Sources);
+        Dictionary<string, BatchFile> Objects, Dictionary<string, string> Sources, HashSet<string> AbandonedObjects);
 
     internal RetentionPreview PreviewRetention(RetentionPolicy policy, DateTimeOffset? clock = null)
     {
@@ -75,6 +75,7 @@ internal sealed partial class VersionStore
         string[] expire = active.Where(id => !keep.Contains(id)).ToArray();
         var referenced = new HashSet<string>(keep.SelectMany(id => inventory.References[id]), StringComparer.Ordinal);
         string[] candidates = expire.SelectMany(id => inventory.References[id])
+            .Concat(inventory.AbandonedObjects)
             .Distinct(StringComparer.Ordinal).Where(digest => !referenced.Contains(digest)).Order(StringComparer.Ordinal).ToArray();
         return new(policy, now, inventory.Registry.LastHash, active.Where(keep.Contains).ToArray(), expire,
             candidates, candidates.Sum(digest => inventory.Objects[digest].Length));
@@ -84,6 +85,7 @@ internal sealed partial class VersionStore
     {
         if (!registeredGenerations)
             throw new InvalidDataException("El almacén anterior no tiene registro durable para retención.");
+        RequireNoAbandonInProgress(root);
         RequireNoPendingMirror(root);
         var registry = GenerationRegistry.Read(root, binding);
         using var pending = WindowsProbeNative.OpenPlainDirectory(root, PendingDirectory);
@@ -91,7 +93,7 @@ internal sealed partial class VersionStore
         {
             string? id = entry.Name.EndsWith(LocationSuffix, StringComparison.Ordinal) ? entry.Name[..^LocationSuffix.Length] :
                 entry.Name.EndsWith(".jsonl", StringComparison.Ordinal) ? entry.Name[..^6] : null;
-            if (id is null || !registry.Generations.ContainsKey(id) || !IsCommitted(root, id))
+            if (id is null || !registry.Abandoned.ContainsKey(id) && (!registry.Generations.ContainsKey(id) || !IsCommitted(root, id)))
                 throw new InvalidDataException("Hay una operación pendiente o desconocida. La limpieza queda suspendida.");
         }
         using var commits = WindowsProbeNative.OpenPlainDirectory(root, CommitDirectory);
@@ -116,6 +118,7 @@ internal sealed partial class VersionStore
         var references = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         var sources = new Dictionary<string, string>(StringComparer.Ordinal);
         var objects = new Dictionary<string, BatchFile>(StringComparer.Ordinal);
+        var abandonedObjects = new HashSet<string>(StringComparer.Ordinal);
         using var scope = workspace.OpenRegisteredRoot();
         foreach (var (id, hash) in registry.Generations)
         {
@@ -137,8 +140,40 @@ internal sealed partial class VersionStore
             }
             references.Add(id, point);
         }
-        var inventory = new RetentionInventory(registry, references, objects, sources);
+        foreach (var (id, hash) in registry.Abandoned)
+        {
+            var plan = ReadAbandonedIntent(scope.Root, root, pending, id, hash);
+            var point = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var file in plan.Files)
+            {
+                string digest = Digest(file);
+                if (!objects.TryAdd(digest, file) && objects[digest].Length != file.Length)
+                    throw new InvalidDataException("Un objeto abandonado tiene referencias contradictorias.");
+                point.Add(digest);
+                abandonedObjects.Add(digest);
+            }
+            references.Add(id, point);
+        }
+        var inventory = new RetentionInventory(registry, references, objects, sources, FindStoredObjects(root, abandonedObjects));
         VerifyObjects(root, ActiveReferences(inventory).Select(digest => objects[digest]).ToArray());
         return inventory;
+    }
+
+    private static HashSet<string> FindStoredObjects(SafeFileHandle root, HashSet<string> known)
+    {
+        var found = new HashSet<string>(StringComparer.Ordinal);
+        if (known.Count == 0) return found;
+        using var objects = WindowsProbeNative.OpenPlainDirectory(root, ObjectDirectory);
+        using var algorithm = WindowsProbeNative.OpenPlainDirectory(objects, Algorithm);
+        foreach (var group in known.GroupBy(digest => digest[..2], StringComparer.Ordinal))
+        {
+            SafeFileHandle bucket;
+            try { bucket = WindowsProbeNative.OpenPlainDirectory(algorithm, group.Key); }
+            catch (FileNotFoundException) { continue; }
+            using (bucket)
+                foreach (string digest in group)
+                    if (WindowsProbeNative.PlainFileExists(bucket, digest)) found.Add(digest);
+        }
+        return found;
     }
 }

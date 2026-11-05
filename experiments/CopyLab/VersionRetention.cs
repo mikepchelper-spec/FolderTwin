@@ -105,7 +105,8 @@ public partial class VersionWindow
             return;
         bool ready = !busy && store is not null;
         PreviewRetentionButton.IsEnabled = ready;
-        ApplyRetentionButton.IsEnabled = ready && retentionReview is { Expire.Length: > 0 } && AcceptRetention.IsChecked == true;
+        ApplyRetentionButton.IsEnabled = ready && retentionReview is { } review &&
+            (review.Expire.Length > 0 || review.Objects.Length > 0) && AcceptRetention.IsChecked == true;
         RetentionChoice.IsEnabled = ready;
         string? state = (RetentionChoice.SelectedItem as CleanupRow)?.Operation.State;
         ResumeRetentionButton.IsEnabled = ready && state == "moving";

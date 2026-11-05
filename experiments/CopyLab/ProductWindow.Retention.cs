@@ -53,7 +53,7 @@ public partial class ProductWindow
         ProductRetentionPanel.IsEnabled = ready;
         PreviewProductRetentionButton.IsEnabled = ready;
         ApplyProductRetentionButton.IsEnabled = ready && productRetentionJob == job?.Id &&
-            productRetentionReview is { Expire.Length: > 0 } && AcceptProductRetention.IsChecked == true;
+            productRetentionReview is { } review && (review.Expire.Length > 0 || review.Objects.Length > 0) && AcceptProductRetention.IsChecked == true;
         string? state = (ProductRetentionChoice.SelectedItem as ProductCleanupRow)?.Operation.State;
         ResumeProductRetentionButton.IsEnabled = ready && state == "moving";
         UndoProductRetentionButton.IsEnabled = ready && state is "moving" or "quarantined" or "undoing";

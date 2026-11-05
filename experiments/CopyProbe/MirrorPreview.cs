@@ -17,6 +17,7 @@ internal sealed partial class VersionStore
         using var store = new DirectoryFence(Destination);
         using var marker = binding.OpenVerifiedMarker(store.Root);
         using var operation = OpenLock(store.Root, FileAccess.ReadWrite);
+        RequireNoAbandonInProgress(store.Root);
         if (!registeredGenerations)
             throw new InvalidDataException("El espejo protegido requiere un almacén nuevo con registro de generaciones.");
         _ = GenerationRegistry.Read(store.Root, binding);
