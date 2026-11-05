@@ -2,7 +2,7 @@
 
 *Copias locales. Versiones recuperables.*
 
-Fecha: 2026-10-29; revisión del plan y los ensayos: 2026-11-04, incluidas dos opiniones externas. Las decisiones siguientes son de diseño; no son capacidades ya probadas de una aplicación existente. Fundamento, evaluación de propuestas y enlaces en [INVESTIGACION.md](INVESTIGACION.md).
+Fecha de inicio 2026-10-29. Revisión del plan y los ensayos 2026-11-04, incluidas dos opiniones externas. El plan distingue las decisiones de diseño, las capacidades verificadas del laboratorio y las validaciones externas pendientes. Fundamento, evaluación de propuestas y enlaces en [INVESTIGACION.md](INVESTIGACION.md).
 
 ## 1. Resultado que buscamos
 
@@ -130,7 +130,7 @@ Para el modo de bajo impacto, comparar primero concurrencia limitada y buffers a
 
 ## 7. Entregas y criterios de salida
 
-La base experimental ya copia, verifica y restaura lotes sintéticos, con recuperación por archivo y ensayos de fallos. La ventana WPF incorpora revisión previa, resultados por ruta y reintentos de copias parciales. Un catálogo JSONL duplicado y confirmado permite restaurar un lote inicial desde otro proceso sin el origen ni SQLite. Un descriptor de ejecución permite reabrir lotes pendientes tras terminar su trabajador y reconstruir el progreso verificando los datos del destino. El versionado, el índice local y el ejecutor independiente funcionan en el laboratorio. Hay mediciones del motor y del índice con 329.000 archivos, y de distribución con 329.000 objetos y un millón de objetos bajo un nivel de prefijo. Faltan completar la comparación de dos niveles con un millón de objetos, la programación, la bandeja, la retención, el espejo protegido y la entrega del piloto. La etapa 1 permanece abierta para el reinicio abrupto de Windows y las pruebas de hardware aplazadas.
+La base experimental ya copia, verifica y restaura lotes sintéticos, con recuperación por archivo y ensayos de fallos. La ventana WPF incorpora revisión previa, resultados por ruta y reintentos de copias parciales. Un catálogo JSONL duplicado y confirmado permite restaurar un lote inicial desde otro proceso sin el origen ni SQLite. Un descriptor permite reabrir lotes pendientes y reconstruir el progreso verificando los datos del destino. El versionado, el índice local, el ejecutor independiente, el horario diario y la bandeja opcional tienen aceptación de software en Windows. Hay mediciones del motor y del índice con 329.000 archivos, y comparaciones completas de distribución con 329.000 y un millón de objetos. Faltan la revisión final de la automatización, el registro durable para retención, la cuarentena y purga, el espejo protegido y la entrega del piloto. La etapa 1 permanece abierta para el reinicio abrupto de Windows y las pruebas de hardware aplazadas.
 
 La restauración de lotes completos se reconstruye desde el catálogo y la reanudación de pendientes desde el descriptor y los registros por archivo. La ventana abre sesiones anteriores, verifica manualmente los lotes confirmados y conserva un historial de los intentos. Antes de admitir carpetas personales, cerrar la matriz de metadatos, exclusiones y detección de contenido no soportado, y superar los criterios de la alfa.
 
@@ -219,7 +219,7 @@ La ventana de versiones permite seleccionar un trabajo guardado, introducir una 
 
 El Programador de tareas usa el token interactivo del usuario actual, privilegios ordinarios, una tarea por ID de trabajo, `IgnoreNew`, `StartWhenAvailable` y hasta tres reintentos espaciados cinco minutos. Se comprueba la definición antes de habilitarla y la propiedad del trabajo antes de actualizar o retirar una tarea. La ventana informa horarios deshabilitados, alterados o con errores de arranque. El bloqueo interno del motor sigue coordinando ejecuciones manuales y programadas. La ejecución sin sesión iniciada, la demora de horarios perdidos y la recuperación tras reinicio y suspensión necesitan su validación de entorno. [Registro de tareas](https://learn.microsoft.com/en-us/windows/win32/taskschd/taskfolder-registertaskdefinition) y [StartWhenAvailable](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-startwhenavailable).
 
-El recorrido `--schedule-smoke` del paquete queda reservado al runner Windows hospedado. Instala el ejecutor, reutiliza y verifica la instalación, registra un disparador de hora próxima, espera un punto verificado, actualiza a horario diario y retira su propia tarea. Finalmente retira su espacio y la instalación verificada. Su resultado debe comprobarse en CI antes de dar por validada esta integración.
+El recorrido `--schedule-smoke` del paquete queda reservado al runner Windows hospedado. Instala el ejecutor, reutiliza y verifica la instalación, registra un disparador de hora próxima, espera un punto verificado, actualiza a horario diario y retira su propia tarea. Finalmente retira su espacio y la instalación verificada. Este recorrido pasó en CI.
 
 El recorrido pasó en Windows, junto con la reproducción del paquete y las pruebas de copia, versión y recuperación. La primera ejecución señaló que COM mapeaba una tarea inexistente a `FileNotFoundException`. La consulta ya admite esa representación y el HRESULT COM equivalente. [Validación del horario real](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41941871457).
 
@@ -230,6 +230,16 @@ El recorrido pasó en Windows, junto con la reproducción del paquete y las prue
 Los avisos se agrupan por trabajo y categoría de incidencia. Repetir el mismo resultado de reintento conserva el aviso en el panel y no genera otro globo. Resolverlo permite avisar de una incidencia posterior. Un almacén ocupado se muestra como en curso u ocupado, y una réplica dañada requiere atención. Las notificaciones visibles dependen de Windows. Cerrar la bandeja dispone sus recursos de interfaz. Los trabajadores ya iniciados son procesos separados y las tareas registradas pertenecen al Programador de Windows.
 
 El ensayo WPF crea dos trabajos, consulta ambos puntos, retira un origen y comprueba que el éxito del otro no oculte la incidencia. Repite consultas y un reintento para comprobar la deduplicación del aviso, recupera el trabajo y lanza ambos ejecutores desde la acción del panel. Luego daña una réplica de catálogo y comprueba el aviso. En el equipo de referencia, consultar los dos trabajos pequeños tomó 0,021 s. Las mediciones de los catálogos de 329.000 archivos figuran arriba. No se han aplicado ajustes propios de prioridad. La respuesta con carga interactiva, pantallas de distintas escalas y entrega de notificaciones se comprobará en el entorno del piloto.
+
+La bandeja, el horario real, la aceptación del motor y las dos compilaciones reproducibles pasaron juntos desde el paquete portable. [Validación integrada](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/41943191276).
+
+### Trabajo pendiente para completar el piloto
+
+- Revisar la automatización de extremo a extremo. Falta el arranque opcional del monitor al iniciar sesión y la comprobación de fallos en ese recorrido. El modo de horario actual requiere sesión iniciada. La recuperación de horarios perdidos tras apagar, suspender o reiniciar Windows necesita el entorno de VM indicado en el plan. Mantener separadas esas pruebas de la validación ya realizada con un disparador de hora próxima.
+- Implementar la etapa 5, empezando por el registro durable de generaciones esperadas y expiradas. El almacén actual aún descubre las confirmaciones existentes al enumerar su directorio. Esa enumeración no basta para autorizar limpieza.
+- Añadir la política revisable de retención, el cálculo de referencias, el diario de cuarentena y la purga posterior con plazo de gracia. Detener la limpieza si falta un manifiesto esperado, hay un conflicto, una operación pendiente o una referencia retenida que no se puede verificar.
+- Incorporar el espejo protegido con previsualización, conservación de lo retirado y protección ante origen ausente, vacío, incompleto o con cambios masivos. Probar recuperación tras interrupciones y coordinación con restauración y limpieza antes de habilitar retiradas.
+- Preparar la guía final del piloto, el paquete reproducible final y la matriz de aceptación por requisito. Registrar las comprobaciones de nube real, USB físico, otra cuenta o equipo, reinicio, suspensión, pantallas y notificaciones que requieran un entorno adicional.
 
 | Etapa | Entrega | Para pasar a la siguiente |
 |---|---|---|
