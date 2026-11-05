@@ -66,6 +66,24 @@ internal static class ScheduleProbe
                     !history.Take(3).Select(item => item.State).SequenceEqual(
                         [VersionJobState.Confirmed, VersionJobState.Busy, VersionJobState.WaitingForDestination]))
                     throw new InvalidOperationException("The scheduled worker did not recover or preserve the prior incidents.");
+
+                Directory.Move(destination, detached);
+                VersionJobResult retryAfter;
+                try
+                {
+                    scheduler.Register(workspace, id, executable, DateTime.Now.AddSeconds(5), daily: false);
+                    retryAfter = await WaitForAttemptAsync(recovered.Sequence);
+                    if (retryAfter.State != VersionJobState.WaitingForDestination)
+                        throw new InvalidOperationException("The retry fixture did not fail on its time trigger.");
+                }
+                finally { Directory.Move(detached, destination); }
+                var retried = await WaitForAttemptAsync(retryAfter.Sequence, TimeSpan.FromMinutes(7));
+                if (retried.State != VersionJobState.Confirmed || store.Verify(retried.Generation!) ||
+                    retried.FinishedUtc - retryAfter.FinishedUtc < TimeSpan.FromMinutes(4.5))
+                    throw new InvalidOperationException("The scheduler did not run its deferred retry as configured.");
+                Console.Error.WriteLine(FormattableString.Invariant(
+                    $"PASS a failed time trigger retried without intervention after {(retried.FinishedUtc - retryAfter.FinishedUtc).TotalSeconds:F1} seconds."));
+
                 scheduler.Remove(workspace, id);
                 if (scheduler.Read(workspace, id) is not null)
                     throw new InvalidOperationException("The owned schedule was not removed.");
@@ -79,10 +97,10 @@ internal static class ScheduleProbe
             Console.Error.WriteLine("PASS the portable app installs a stable worker; an actual Windows time trigger confirms a point, updates to daily and removes its owned schedule.");
             Console.Error.WriteLine("PASS the scheduled action reports missing destination and manual-store contention, then recovers and preserves both incidents.");
 
-            async Task<VersionJobResult> WaitForAttemptAsync(long afterSequence)
+            async Task<VersionJobResult> WaitForAttemptAsync(long afterSequence, TimeSpan? limit = null)
             {
                 using var scheduler = new WindowsSchedule();
-                var deadline = DateTime.UtcNow.AddMinutes(2);
+                var deadline = DateTime.UtcNow + (limit ?? TimeSpan.FromMinutes(2));
                 while (DateTime.UtcNow < deadline)
                 {
                     var latest = VersionJob.History(workspace, id).Results.FirstOrDefault();
