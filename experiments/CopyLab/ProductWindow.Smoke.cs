@@ -243,6 +243,7 @@ public partial class ProductWindow
             await RunRestoreWorkerSmokeAsync();
             await RunMirrorReviewSmokeAsync();
             await RunPendingVersionSmokeAsync();
+            await RunPreservedJobSmokeAsync();
             await ProductTrayProbe.RunAsync();
             await RunProductRetentionSmokeAsync();
             await RunConfigurationSmokeAsync();

@@ -114,7 +114,7 @@
                                 <TextBox x:Name="EditDailyTime" MaxLength="5" Width="92" HorizontalAlignment="Left" AutomationProperties.Name="Nueva hora diaria en formato HH:mm" />
                                 <CheckBox x:Name="EditEnabled" Content="Trabajo _habilitado" Margin="0,8,0,4" />
                                 <CheckBox x:Name="EditRetired" Content="Retirar trabajo; conservar datos y recuperación" Margin="0,0,0,8" />
-                                <TextBlock Text="Retirar desactiva el horario y los nuevos respaldos. Los datos siguen disponibles para recuperar. Para reactivarlo, desmarca Retirar y vuelve a habilitarlo. Para cambiar las carpetas o el modo, crea otro trabajo."
+                                <TextBlock Text="Retirar desactiva el horario y los nuevos respaldos. Los datos siguen disponibles para recuperar. Si un plan ya no puede completarse con el origen actual, conserva este trabajo retirado y crea otro con un destino nuevo. No se trasladan ni eliminan sus datos parciales y no se libera su espacio. Para reactivarlo, desmarca Retirar y vuelve a habilitarlo; su diario seguirá pendiente. Para cambiar las carpetas o el modo, crea otro trabajo."
                                            TextWrapping="Wrap" />
                                 <WrapPanel Margin="0,8,0,0">
                                     <Button x:Name="ReviewImportedSourceButton" Content="Revisar origen importado" Click="ReviewImportedSourceClick" IsEnabled="False" Margin="0,0,8,4" />

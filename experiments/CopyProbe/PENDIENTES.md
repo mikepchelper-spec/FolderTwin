@@ -1,6 +1,6 @@
 # Conservación de planes incompletos
 
-La vista previa WPF permite revisar y conservar una generación incompleta de un trabajo de **versionado de producto** y permitir un análisis nuevo. Revisión y conservación se ejecutan en procesos separados, con controles compartidos e historial durable. Los borradores incompletos y las actualizaciones pendientes de acumulativo y espejo siguen pendientes. Los ensayos usan datos sintéticos.
+La vista previa WPF permite revisar y conservar una generación incompleta de un trabajo de **versionado de producto** y permitir un análisis nuevo en el mismo almacén. Revisión y conservación se ejecutan en procesos separados, con controles compartidos e historial durable. Para borradores incompletos y diarios de acumulativo o espejo, la v1 conserva el trabajo retirado y crea otro destino dedicado: no abandona ni modifica su diario. Los ensayos usan datos sintéticos.
 
 En el trabajo de versionado, abre **Resolver un plan de versionado pendiente** y **Revisar plan pendiente**. El resumen indica la fecha y número de archivos previstos. Acepta **Conservar el plan incompleto y permitir uno nuevo** antes de aplicar. Después usa **Respaldar ahora** para analizar el origen actual. Conservar el plan no actualiza la fecha del último respaldo ni verifica datos nuevos. La bandeja mantiene un aviso hasta realizar un respaldo posterior. Si se cancela o interrumpe la conservación, vuelve a revisar: la interfaz ofrece reanudar su diario, también con el origen ausente. Los puntos completos anteriores permanecen disponibles.
 
@@ -26,10 +26,23 @@ La limpieza sigue exigiendo coincidencia exacta entre las generaciones recuperab
 
 Los objetos existentes que solo pertenecen a planes abandonados pueden entrar en una revisión de retención junto con los objetos de fechas expiradas. Los compartidos por fechas conservadas permanecen protegidos. La revisión no elimina objetos; la cuarentena, deshacer y purga posterior conservan su diario y plazo de gracia. Los metadatos del plan abandonado permanecen incluso después de purgar los objetos no referenciados.
 
-## Pruebas y alcance pendiente
+## Conservar el trabajo y continuar en otro destino
+
+Cuando el origen ya no permite completar un borrador o diario, se puede continuar sin descartarlo:
+
+1. Espera a que termine el trabajador o cancélalo en un límite seguro. No retires el trabajo mientras esté activo.
+2. Selecciona **Editar trabajo y horario → Retirar trabajo; conservar datos y recuperación** y **Guardar cambios**. Se retira su horario propio y queda deshabilitado. Conserva el nombre anterior para identificar la incidencia.
+3. Usa **Nuevo trabajo** con el origen actual y el modo deseado. Revisa una **carpeta dedicada nueva**. No selecciones ni reutilices el destino del trabajo anterior.
+4. Respalda y verifica el trabajo nuevo. El anterior conserva historial, intenciones, objetos, diarios y puntos confirmados; sigue disponible para recuperar. No se anuncia como terminado ni se traslada su estado parcial al nuevo trabajo.
+
+Esta decisión evita introducir un segundo protocolo de abandono para borradores y para una carpeta actual que puede estar parcialmente modificada. Conserva el diario original y sus restricciones. El trabajo anterior sigue ocupando espacio y la limpieza continúa bloqueada cuando haya operaciones pendientes. Reactivarlo no descarta el diario ni cambia sus requisitos: intenta completar el plan original. Solo el abandono revisado de versionado completo permite comenzar otro análisis dentro del mismo almacén.
+
+## Pruebas y límites
 
 `--version-abandon` interrumpe cada paso del diario y las cuatro escrituras del evento replicado, conserva los límites de publicación de ambos catálogos y del recibo temporal y rechaza el recibo final. Termina un trabajador real después de mover un catálogo y reanuda sin origen. Prueba una copia parcial cuyo origen cambia, el nuevo respaldo, referencias compartidas, cuarentena, deshacer, purga con reloj sintético y rechazo del diario dañado.
 
 El mismo arnés controla trabajadores de producto reales: pausa, continúa, cancela, termina el proceso y reanuda sin origen. Conserva las fechas de respaldo y rechaza usar un intento de copia como autorización. `--product-smoke` añade revisión y aceptación WPF, cierre de ventana con el proceso activo, recuperación del resultado y reanudación del diario después de cancelar. Termina con un respaldo nuevo verificado. Ambos recorridos pasaron localmente.
 
-Faltan el tratamiento de intenciones que todavía no tengan descriptor completo y el abandono seguro de acumulativo y espejo. Una actualización que haya empezado a modificar la carpeta actual requiere completar su diario verificado; no se descartará para evitar reanudarla. Estas comprobaciones de software no sustituyen cortes de energía, USB físico ni las observaciones de entorno de la matriz de v1.
+`--product-preserved-smoke`, incluido también en `--product-smoke`, recorre desde WPF las cuatro interrupciones de escritura del descriptor, dos borradores con JSONL o descriptor truncados y, en acumulativo y espejo, los límites de plan, preparación y promoción. Retira el trabajo, reabre la interfaz, crea otro mediante el asistente y verifica el respaldo nuevo. Con el origen ausente restaura el punto anterior del trabajo retirado. Compara nombres y SHA-256 de todos los archivos del destino anterior antes y después: sus bytes permanecen iguales. La consulta de horarios se inyecta en este recorrido; la retirada nativa conserva sus pruebas separadas de instalación y configuración.
+
+El primer recorrido local pasó los doce casos. Falta repetirlos desde el paquete final. Estas comprobaciones no sustituyen reinicio abrupto, USB físico ni las observaciones de entorno de la matriz de v1. El corte eléctrico físico queda excluido.

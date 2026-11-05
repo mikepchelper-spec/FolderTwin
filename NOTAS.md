@@ -24,7 +24,7 @@ Los almacenes nuevos y anteriores conservan lectores explícitos. No se permite 
 
 ## Pendientes antes de cerrar v1
 
-- Resolución segura de borradores incompletos y planes incompatibles de acumulativo y espejo. Las actualizaciones que ya modifican la carpeta actual deben completar su diario.
+- Aceptación desde el paquete de la resolución de planes mediante conservación del trabajo retirado y creación de otro destino. Sus doce casos WPF pasaron localmente. No se descartan borradores ni diarios dentro del almacén anterior; conserva su espacio y sus restricciones de limpieza.
 - Aceptación integrada desde el artefacto final y recorrido interactivo completo desde una instalación limpia.
 - Revisión final de identidad, textos, accesibilidad y escalado.
 - Piloto de 7–14 días y validaciones externas de USB NTFS físico, ciclos de Windows, otra cuenta o equipo y proveedor de nube real.

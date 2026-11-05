@@ -14,7 +14,7 @@ public partial class App : Application
         bool labPreview = e.Args is ["--lab"];
         bool startupSmoke = e.Args is ["--product-startup-smoke"];
         bool productSyntheticPreview = e.Args is ["--product-synthetic-preview"] or ["--product-synthetic-preview", "compact"] or ["--product-synthetic-preview", "light"];
-        bool productSmoke = e.Args is ["--product-smoke"];
+        bool productSmoke = e.Args is ["--product-smoke"] or ["--product-preserved-smoke"];
         bool productScheduleSmoke = e.Args is ["--product-schedule-smoke"];
         bool heldProductChild = e.Args is ["--held-product-child", _, _];
         bool heldRestoreChild = e.Args is ["--held-restore-child", _, _, _];
@@ -75,7 +75,8 @@ public partial class App : Application
             }
             if (productSmoke)
             {
-                await ProductWindow.RunSmokeAsync();
+                if (e.Args[0] == "--product-preserved-smoke") await ProductWindow.RunPreservedJobSmokeAsync();
+                else await ProductWindow.RunSmokeAsync();
                 Shutdown(0);
                 return;
             }
