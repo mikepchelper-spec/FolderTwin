@@ -25,14 +25,14 @@ La vista previa permite revisar y conservar un plan completo de versionado que y
 
 El panel de producto separa lista y detalles, y los apila en ventanas estrechas. Hay una sesión sintética reproducible para revisar el escritorio sin abrir la configuración habitual. La observación local cubrió los temas y parte de la navegación; el lector de pantalla, el escalado y el recorrido del paquete final siguen pendientes. [Prueba de interfaz](experiments/CopyLab/INTERFAZ.md).
 
-## Alfa portable de Windows
+## Paquete portable de Windows
 
-Abre un resultado de [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml) para `main` y descarga el artefacto `FolderTwin-alpha-win-x64-…`. Extrae todo el contenido y abre `FolderTwin.exe`: la entrada habitual muestra los trabajos de producto sin comandos. Sigue la [guía de uso](GUIA.md) y consulta las [notas](NOTAS.md). El paquete incluye .NET, el código fuente del commit y la [guía de la alfa](ALFA.md) para las herramientas anteriores de **Respaldos de alfa**. Sigue siendo una vista previa; no es la entrega final de v1.
+Abre un resultado de [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml) para `main` y descarga el artefacto `FolderTwin-win-x64-<commit>`. Extrae todo el contenido y abre `FolderTwin.exe` para acceder a tus trabajos. El paquete incluye .NET, código fuente, licencias y documentación. Las compilaciones de desarrollo se identifican por su commit. [Guía de uso](GUIA.md) · [Notas](NOTAS.md) · [Matriz de v1](V1.md).
 
 Para producir el paquete desde el código, instala el SDK indicado en [global.json](global.json) y ejecuta en PowerShell 7 para Windows:
 
 ```powershell
-.\scripts\Publish-Alpha.ps1 -OutputDirectory "$env:TEMP\FolderTwin-alpha-win-x64"
+.\scripts\Publish-Portable.ps1 -OutputDirectory "$env:TEMP\FolderTwin-win-x64"
 ```
 
 Elige un nombre nuevo para cada compilación. El script guarda los archivos intermedios en una carpeta hermana con sufijo `.build`. La automatización compara los SHA-256 de todos los archivos tras dos compilaciones desde árboles limpios y ejecuta el recorrido WPF desde el paquete. La comparación cubre el contenido distribuido. GitHub genera el ZIP al entregar el artefacto.

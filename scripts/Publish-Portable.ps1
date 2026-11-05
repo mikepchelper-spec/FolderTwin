@@ -66,7 +66,7 @@ try {
         "$hash  $path"
     }
     [IO.File]::WriteAllText((Join-Path $output 'SHA256SUMS.txt'), ($checksums -join "`n") + "`n")
-    Write-Host "Compilación portable en $output"
+    Write-Host "Paquete portable de FolderTwin en $output"
 }
 finally {
     Pop-Location

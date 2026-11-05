@@ -16,7 +16,7 @@ Estado: desarrollo de v1. Este documento acompaña al paquete reproducible del c
 
 ## Distribución y actualización
 
-El paquete incluye el runtime, hashes, licencias y documentación. Las entregas de CI incluyen el código fuente del commit. Dos compilaciones desde árboles limpios deben producir los mismos hashes antes de aceptar una entrega. El nombre del artefacto todavía identifica la distribución de desarrollo como `FolderTwin-alpha-win-x64-…`.
+El paquete incluye el runtime, hashes, licencias y documentación. El artefacto `FolderTwin-win-x64-<commit>` incluye el código fuente del commit. Dos compilaciones desde árboles limpios deben producir los mismos hashes antes de aceptar una entrega. CI conserva el artefacto 30 días. Guarda una copia local para todo el piloto.
 
 Extrae una actualización en otra carpeta y conserva la anterior hasta verificar reapertura y restauración. **Aplicación** prepara una versión estable distinta y actualiza los horarios propios habilitados. No sobrescribe otra instalación para resolver un conflicto. La retirada comprueba los archivos, identidades y referencias directas de tareas consultables, mantiene un diario y permite reanudarla. No retira la versión que está abierta. [Procedimiento](INSTALACION.md).
 

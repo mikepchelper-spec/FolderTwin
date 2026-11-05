@@ -18,6 +18,6 @@ jobs:
         with:
           global-json-file: global.json
       - name: Build the self-contained portable package
-        run: ./scripts/Publish-Alpha.ps1 -OutputDirectory "$env:RUNNER_TEMP\FolderTwin-volume-package"
+        run: ./scripts/Publish-Portable.ps1 -OutputDirectory "$env:RUNNER_TEMP\FolderTwin-volume-package"
       - name: Exercise disk full, reassignment, and reconnection
         run: ./experiments/CopyProbe/Run-VolumeLab.ps1

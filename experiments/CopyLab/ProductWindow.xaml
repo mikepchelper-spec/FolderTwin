@@ -84,6 +84,13 @@
                             <Button x:Name="RecoverJobButton" Content="Re_cuperar archivos" Click="RecoverJobClick" IsEnabled="False" Margin="0,0,8,4" />
                             <Button x:Name="ExportConfigurationButton" Content="_Exportar configuración" Click="ExportConfigurationClick" IsEnabled="False" Margin="0,0,8,4" />
                         </WrapPanel>
+                        <StackPanel x:Name="MirrorReviewPanel" Visibility="Collapsed" Margin="0,8,0,0">
+                            <TextBlock x:Name="MirrorReviewText" TextWrapping="Wrap" />
+                            <CheckBox x:Name="AcceptEmptySource" Content="He revisado que el origen esté vacío" Margin="0,8,0,0" />
+                            <CheckBox x:Name="AcceptMassChanges" Content="He revisado el alcance de los cambios" Margin="0,4,0,0" />
+                            <Button x:Name="ApplyMirrorButton" Content="Aplicar _espejo revisado" Click="ApplyMirrorClick"
+                                    HorizontalAlignment="Left" Margin="0,8,0,0" />
+                        </StackPanel>
                         <TextBlock x:Name="RuntimeStatusText" TextWrapping="Wrap" Margin="0,12,0,0" />
                         <TextBlock x:Name="ScheduleStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
                         <TextBlock x:Name="SpaceStatusText" TextWrapping="Wrap" Margin="0,4,0,8" />
@@ -145,13 +152,6 @@
                                 <Button x:Name="PurgeProductRetentionButton" Content="Purgar tras el plazo de gracia" Click="PurgeProductRetentionClick" IsEnabled="False" HorizontalAlignment="Left" />
                             </StackPanel>
                         </Expander>
-                        <StackPanel x:Name="MirrorReviewPanel" Visibility="Collapsed" Margin="0,8,0,0">
-                            <TextBlock x:Name="MirrorReviewText" TextWrapping="Wrap" />
-                            <CheckBox x:Name="AcceptEmptySource" Content="He revisado que el origen esté vacío" Margin="0,8,0,0" />
-                            <CheckBox x:Name="AcceptMassChanges" Content="He revisado el alcance de los cambios" Margin="0,4,0,0" />
-                            <Button x:Name="ApplyMirrorButton" Content="Aplicar _espejo revisado" Click="ApplyMirrorClick"
-                                    HorizontalAlignment="Left" Margin="0,8,0,0" />
-                        </StackPanel>
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>

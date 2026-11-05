@@ -85,6 +85,16 @@ public partial class ProductWindow
                     Check(window.MirrorReviewPanel.Visibility == Visibility.Visible && window.ApplyMirrorButton.IsEnabled &&
                         window.mirrorReviewRun == paused.Intent.Id && window.mirrorReview is { Conflicts: 0 },
                         "The reopened window lost its durable review or approval controls.");
+                    if (action == "resume")
+                    {
+                        window.Show();
+                        await window.Dispatcher.InvokeAsync(window.UpdateLayout, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                        var summary = window.MirrorReviewPanel.TranslatePoint(new Point(), window.JobDetailsScroll);
+                        var actionPosition = window.ApplyMirrorButton.TranslatePoint(new Point(), window.JobDetailsScroll);
+                        Check(summary.Y >= 0 && window.ApplyMirrorButton.ActualHeight > 0 &&
+                            actionPosition.Y + window.ApplyMirrorButton.ActualHeight <= window.JobDetailsScroll.ViewportHeight,
+                            "The mirror review or its apply action requires scrolling at the default window size.");
+                    }
                     await Click(window, window.ApplyMirrorButton);
                     Check(VersionStore.OpenProduct(job).ListPoints().Length == 2 &&
                         window.MirrorReviewPanel.Visibility == Visibility.Collapsed, "The reopened durable review did not apply as a real backup.");

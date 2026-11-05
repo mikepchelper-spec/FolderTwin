@@ -77,7 +77,7 @@ jobs:
           $archive = Join-Path $env:RUNNER_TEMP 'FolderTwin-source.tar'
           $sourceA = Join-Path $env:RUNNER_TEMP 'FolderTwin-source-A'
           $sourceB = Join-Path $env:RUNNER_TEMP 'FolderTwin-source-B'
-          $outputA = Join-Path $env:RUNNER_TEMP 'FolderTwin-alpha-win-x64'
+          $outputA = Join-Path $env:RUNNER_TEMP 'FolderTwin-win-x64'
           $outputB = Join-Path $env:RUNNER_TEMP 'FolderTwin-reproduction'
           git archive --format=tar "--output=$archive" HEAD
           if ($LASTEXITCODE -ne 0) { throw 'Could not archive the tested commit.' }
@@ -86,8 +86,8 @@ jobs:
             tar -xf $archive -C $source
             if ($LASTEXITCODE -ne 0) { throw 'Could not extract a clean source tree.' }
           }
-          & (Join-Path $sourceA 'scripts/Publish-Alpha.ps1') -OutputDirectory $outputA -SourceArchive $archive
-          & (Join-Path $sourceB 'scripts/Publish-Alpha.ps1') -OutputDirectory $outputB -SourceArchive $archive
+          & (Join-Path $sourceA 'scripts/Publish-Portable.ps1') -OutputDirectory $outputA -SourceArchive $archive
+          & (Join-Path $sourceB 'scripts/Publish-Portable.ps1') -OutputDirectory $outputB -SourceArchive $archive
           $first = Get-FileHash -LiteralPath (Join-Path $outputA 'SHA256SUMS.txt')
           $second = Get-FileHash -LiteralPath (Join-Path $outputB 'SHA256SUMS.txt')
           if ($first.Hash -ne $second.Hash) {
@@ -135,11 +135,11 @@ jobs:
             throw "The packaged Windows schedule test exited with $($schedule.ExitCode)."
           }
           if ($productSchedule.ExitCode -ne 0) { throw "The packaged product schedule test exited with $($productSchedule.ExitCode)." }
-      - name: Upload the verified alpha
+      - name: Upload the verified Windows package
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: FolderTwin-alpha-win-x64-${{ github.sha }}
-          path: ${{ runner.temp }}/FolderTwin-alpha-win-x64
+          name: FolderTwin-win-x64-${{ github.sha }}
+          path: ${{ runner.temp }}/FolderTwin-win-x64
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
