@@ -9,7 +9,9 @@ internal sealed partial class VersionStore
 {
     internal string MirrorCurrentPath => Path.Combine(Destination, MirrorJournal.DirectoryName, MirrorJournal.CurrentName);
 
-    internal void InitializeMirror()
+    internal void InitializeMirror() => InitializeMirror(resumeInitialization: false);
+
+    internal void InitializeMirror(bool resumeInitialization)
     {
         using var scope = workspace.OpenRegisteredRoot();
         using var store = new DirectoryFence(Destination);
@@ -18,7 +20,7 @@ internal sealed partial class VersionStore
         if (!registeredGenerations)
             throw new InvalidDataException("El espejo protegido requiere un almacén nuevo con registro de generaciones.");
         _ = GenerationRegistry.Read(store.Root, binding);
-        MirrorJournal.Initialize(store.Root, binding);
+        MirrorJournal.Initialize(store.Root, binding, resumeInitialization);
     }
 
     internal MirrorPreview PreviewMirror(string source, int maximumChangePercent = 25)

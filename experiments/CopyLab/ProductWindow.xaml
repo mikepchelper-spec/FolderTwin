@@ -16,7 +16,7 @@
             <TextBlock Text="FolderTwin" FontWeight="SemiBold" />
             <TextBlock Text="Trabajos" FontSize="28" FontWeight="SemiBold" Margin="0,4,0,0"
                        AutomationProperties.HeadingLevel="Level1" />
-            <TextBlock Text="Vista previa de la configuración. Usa carpetas desechables con datos de prueba."
+            <TextBlock Text="Vista previa de la v1. Usa carpetas desechables con datos de prueba."
                        TextWrapping="Wrap" Margin="0,4,0,0" />
         </StackPanel>
 
@@ -30,6 +30,23 @@
                 </WrapPanel>
                 <TextBlock x:Name="EmptyJobsText" DockPanel.Dock="Top" Text="Crea un trabajo para guardar su origen, destino y modo."
                            TextWrapping="Wrap" Margin="0,4,0,12" />
+                <ScrollViewer DockPanel.Dock="Bottom" MaxHeight="270" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock x:Name="SelectedJobText" TextWrapping="Wrap" />
+                        <WrapPanel Margin="0,8,0,0">
+                            <Button x:Name="BackupJobButton" Content="_Respaldar ahora" Click="BackupJobClick" IsEnabled="False" Margin="0,0,8,4" />
+                            <Button x:Name="RecoverJobButton" Content="Re_cuperar archivos" Click="RecoverJobClick" IsEnabled="False" Margin="0,0,8,4" />
+                        </WrapPanel>
+                        <StackPanel x:Name="MirrorReviewPanel" Visibility="Collapsed" Margin="0,8,0,0">
+                            <TextBlock x:Name="MirrorReviewText" TextWrapping="Wrap" />
+                            <CheckBox x:Name="AcceptEmptySource" Content="He revisado que el origen esté vacío" Margin="0,8,0,0" />
+                            <CheckBox x:Name="AcceptMassChanges" Content="He revisado el alcance de los cambios" Margin="0,4,0,0" />
+                            <Button x:Name="ApplyMirrorButton" Content="Aplicar _espejo revisado" Click="ApplyMirrorClick"
+                                    HorizontalAlignment="Left" Margin="0,8,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
                 <ListBox x:Name="JobList" SelectionChanged="JobSelected"
                          AutomationProperties.Name="Trabajos guardados y registros pendientes"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
@@ -42,6 +59,29 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+            </DockPanel>
+
+            <DockPanel x:Name="RecoveryPanel" Visibility="Collapsed">
+                <StackPanel DockPanel.Dock="Top">
+                    <TextBlock Text="Recuperar archivos" FontSize="20" FontWeight="SemiBold"
+                               AutomationProperties.HeadingLevel="Level2" />
+                    <Label Content="_Fecha del respaldo" Target="{Binding ElementName=RecoveryDates}" />
+                    <ComboBox x:Name="RecoveryDates" DisplayMemberPath="Label" SelectionChanged="RecoveryDateChanged"
+                              AutomationProperties.Name="Fecha del respaldo" />
+                    <TextBlock x:Name="RecoverySummary" TextWrapping="Wrap" Margin="0,8,0,8" />
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                    <TextBlock x:Name="RestoreReviewText" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <WrapPanel>
+                        <Button x:Name="VerifyPointButton" Content="_Verificar respaldo" Click="VerifyPointClick" Margin="0,0,8,4" />
+                        <Button x:Name="ReviewRestoreButton" Content="Elegir dónde _recuperar" Click="ReviewRestoreClick" Margin="0,0,8,4" />
+                        <Button x:Name="RestorePointButton" Content="Recuperar en carpeta _nueva" Click="RestorePointClick"
+                                IsEnabled="False" Margin="0,0,8,4" />
+                        <Button x:Name="ReturnToJobsButton" Content="Volver a _trabajos" Click="ReturnToJobsClick" Margin="0,0,8,4" />
+                    </WrapPanel>
+                </StackPanel>
+                <ListBox x:Name="RecoveryFiles" AutomationProperties.Name="Archivos del punto seleccionado"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
             </DockPanel>
 
             <DockPanel x:Name="Wizard" Visibility="Collapsed" KeyboardNavigation.TabNavigation="Cycle">

@@ -50,6 +50,60 @@ public partial class ProductWindow
                         Directory.EnumerateFileSystemEntries(destination).Select(Path.GetFileName)
                             .SequenceEqual([DestinationBinding.MarkerName]), window.StatusText.Text);
                 }
+
+                ProductJob[] jobs;
+                using (var registry = Open()) jobs = registry.List().Jobs;
+                var versions = jobs.Single(job => job.Options.Mode == ProductBackupMode.Versions);
+                window.SelectJob(versions.Id);
+                await Click(window, window.BackupJobButton);
+                var store = VersionStore.OpenProduct(versions);
+                Check(store.ListPoints().Length == 1 && window.StatusText.Text.StartsWith("Respaldo completo", StringComparison.Ordinal),
+                    "The WPF product entry point did not create a version.");
+                using (var writer = new FileStream(Path.Combine(source, "datos.txt"), FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
+                {
+                    await Click(window, window.BackupJobButton);
+                    Check(!window.StatusText.Text.StartsWith("Respaldo completo", StringComparison.Ordinal) && store.ListPoints().Length == 1,
+                        "A busy file was reported as a complete product backup.");
+                }
+                File.WriteAllText(Path.Combine(source, "datos.txt"), "actualizado");
+                await Click(window, window.BackupJobButton);
+                Check(store.ListPoints().Length == 2, "Retry did not create the second version.");
+                await Click(window, window.RecoverJobButton);
+                window.RecoveryDates.SelectedIndex = 1;
+                await window.activeTask;
+                await Click(window, window.VerifyPointButton);
+                Check(window.StatusText.Text.StartsWith("Verificación completa", StringComparison.Ordinal), window.StatusText.Text);
+                string absent = Path.Combine(workspace.Root, "Origen apartado para recuperar");
+                Directory.Move(source, absent);
+                string recoveredParent = Folder("Recuperaciones de prueba");
+                picks.Enqueue(recoveredParent);
+                await Click(window, window.ReviewRestoreButton);
+                Check(window.restoreChoice is not null && !Directory.EnumerateFileSystemEntries(recoveredParent).Any(),
+                    "The restoration review wrote data before confirmation.");
+                await Click(window, window.RestorePointButton);
+                string output = Directory.EnumerateDirectories(recoveredParent).Single();
+                Check(File.ReadAllText(Path.Combine(output, "datos.txt")) == "original" &&
+                    window.StatusText.Text.StartsWith("Recuperación completa", StringComparison.Ordinal), window.StatusText.Text);
+                Directory.Move(absent, source);
+                await Click(window, window.ReturnToJobsButton);
+
+                var mirror = jobs.Single(job => job.Options.Mode == ProductBackupMode.ProtectedMirror);
+                window.SelectJob(mirror.Id);
+                await Click(window, window.BackupJobButton);
+                Check(window.mirrorReview?.Added == 1 && window.MirrorReviewPanel.Visibility == Visibility.Visible,
+                    "The WPF mirror entry point did not show its review.");
+                await Click(window, window.ApplyMirrorButton);
+                var mirrored = VersionStore.OpenProduct(mirror);
+                Check(File.ReadAllText(Path.Combine(mirrored.MirrorCurrentPath, "datos.txt")) == "actualizado", window.StatusText.Text);
+                File.WriteAllText(Path.Combine(source, "datos.txt"), "tercera versión");
+                await Click(window, window.BackupJobButton);
+                Check(window.mirrorReview?.RequiresMassReview == true, "A mass mirror change was not reviewed.");
+                await Click(window, window.ApplyMirrorButton);
+                Check(File.ReadAllText(Path.Combine(mirrored.MirrorCurrentPath, "datos.txt")) == "actualizado",
+                    "A mass mirror change was applied without review.");
+                window.AcceptMassChanges.IsChecked = true;
+                await Click(window, window.ApplyMirrorButton);
+                Check(File.ReadAllText(Path.Combine(mirrored.MirrorCurrentPath, "datos.txt")) == "tercera versión", window.StatusText.Text);
             }
             finally { window.Close(); }
 
@@ -62,7 +116,7 @@ public partial class ProductWindow
                     "The reopened window lost jobs when the source was unavailable.");
             }
             finally { reopened.Close(); }
-            Console.Error.WriteLine("PASS the WPF wizard reviews and registers all three modes and reloads offline jobs.");
+            Console.Error.WriteLine("PASS the WPF wizard registers three modes; versions retry a busy file, restore an earlier date offline, and mirror changes require review.");
         }
         finally
         {
@@ -79,6 +133,7 @@ public partial class ProductWindow
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         await window.activeTask;
     }
+
 
     private static void Check(bool valid, string message)
     {

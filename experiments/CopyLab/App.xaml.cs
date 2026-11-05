@@ -33,9 +33,9 @@ public partial class App : Application
             {
                 var product = new ProductWindow();
                 MainWindow = product;
-                await product.InitializeAsync();
                 ShutdownMode = ShutdownMode.OnMainWindowClose;
                 product.Show();
+                await product.InitializeAsync();
                 return;
             }
             if (scheduleSmoke)

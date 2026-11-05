@@ -4,6 +4,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Automation.Peers;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using Microsoft.Win32;
 
 namespace CopyLab;
@@ -11,7 +12,7 @@ namespace CopyLab;
 public partial class ProductWindow : Window
 {
     private sealed record Choice(ProductJobOptions Options, DedicatedDestinationReview Destination);
-    private sealed record JobRow(Guid Id, string Label, string Detail, bool Pending);
+    private sealed record JobRow(Guid Id, string Label, string Detail, bool Pending, ProductJob? Job = null);
     private readonly Func<ProductJobRegistry> openRegistry;
     private readonly Func<string, string?>? testPicker;
     private string? origin;
@@ -36,6 +37,7 @@ public partial class ProductWindow : Window
         if (busy) return;
         origin = parent = null;
         selection = null;
+        ResetProductActions();
         OriginText.Text = ParentText.Text = "";
         JobName.Text = DailyTime.Text = "";
         BackupMode.SelectedIndex = 1;
@@ -171,6 +173,7 @@ public partial class ProductWindow : Window
     {
         if (ResumeRegistrationButton is not null)
             ResumeRegistrationButton.IsEnabled = !busy && JobList.SelectedItem is JobRow { Pending: true };
+        if (BackupJobButton is not null) RefreshProductActions();
     }
 
     private void SelectJob(Guid id)
@@ -186,7 +189,7 @@ public partial class ProductWindow : Window
             return registry.List();
         });
         JobRow[] rows = [.. list.Jobs.Select(job => new JobRow(job.Id, job.Options.Name,
-            $"{ModeName(job.Options.Mode)} · {Schedule(job.Options)}", false)),
+            $"{ModeName(job.Options.Mode)} · {Schedule(job.Options)}", false, job)),
             .. list.Pending.Select(id => new JobRow(id, "Registro pendiente",
                 $"Selecciona Reanudar registro para continuar · {id.ToString("N")[..8]}", true))];
         JobList.ItemsSource = rows;
@@ -197,6 +200,7 @@ public partial class ProductWindow : Window
     private void ShowJobs()
     {
         selection = null;
+        RecoveryPanel.Visibility = Visibility.Collapsed;
         Wizard.Visibility = Visibility.Collapsed;
         JobListPanel.Visibility = Visibility.Visible;
         NewJobButton.Focus();
@@ -224,7 +228,12 @@ public partial class ProductWindow : Window
 
     private void FocusCurrentStep()
     {
-        _ = (step switch { 0 => ChooseOriginButton, 1 => ChooseParentButton, 2 => (Control)JobName, _ => SaveJobButton }).Focus();
+        int expectedStep = step;
+        _ = Dispatcher.InvokeAsync(() =>
+        {
+            if (!busy && step == expectedStep && Wizard.IsVisible)
+                (step switch { 0 => ChooseOriginButton, 1 => ChooseParentButton, 2 => (Control)JobName, _ => SaveJobButton }).Focus();
+        }, DispatcherPriority.Input);
     }
 
     private void ModeChanged(object sender, RoutedEventArgs e)
@@ -246,15 +255,16 @@ public partial class ProductWindow : Window
         int previousStep = step;
         bool wasWizard = Wizard.Visibility == Visibility.Visible;
         busy = true;
-        Wizard.IsEnabled = JobListPanel.IsEnabled = false;
+        Wizard.IsEnabled = JobListPanel.IsEnabled = RecoveryPanel.IsEnabled = false;
         SetStatus("Comprobando la selección…");
         try { await action(); }
         catch (Exception error) when (VersionJob.Expected(error)) { SetStatus(error.Message); }
         finally
         {
             busy = false;
-            Wizard.IsEnabled = JobListPanel.IsEnabled = true;
+            Wizard.IsEnabled = JobListPanel.IsEnabled = RecoveryPanel.IsEnabled = true;
             ResumeRegistrationButton.IsEnabled = JobList.SelectedItem is JobRow { Pending: true };
+            RefreshProductActions();
             if (Wizard.Visibility == Visibility.Visible && previousStep != step) FocusCurrentStep();
             if (wasWizard && JobListPanel.Visibility == Visibility.Visible)
                 (JobList.SelectedItem is null ? (Control)NewJobButton : JobList).Focus();
@@ -272,7 +282,7 @@ public partial class ProductWindow : Window
         if (busy)
         {
             e.Cancel = true;
-            SetStatus("Espera a que termine el registro para cerrar la ventana.");
+            SetStatus("Espera a que termine la operación para cerrar la ventana.");
         }
         base.OnClosing(e);
     }

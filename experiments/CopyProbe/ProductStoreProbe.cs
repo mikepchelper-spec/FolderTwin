@@ -127,7 +127,9 @@ internal static class ProductStoreProbe
 
             var mirrorJob = Create(ProductBackupMode.ProtectedMirror);
             var mirror = VersionStore.OpenProduct(mirrorJob, initialize: true);
-            mirror.InitializeMirror();
+            Directory.CreateDirectory(Path.Combine(mirror.Destination, MirrorJournal.DirectoryName, MirrorJournal.CurrentName));
+            mirror.InitializeMirror(resumeInitialization: true);
+            mirror.InitializeMirror(resumeInitialization: true);
             var initial = mirror.PreviewMirror(mirrorJob.Source.VolumePath);
             mirror.BeginMirror(initial);
             File.WriteAllText(Path.Combine(source, "documento.txt"), "segunda versión");

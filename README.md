@@ -12,10 +12,11 @@ Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 - [Matriz de aceptación](ACEPTACION.md): requisitos de las etapas 2 a 5, evidencia y validaciones pendientes del piloto.
 - [Alcance y aceptación de la v1](V1.md): trabajo de producto, criterios de salida y comprobaciones externas.
 
-La vista previa de la v1 registra trabajos y revisa su configuración desde WPF. La ejecución de respaldos sigue en la alfa mientras se conectan los motores al registro de producto. [Estado y recorrido de prueba](V1.md).
 - [Guía del piloto](PILOTO.md): preparación, observación, recuperación y criterios de detención.
 - [Investigación](INVESTIGACION.md): necesidades observadas, documentación técnica y fuentes.
 - [Nombres](NOMBRES.md): elección, alternativas anteriores y estado de la comprobación de disponibilidad.
+
+La vista previa de la v1 registra los tres modos y permite ejecutar versionado y espejo protegido desde WPF, verificar un punto y recuperarlo por fecha en una carpeta nueva. La ejecución acumulativa y el resto de la integración de producto siguen pendientes. Usa solo carpetas desechables con datos sintéticos. [Estado y recorrido de prueba](V1.md).
 
 ## Alfa portable de Windows
 

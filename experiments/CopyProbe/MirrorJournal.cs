@@ -25,12 +25,25 @@ internal static class MirrorJournal
         MaxDepth = 8
     };
 
-    internal static void Initialize(SafeFileHandle store, DestinationBinding binding)
+    internal static void Initialize(SafeFileHandle store, DestinationBinding binding, bool resumeInitialization = false)
     {
         using var mirror = WindowsProbeNative.OpenOrCreatePlainDirectory(store, DirectoryName);
-        LabWorkspace.RequireEmpty(mirror);
+        if (resumeInitialization && WindowsProbeNative.PlainFileExists(mirror, HeaderName))
+        {
+            using var existing = Open(store, binding, out _);
+            return;
+        }
+        if (resumeInitialization)
+        {
+            if (WindowsProbeNative.ReadDirectory(mirror).Any(entry =>
+                entry.Name is not ("." or ".." or CurrentName or OperationsName or HeaderName + ".tmp")))
+                throw new InvalidDataException("La preparación del espejo contiene archivos inesperados.");
+        }
+        else LabWorkspace.RequireEmpty(mirror);
         using var current = WindowsProbeNative.OpenOrCreatePlainDirectory(mirror, CurrentName);
         using var operations = WindowsProbeNative.OpenOrCreatePlainDirectory(mirror, OperationsName);
+        LabWorkspace.RequireEmpty(current);
+        LabWorkspace.RequireEmpty(operations);
         byte[] header = [.. "FTMIRR01"u8, .. binding.Identity, .. binding.Marker.ToByteArray(), .. WindowsProbeNative.DirectoryIdentity(current)];
         RetentionJournal.WriteFile(mirror, HeaderName, header);
     }
