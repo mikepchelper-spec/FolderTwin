@@ -1,8 +1,25 @@
 # Publicación experimental de FolderTwin
 
-**RC1 retirada durante la auditoría posterior: no usar ni iniciar nuevas ejecuciones.** El ZIP oficial se eliminó y su URL devuelve 404; se conservan etiqueta, fuentes, hashes e informe histórico. Conserva configuración, diarios y respaldos sintéticos sin purgarlos. La retirada no puede revocar descargas anteriores o cachés externas. [Auditoría y correcciones en curso](AUDITORIA.md).
+## RC2 publicada y verificada
 
-El resto de esta sección registra la publicación y aceptación **históricas** de RC1. No describe una descarga actualmente disponible ni aprueba su uso. La candidata corregida tendrá otra etiqueta, aceptación y hashes. Sigue siendo una vista previa para datos sintéticos y carpetas desechables, sin v1 definitiva ni aceptación para respaldos personales.
+Publicada el 6 de noviembre de 2026 a las 06:57:12 de America/Bogota. La API registra `2026-11-06T11:57:12Z`, release `436446181`, `draft=false` y `prerelease=true`. La etiqueta resuelve al commit `d902f4ca9608480933d7cb392dcb557aba36ea33`. La consulta de versión estable devolvió HTTP 404. [Página pública](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.2) · [API](https://api.github.com/repos/mikepchelper-spec/FolderTwin/releases/tags/v1.0.0-rc.2) · [Etiqueta](https://github.com/mikepchelper-spec/FolderTwin/tree/v1.0.0-rc.2)
+
+La página y las cuatro descargas respondieron sin autenticación. Los tamaños y hashes de cada descarga coincidieron con los adjuntos revisados y los digests públicos de GitHub. El ZIP extraído pasó identidad, fuentes, inventario exacto de 499 archivos, hashes, licencias y guías. [Informe de aceptación separado](ENTREGA-RC2.md) · [Auditoría](AUDITORIA.md)
+
+| Adjunto | ID | Bytes | SHA-256 |
+|---|---:|---:|---|
+| `FolderTwin-win-x64-d902f4c.zip` | 717013084 | 77.025.240 | `9c701f84c58b2420618296b31bfe75c2fc6082383fdd906ff64e149391385e4a` |
+| `SHA256SUMS.txt` | 717013082 | 49.742 | `15c7ebb6b2a504a859b5cb2dd1cbb86b1d43af01a7f35e8b008acd724f48b694` |
+| `SHA256SUMS-zip.txt` | 717013087 | 98 | `c3bdc9864a6d4729093acc4ad3b755a76744629044cb51a43d8a9af51132420b` |
+| `ENTREGA-RC2.md` | 717013083 | 5.445 | `db00104635b51811df0b99f95d45d394b8193163f202ef8b76964ddf4e33e05d` |
+
+Se cotejó el archivo de fuentes incluido con el tar de Git del commit revisado. Se inspeccionaron los 188 paths fuente y el inventario de distribución en busca de rutas personales, credenciales y artefactos de pruebas. Los logs locales y fixtures quedan fuera del repositorio y de los adjuntos. La entrega sigue limitada a datos sintéticos y carpetas desechables. El piloto y las pruebas de entorno de la v1 siguen pendientes. [Piloto](PILOTO.md)
+
+## RC1 retirada y registro histórico
+
+**RC1 está retirada. Detén sus ejecuciones y conserva sus datos sintéticos.** El ZIP oficial se eliminó y su URL devuelve 404. Se conservan etiqueta, fuentes, hashes e informe histórico. Las copias ya descargadas pueden seguir existiendo. [Aviso de retirada](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1)
+
+Los resultados siguientes corresponden a la publicación y aceptación históricas de RC1.
 
 Publicación: **5 de noviembre de 2026, 23:01:28, America/Bogota (UTC−05:00)**. La API registra `2026-11-06T04:01:28Z`. Se publicó el borrador ya revisado, ID `435666824`, sin reconstruir ni sustituir sus archivos.
 

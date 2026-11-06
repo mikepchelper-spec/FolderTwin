@@ -1,22 +1,22 @@
 # Plan de trabajo — FolderTwin
 
-> Estado posterior a publicación: RC1 retirada durante la auditoría profunda. Se confirmaron una carrera entre deshabilitación e inicio de trabajo y la ocultación de una incidencia de respaldo tras verificar un punto anterior. El ZIP oficial se retiró; se conservan etiqueta, fuentes, hashes e informe histórico. No hay pérdida de contenido demostrada. La candidata corregida requiere nuevas regresiones y aceptación. Las validaciones externas siguen pendientes.
+> RC2 experimental publicada y verificada en el commit `d902f4c`. La auditoría corrigió la frontera de escritura del caché SQLite, dos carreras de coordinación y fallos de disponibilidad y presentación. RC1 permanece retirada. El siguiente hito es ejecutar el piloto y sus comprobaciones externas cuando exista entorno. [Auditoría](AUDITORIA.md) · [Aceptación de RC2](ENTREGA-RC2.md)
 
 *Copias locales. Versiones recuperables.*
 
-Fecha de inicio 2026-10-29. Revisión del plan y los ensayos 2026-11-05, incluidas dos opiniones externas. El plan distingue las decisiones de diseño, las capacidades verificadas del laboratorio y las validaciones externas pendientes. Fundamento, evaluación de propuestas y enlaces en [INVESTIGACION.md](INVESTIGACION.md).
+Fecha de inicio 2026-10-29. Estado de entrega actualizado el 2026-11-06. El plan distingue las decisiones de diseño, las capacidades verificadas del laboratorio y las validaciones externas pendientes. [Investigación y opiniones externas](INVESTIGACION.md)
 
 ## 1. Resultado que buscamos
 
 ### Publicación experimental y mantenimiento inicial
 
-**Publicado y comprobado:** [v1.0.0-rc.1](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1), el 5 de noviembre de 2026 a las 23:01:28 de America/Bogota. La etiqueta fija `e4e87b8`; se conservaron binarios, fuentes, hashes e informe de aceptación. Se prepararon contribución, soporte, reporte privado de vulnerabilidades habilitado en GitHub, formularios de errores y recuperación y un procedimiento de clasificación, contención y entregas posteriores. No cambió el motor ni se reconstruyó el paquete.
+**Publicado y comprobado.** RC2 salió el 6 de noviembre de 2026 a las 06:57:12 de America/Bogota. Su etiqueta fija `d902f4c` y los cuatro adjuntos públicos coinciden con los hashes revisados. La aceptación incluye dos compilaciones limpias, WPF y horarios desde el paquete y restauración de respaldos creados con el binario de RC1. [Registro de publicación](PUBLICACION.md)
 
-La página, API, etiqueta y las cuatro descargas se comprobaron sin autenticación. Sus tamaños y hashes coinciden con ENTREGA y el ZIP público pasó inventario y 499 hashes. Sigue siendo prerelease y no Latest. La evidencia posterior está en [PUBLICACION.md](PUBLICACION.md), fuera del ZIP. Los cambios de comunidad se comprobaron sin repetir los arneses del software aceptado. El mantenimiento no ofrece un servicio de recuperación personal ni plazos de soporte garantizados. [Procedimiento](MANTENIMIENTO.md).
+RC1 fue la primera publicación experimental. Se retiró su ZIP oficial durante la auditoría y se conservaron su etiqueta, fuentes, hashes e informe. Contribución, soporte, reporte privado de vulnerabilidades y formularios de incidencias siguen disponibles. [Procedimiento de mantenimiento](MANTENIMIENTO.md)
 
 El siguiente trabajo real es clasificar las incidencias que lleguen, reproducir fallos confirmados con datos sintéticos y, cuando exista entorno, ejecutar el piloto y las validaciones externas pendientes. No hay un bloqueo de publicación por esos pendientes ni una observación de piloto ya realizada. No se añaden funciones para prolongar el goal de publicación.
 
-### Cierre independiente del candidato de software
+### Aceptación histórica del candidato de software RC1
 
 **Cerrado el alcance de software con e4e87b8.** La [aceptación Windows 42124550998](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42124550998) aprobó dos compilaciones limpias idénticas, revisión WPF del paquete y ensayos nativos de instalación, actualización, retirada y recuperación de los tres modos. Se descargó el artefacto y se comprobaron sus 499 archivos y el inventario exacto. [ENTREGA.md](ENTREGA.md) registra ZIP, hashes y límites. Los informes posteriores se adjuntan aparte y el ZIP no se reconstruye para incorporarlos.
 
@@ -32,7 +32,7 @@ La inspección posterior del escritorio detectó recreación del historial en ca
 
 ### Antecedentes del cierre
 
-La [matriz de la v1](V1.md) registra el paso de la alfa de laboratorio a la aplicación distribuible. Conserva por separado la aceptación ya realizada y las validaciones externas del producto. Los párrafos siguientes conservan los candidatos y observaciones anteriores; el paquete actual es e4e87b8, fijado arriba y en ENTREGA.
+La matriz de la v1 conserva el paso de la alfa de laboratorio a la aplicación distribuible y las validaciones externas del producto. Los párrafos siguientes registran candidatos y observaciones anteriores. [Matriz de la v1](V1.md)
 
 La revisión adicional de teclado retuvo `8bde43f`: abrir recuperación y buscar podían perder el foco al deshabilitar temporalmente el panel. El candidato corregido `76b7eed` pasó la regresión WPF con ventana visible, consultas consecutivas con Enter en los temas claro y oscuro y el recorrido normal de los tres modos. Pasaron también Windows CI y el laboratorio VHDX del mismo commit. [Incidencia, paquete y reanudación](ENTREGA.md).
 
@@ -48,7 +48,7 @@ La retirada de versiones ofrece selección y aceptación, diario reanudable y re
 
 La [guía de uso](GUIA.md) recorre los tres modos desde la ventana de producto, verificación, incidencias, restauración, configuración y retención. Las [notas de la vista previa](NOTAS.md) acompañan al paquete y mantienen sus límites; el publicador incluye ambas y CI comprueba que coincidan con las fuentes. El [piloto](PILOTO.md) usa ahora el panel de producto y registra por separado el laboratorio anterior.
 
-La v1 sigue abierta según su matriz. El candidato y sus hashes están fijados en ENTREGA; la evidencia posterior se añade sin reconstruir ni alterar ese paquete. El VHDX del candidato corregido aprobó los tres modos. Quedan las validaciones externas: piloto de 7–14 días, USB físico, ciclos de Windows, otra cuenta/equipo, nube y aceptación completa de accesibilidad. No hay por ahora entorno externo disponible; por indicación del usuario permanecen pendientes, sin resultados ni fechas ficticias. Los ensayos usan únicamente datos sintéticos y destinos desechables.
+La v1 sigue abierta según su matriz. La aceptación y los hashes de RC2 quedan separados del ZIP. El laboratorio VHDX aprobó los tres modos con el motor corregido de `6ba2c91`. Quedan el piloto de 7–14 días, USB físico, ciclos de Windows, otra cuenta o equipo, nube y aceptación completa de accesibilidad. Los ensayos usan datos sintéticos y destinos desechables. [Aceptación de RC2](ENTREGA-RC2.md)
 
 En menos de dos minutos, una persona debe poder elegir una carpeta, elegir el disco de respaldo y entender qué va a ocurrir. Debe poder recuperar un archivo desde la misma app sin saber qué es un manifiesto, un hash o un comando.
 
@@ -192,7 +192,7 @@ El almacén guarda el descriptor de cada generación antes de escribir objetos. 
 
 La ventana **Versiones** permite crear o abrir almacenes, crear un punto, reintentar uno pendiente, verificar una fecha y restaurar un punto o un archivo a una carpeta vacía. Muestra una carpeta a la vez y permite filtrar por altas, modificaciones y borrados respecto al punto anterior. Un archivo eliminado se restaura desde la fecha anterior que lo conserva. La prueba WPF reabre un punto pendiente con el origen ausente, comprueba los tres tipos de cambio, recupera un archivo eliminado y restaura la fecha reciente. También comprueba que un punto con ambas réplicas dañadas quede para revisión y que otro punto íntegro siga disponible.
 
-El laboratorio mantiene su índice SQLite en `.foldertwin-index/index.db` dentro del espacio temporal registrado, fuera del origen y del almacén, en un volumen fijo. Usa SQLite de Windows y confirma `WAL` y `synchronous=FULL` al importar. Valida los catálogos antes de consultar la vista y usa sus hashes para identificarla. Importa cada vista en una transacción y navega por carpeta. Si falta la base, vuelve a importar la vista. Si SQLite falla, la ventana conserva la base y vuelve a leer los catálogos. La prueba WPF borra una base sintética, comprueba que se reconstruya, la corrompe, compara ambas vistas y vuelve a verificar y restaurar. Las mediciones figuran a continuación. El producto usa el registro fijo del perfil local; sus recorridos de recuperación y reconstrucción del índice pasaron desde el paquete. [SQLite de Windows](https://learn.microsoft.com/en-us/dotnet/standard/data/sqlite/custom-versions) y [WAL](https://www.sqlite.org/wal.html).
+El laboratorio mantiene el índice SQLite en `.foldertwin-index/index.db`, dentro del espacio temporal registrado en un volumen fijo, fuera de las carpetas de origen y almacén. El producto usa el registro fijo del perfil local. Los hashes de catálogos identifican cada vista y SQLite de Windows usa WAL/FULL en las transacciones normales. RC2 valida y mantiene abiertos los archivos que SQLite usa. Si falta toda la caché, vuelve a importar la vista. Si quedan diarios sin base o SQLite falla, conserva los archivos y lee los catálogos. WPF comprueba ausencia parcial, reconstrucción, corrupción, comparación de vistas, verificación y restauración. [Auditoría](AUDITORIA.md) · [SQLite de Windows](https://learn.microsoft.com/en-us/dotnet/standard/data/sqlite/custom-versions) · [WAL](https://www.sqlite.org/wal.html)
 
 ### Mediciones del versionado
 

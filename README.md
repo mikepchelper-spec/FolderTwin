@@ -4,7 +4,7 @@
 
 **Vista previa experimental para Windows 11 x64: usa solo datos sintéticos y carpetas desechables. No es una v1 definitiva ni está aceptada para respaldos personales.**
 
-**RC1 está retirada; no hay ZIP oficial disponible.** La [publicación histórica](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1) conserva etiqueta, fuentes, hashes e informe. La auditoría posterior reprodujo fallos de coordinación de trabajos y de presentación de incidencias. No se ha demostrado pérdida de contenido. Detén nuevos intentos con RC1 y conserva configuración, diarios y respaldos sintéticos; no purgues sus datos. Se prepara una candidata corregida con nueva etiqueta. El piloto y las validaciones externas siguen pendientes.
+**RC2 está publicada y verificada.** Corrige fallos de confinamiento del caché SQLite, coordinación de trabajos, estado de incidencias y otros casos de la auditoría. RC1 sigue retirada y conserva etiqueta, fuentes y evidencia histórica. Si la probaste, conserva configuración, diarios y respaldos sintéticos. El piloto y las validaciones externas siguen pendientes. [Publicación de RC2](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.2) · [Aviso de RC1](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1)
 
 ## Leer primero
 
@@ -19,7 +19,7 @@ Esta entrega es **experimental y solo para datos sintéticos y carpetas desechab
 - [Notas de versión](NOTAS.md): funciones de la vista previa, actualización y pendientes antes de cerrar v1.
 - [Matriz de aceptación](ACEPTACION.md): requisitos de las etapas 2 a 5, evidencia y validaciones pendientes del piloto.
 - [Alcance y aceptación de la v1](V1.md): trabajo de producto, criterios de salida y comprobaciones externas.
-- [Entrega del candidato](ENTREGA.md): ZIP y hashes comprobados, resultados del escritorio y punto exacto de reanudación.
+- [Aceptación de RC2](ENTREGA-RC2.md): ZIP, hashes, pruebas del paquete y compatibilidad. La [aceptación histórica de RC1](ENTREGA.md) conserva sus resultados y observaciones de escritorio.
 - [Guía del piloto](PILOTO.md): preparación, observación, recuperación y criterios de detención.
 - [Recuperar respaldos anteriores](COMPATIBILIDAD.md): acceso desde la interfaz, formatos admitidos y límites.
 - [Instalación y actualización](INSTALACION.md): paquete portable, ejecutor estable, reanudación y trabajo pendiente.
@@ -34,7 +34,7 @@ El panel de producto separa lista y detalles, y los apila en ventanas estrechas.
 
 ## Paquete portable de Windows
 
-**Descarga binaria retirada durante la auditoría.** Consulta el aviso en la [publicación RC1](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1). Las comprobaciones de [PUBLICACION](PUBLICACION.md) y [ENTREGA](ENTREGA.md) son evidencia histórica del candidato e4e87b8; no sustituyen la revisión posterior ni autorizan su uso. Los archivos ya descargados o las cachés externas no pueden revocarse.
+Extrae todo el ZIP de RC2 en una carpeta nueva y abre **FolderTwin.exe**. Incluye el runtime, fuentes, licencias y guías. La etiqueta fija el commit `d902f4c`. [Descarga para Windows x64](https://github.com/mikepchelper-spec/FolderTwin/releases/download/v1.0.0-rc.2/FolderTwin-win-x64-d902f4c.zip) · [Verificación pública](PUBLICACION.md) · [Aceptación Windows](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42212336681)
 
 Para producir el paquete desde el código, instala el SDK indicado en [global.json](global.json) y ejecuta en PowerShell 7 para Windows:
 

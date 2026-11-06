@@ -1,5 +1,7 @@
 # Candidato de software de FolderTwin 1.0
 
+> Informe histórico de RC1. El ZIP oficial de esa candidata fue retirado. [Aceptación de RC2](ENTREGA-RC2.md) · [Publicación y contención](PUBLICACION.md)
+
 Estado del 5 de noviembre de 2026: **e4e87b8 aceptado como candidato de software**. El cierre de este alcance es independiente del piloto y de los entornos externos ausentes. No se declara v1 definitiva ni se ha iniciado el piloto. Este informe se produce después de compilar y probar el paquete y se distribuye fuera del ZIP.
 
 ## Artefacto elegido

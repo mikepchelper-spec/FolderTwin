@@ -1,6 +1,6 @@
 # Auditoría posterior a RC1
 
-Estado: **en curso**. Este informe no acepta todavía una nueva distribución. RC1 (fuentes `e4e87b8`, etiqueta `v1.0.0-rc.1`) se retiró: el ZIP oficial ya no está disponible; se conservan la etiqueta, las fuentes, los hashes y el informe histórico. No se retargetea esa etiqueta. Las descargas previas y las cachés externas no se pueden revocar.
+**Auditoría de software cerrada con RC2 experimental**. Las fuentes del ZIP son `d902f4c`. Se verificaron las descargas públicas y su manifiesto. RC1, del commit `e4e87b8`, conserva etiqueta, fuentes, hashes e informe histórico. Su ZIP oficial permanece retirado. [Aceptación de RC2](ENTREGA-RC2.md) · [Publicación y hashes](PUBLICACION.md)
 
 ## Alcance y reglas de evidencia
 
@@ -19,7 +19,7 @@ Se distingue revisión estática, regresión automatizada, medición y observaci
 | A05 | P2, disponibilidad | Acumulativo trataba `case.txt` y `CASE.txt` como dos entradas, rechazando un renombrado solo de mayúsculas. | Conserva casing del destino y padres; compara conflictos bajo la misma equivalencia. Oráculo ampliado verde: nueve casos y 52 puntos restaurados offline, incluidos exclusivo bajo padre renombrado, interrupción Planned/Resume, revisión obsoleta con unión idéntica y cambios archivo↔carpeta rechazados sin cambios de datos. Segunda revisión independiente completada. |
 | A06 | P2, lectura de metadatos | Elementos `null` en colecciones de retención y abandono escapaban de la validación del contrato. | Guards explícitos antes de desreferenciar. Nuevos casos semánticos conservan snapshots de bytes/rutas ante rechazo. |
 | A07 | P2, disponibilidad | Secuencia `long.MaxValue` en historial de producto o legado lanzaba `OverflowException`. | Límite explícito con rechazo controlado, sin reutilizar secuencias. El caso legado se reprodujo con un sobre válido; campaña de 24 lectores semánticos verde y segunda revisión completadas. |
-| A08 | P2, programación | La inspección XML aceptaba restricciones de batería o disparador deshabilitado como política equivalente. | Siete variaciones rechazadas: disparador, batería explícita/implícita, demanda, solo inactividad y solo red. Verde XML-only, sin crear tareas; aceptación nativa pendiente. |
+| A08 | P2, programación | La inspección XML aceptaba restricciones de batería o disparador deshabilitado como política equivalente. | Siete variaciones rechazadas. La aceptación nativa del paquete pasó los tres modos, el reintento tras 300,9 s, la retirada durante la espera y la conservación de la incidencia. |
 
 Prioridades se refieren al comportamiento demostrado. No se ha demostrado pérdida de contenido de respaldo, escritura en origen ni evasión de una aprobación destructiva. A03 sí demostró una escritura fuera del caché autorizado, sobre un centinela exclusivamente sintético. La retirada preventiva de RC1 no borra su evidencia ni afirma que el daño se haya producido en otros equipos.
 
@@ -29,7 +29,7 @@ Prioridades se refieren al comportamiento demostrado. No se ha demostrado pérdi
 |---|---|---|---|
 | Origen abierto solo para lectura; no copiar una instantánea incoherente como completa | `VerifiedCopy`, `FolderBatch`, `VersionStore`; runners de los tres modos | Archivos ocupados, cambio concurrente, inventario parcial; oráculo compara bytes y metadatos del origen antes/después | Sin VSS ni coherencia entre múltiples archivos abiertos |
 | Raíces locales, identidad de volumen/directorio y confinamiento | `DirectoryFence`, `WindowsProbeNative`, `LocalJobRoots`, `ProductJobRegistry` | Paths/product-roots/product-jobs: sustitución, enlaces, solapamiento, GUID de volumen, revalidación de identidad | Los handles fijan componentes; no son una defensa ante un administrador que modifica el dispositivo |
-| Archivos ordinarios sin reparse/hardlinks/nube/EFS | `OpenPlainFile`, `OpenPlainDirectory`, `RequirePlain` | Paths, inventario, laboratorio VHDX previo; nueva frontera SQLite A03 | Revalidar VHDX afectado tras correcciones del motor |
+| Archivos ordinarios sin reparse/hardlinks/nube/EFS | `OpenPlainFile`, `OpenPlainDirectory`, `RequirePlain` | Paths, inventario y nueva frontera SQLite A03. VHDX 42210313861 pasó con el motor corregido | USB físico y nube real pendientes |
 | Publicar solo contenido copiado y verificado | `VerifiedCopy`, `CopyRecovery`, `VersionStore.CopyAndConfirm` | Fallos por fases, recibos, flush, hash, recuperación del temporal con origen ausente | Flush/relectura no prueban persistencia física del hardware |
 | Intento durable y reanudable, sin éxito ficticio | `ProductRun`, `ProductRunner`, pending intents | Pausa/cancelación/terminación de trabajador propio y reapertura sin origen; A01/A07 | Nuevas intercalaciones no sustituyen ciclos reales de Windows |
 | Manifiestos duplicados, cierre y referencia esperada | `BatchCatalog`, `GenerationRegistry` | Catalog/registry probes, split de réplicas, hash-chain, lector independiente | Recuperar con una réplica válida es degradado; GC exige ambas |
@@ -41,11 +41,38 @@ Prioridades se refieren al comportamiento demostrado. No se ha demostrado pérdi
 | Exclusión de operaciones sobre el mismo trabajo/almacén | `ProductRun`, settings, scheduler, maintenance, store locks | A01/A02 deterministas; restoration worker vs backup/GC/registro; locks fallan sin esperar | Inversiones de orden no demostraron deadlock porque adquisición no espera; no añadir un lock global persistente |
 | Índice reconstruible, sin autoridad sobre el respaldo | `VersionIndex`, `LocalSqlite`, browser | Corrupción/reconstrucción y navegación existentes; seis casos nuevos de sustitución del VFS | A03 corregido y con regresión; no confiar en NOFOLLOW como protección frente a hardlinks |
 | Estado e incidencias independientes por operación/trabajo | `TraySnapshot`, `ProductWindow`, histories | A04 regresión, product surface smoke y revisión de callers | Lector de pantalla, DPI y escritorio manual completo siguen externos |
-| Política de horario fiel a lo mostrado | `WindowsSchedule` | A08 XML-only con cinco mutaciones y control de defaults | Requiere aceptación nativa desde el paquete nuevo |
+| Política de horario fiel a lo mostrado | `WindowsSchedule` | A08 con siete mutaciones XML y control de defaults. Prueba nativa desde RC2 | Ciclos de Windows siguen externos |
 | Instalación solo adopta archivos inventariados y hashes conocidos | `LabInstallation`, manifest reader | Cinco interrupciones, actualización/compatibilidad/reanudación | Nunca adoptar automáticamente archivos ajenos |
 | Retirada conserva datos ajenos y diario reanudable | `LabInstallation.Removal` | Siete checkpoints; nuevos casos de archivo ajeno insertado después de inventariar en raíz y docs | Puede haber eliminado archivos propios antes de detenerse: no es retirada atómica |
-| Formatos anteriores siguen legibles | Readers de catálogo, journal, intents y compatibilidad | Probes existentes y secuencias límite nuevas, sin migrar formatos | Aceptación del paquete y guía de reapertura pendientes |
-| Distribución identifica exactamente fuentes/runtime/licencias | Publish/Test-Portable, CI | Dos builds limpias y aceptación del RC1 son históricas | Nueva RC obligatoria por cambios binarios; no incluir su propio informe posterior dentro del ZIP |
+| Formatos anteriores siguen legibles | Readers de catálogo, journal, intents y compatibilidad | WPF empaquetado abrió FTVERS01/02. Motor RC2 verificó y restauró tres trabajos FTVERS03 creados con RC1 | Downgrade, otra cuenta y otro equipo siguen fuera de la evidencia |
+| Distribución identifica exactamente fuentes/runtime/licencias | Publish/Test-Portable, CI | Dos builds limpias, verificación de ZIP exacto, compatibilidad y cuatro descargas públicas comprobadas | El informe posterior queda como adjunto separado |
+
+## Recorrido, coordinación y reanudación
+
+El asistente `ProductWindow` usa `LocalJobRoots.ReviewDedicatedDestination` y `ProductJobRegistry.Create` para ligar identidades y destino. El ejecutor `ProductRunner.Run` reabre el registro, toma su lease y abre `VersionStore.OpenProduct`. Versionado toma el inventario y publica por `CreatePoint` o continúa su intención. Espejo usa `PreviewMirror` → `BeginMirror`/continuación. Acumulativo pasa por ese diario con su inventario bruto y una unión del origen y el destino, conservando exclusivos. Los tres pasan por los objetos verificados y catálogos duplicados. Para recuperar, el trabajador vuelve a revisar la salida y abre el punto con el lector de almacén. Retención toma el lock del almacén y contrasta el registro esperado, ambos catálogos y referencias antes de mover o purgar.
+
+| Operación | Orden y frontera comprobada | Evidencia |
+|---|---|---|
+| Registro, importación y revisión de salida | Registro global. Restauración anuncia su intención activa antes de repetir la comprobación de solapamiento bajo ese lock | ProductJobRegistryProbe, ProductConfigurationProbe y ProductRestoreProbe con trabajador retenido |
+| Inicio manual, verificación y controles | Lock de ejecución antes de leer ajustes. Los controles se ligan a la intención y secuencia del intento activo | A01 y ProductRunProbe, incluidas órdenes antiguas y terminación de proceso |
+| Horario y reintentos | El ejecutor programado retiene su lease de programación y vuelve a pasar por el registro y la ejecución. Una colisión se rechaza sin esperar el otro lock | ProductScheduleProbe y revisión de `WindowsSchedule` |
+| Edición y revisión de origen importado | Ejecución → ajustes. La revisión importada toma primero registro global y luego ejecución → programación → ajustes | A01/A02 con callbacks en el límite, sin esperas temporizadas |
+| Aplicación y retirada | Registro global → leases ejecución/programación por ID → segunda instantánea de ajustes. El runtime verifica la instalación antes de retirar archivos | ProductWindow.ApplicationSmoke e InstallationProbe |
+| Almacén, restauración y limpieza | Lock del almacén para catálogo, verificación, copia, restauración y retención. Revisión y aplicación comprueban estado y huellas | ProductRestoreProbe, MirrorProbe, ProductStoreProbe y RetentionProbe |
+
+El orden no es globalmente idéntico entre horarios, registro y ejecución. Estas adquisiciones usan `FileShare.None` y fallan de inmediato ante conflicto, con liberación de los handles ya adquiridos. La revisión no encontró espera circular en esos caminos. Los recorridos sintéticos cubren intercalaciones concretas y no sustituyen un ensayo prolongado entre sesiones de Windows.
+
+### Límites de interrupción
+
+| Límite durable | Prueba que exige preservación o reanudación |
+|---|---|
+| Escritura, flush, recibo, verificación y promoción de objeto | Probe principal y ResumeProbe. Trabajador propio terminado y reabierto con el mismo plan |
+| Intención y preparación de directorios/registro/almacén | ProductStoreProbe recorre ProductStoreStep y PendingStep. ResumeProbe comprueba intención parcial |
+| Primario, réplica y recibo | CatalogProbe y VersionProbe recorren CatalogStep. RegistryProbe cubre ambas réplicas y reparación del prefijo común |
+| Plan, preparación, retiro, promoción y confirmación de actual | MirrorProbe y AccumulativeProbe recorren sus puntos de corte. El oráculo añade reanudación tras un renombrado de carpeta que conserva exclusivos |
+| Abandono de plan y registro de expiración | VersionAbandonProbe recorre AbandonStep y cortes de catálogo/registro. WPF comprueba que se conserva el plan incompatible |
+| Cuarentena, deshacer y purga | RetentionProbe cubre cuatro, cuatro y tres pasos respectivamente, además de un trabajador terminado. RecoveryAudit comprueba el contenido desde catálogos offline |
+| Instalación y retirada | InstallationProbe cubre archivos parciales y verificados, registro/confirmación, siete pasos de retirada y dos llegadas tardías |
 
 ## Contratos de lectura
 
@@ -76,9 +103,9 @@ Un fallo durante la inicialización MEMORY o un rollback journal antiguo puede d
 
 La primera aceptación empaquetada, [42210266286](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42210266286), pasó los arneses del motor y reprodujo el manifiesto en dos árboles, pero se detuvo al borrar solo `index.db` en el smoke de versiones. Con PERSIST_WAL ese escenario deja diarios, así que la apertura ahora distingue una caché ausente de una caché incompleta. Conserva todos los archivos de una caché incompleta sin crear una base vacía y permite seguir desde los catálogos. La prueba exige ese resultado y después una reconstrucción al apartar toda la caché sintética. SQLite documenta que el WAL puede contener transacciones confirmadas que aún pertenecen a la base original. [Persistencia del WAL](https://www.sqlite.org/wal.html#the_wal_file)
 
-Un segundo agente revisó de forma independiente el orden y duración de locks/pins, bootstrap, bases ajenas y fallback; también revisó los cambios de acumulativo, bandeja, límites de secuencia y guards de lectores sin hallar otro defecto por lectura. El autor de una corrección no fue su único revisor. Root revisó código y reproduce las regresiones integradas; la aceptación del paquete sigue siendo un hito distinto.
+Un segundo agente revisó el orden y duración de los handles, la inicialización, las bases ajenas y el fallback. También revisó acumulativo, bandeja, límites de secuencia y guards de lectores. Otro agente revisó la corrección de diarios huérfanos. La revisión de llamadores y errores se contrastó con las regresiones integradas y la aceptación del paquete.
 
-## Recursos y resultados pendientes
+## Recursos y entrega
 
 La nueva medición de polling usa 100 y 1000 intentos sintéticos, cinco muestras calientes por tamaño, reserva de 2 GiB, payload máximo de 32 MiB y presupuesto cooperativo de 120 s. Se ejecutó sin builds ni campañas de E/S concurrentes del equipo de agentes.
 
@@ -91,8 +118,8 @@ Cero bytes escritos durante cada consulta; payload de fixture de 539.355 bytes a
 
 El recorrido WPF integrado local pasó con el estado corregido: instalación/actualización/retirada (incluidas las dos incorporaciones tardías), tres modos, búsqueda/recuperación y caché dañada, foco/temas/tamaños, trabajadores y controles, retención, configuración y gestión de aplicación. Las consultas de bandeja y política también pasaron sus regresiones específicas. Es automatización de la aplicación, no una observación manual ni una certificación del lector.
 
-El oráculo de 52 puntos tardó 15,761 s y alcanzó 58.916.864 bytes de máximo residente del proceso. La campaña de compatibilidad real RC1→motor corregido tardó 7,4465 s, con dos builds del mismo harness y tres respaldos creados por el binario anterior. Sus hashes y el cotejo con el binario final se registrarán en la aceptación posterior. No valida downgrade ni otra cuenta.
+El oráculo de 52 puntos tardó 15,761 s localmente y alcanzó 58.916.864 bytes de máximo residente. La campaña de compatibilidad se ejecutó con el motor extraído del ZIP final. Duró 18,980 s incluidas las dos compilaciones del arnés. El informe registra sus hashes y el resultado independiente de bytes y árbol. [Aceptación de RC2](ENTREGA-RC2.md)
 
-Falta aceptar un paquete nuevo reproducible y comprobar su publicación y descargas. CI añade las campañas acotadas a la aceptación y mantiene un máximo de 25 minutos para el conjunto ampliado (antes 18), incluidas dos builds y horarios nativos. No se repite la escala de 329.000 rutas; sus resultados anteriores conservan la identidad del motor medido. El procedimiento de piloto permanece en `PILOTO.md`.
+Windows CI 42212336681 aprobó la candidata `d902f4c` en 11 min 16 s. La campaña empaquetada de historial registró 13,52 ms y 129,08 ms de mediana para 100 y 1000 intentos, con cinco muestras por tamaño. Las diferencias de entorno impiden compararlas como una aceleración del código. La escala de 329.000 rutas conserva la identidad de su motor anterior. [Aceptación Windows](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42212336681)
 
 Validaciones externas pendientes: observación de 7–14 días, USB NTFS físico, reinicio/suspensión/sesión, otra cuenta/equipo, nube real y accesibilidad que requiere lector, escalado y otro entorno. No bloquean esta auditoría de software y no se consideran aprobadas.
