@@ -70,7 +70,7 @@ Primera pantalla: **¿Qué quieres proteger? → ¿Dónde guardarlo? → ¿Cómo
 
 Pantalla habitual: nombre de la tarea, origen → destino, último respaldo correcto, última verificación, próxima ejecución, espacio disponible y dos acciones: **Respaldar ahora** / **Recuperar archivos**. Detalles y exclusiones en un panel secundario. Estado separado: esperando disco, analizando, copiando, verificando, completo, parcial, interrumpido, requiere atención. Un archivo fallido u omitido por error impide mostrar «Todo protegido».
 
-**Interfaz de producto en validación local.** La ayuda contextual dispone de un inventario por control, hover y **ⓘ Ayuda y versión** con acceso F1. Incluye requisitos de acciones deshabilitadas, guía, soporte y diagnóstico revisable. El recorrido nuevo crea los tres modos desde vacío, verifica y recupera, conserva las acciones habituales visibles y permite abrir la salida. La matriz identifica qué se comprobó por software y qué depende del lector o DPI reales. [Matriz de interfaz](INTERFAZ-PRODUCTO.md)
+**Interfaz de producto aceptada como candidata local.** El paquete `7c568d6` está en `C:\FolderTwin-Producto`. Tiene ayuda para 85 controles, acceso F1, guía, soporte y diagnóstico revisable. El recorrido desde vacío crea los tres modos, verifica y recupera, conserva acciones visibles y permite abrir la salida. Dos builds limpios coinciden. El piloto sigue en pausa y las pruebas externas conservan sus pendientes. [Matriz de interfaz](INTERFAZ-PRODUCTO.md) · [Aceptación](ENTREGA-INTERFAZ.md)
 
 **Criterios básicos de la interfaz de producto**
 

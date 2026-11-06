@@ -1,8 +1,8 @@
 # Candidata local de interfaz
 
-Alcance de software del 6 de noviembre de 2026. Se parte de RC2 y de la corrección local de navegación `4ba14cb`. La distribución pública de RC2 y su acceso directo se conservan. Esta entrega local completa los recorridos de producto sobre los motores existentes.
+Alcance de software aceptado localmente el 6 de noviembre de 2026, código `7c568d6`. Se parte de RC2 y de la corrección local de navegación `4ba14cb`. La entrada es `C:\FolderTwin-Producto\FolderTwin.exe`, también accesible como **FolderTwin candidata** en el Escritorio. [Aceptación y hashes](ENTREGA-INTERFAZ.md)
 
-La aceptación del paquete y sus hashes se registran después de compilar, fuera del ZIP. Este documento sirve como matriz de requisitos y protocolo reproducible.
+Las filas UI-01 a UI-24 se comprobaron por inspección de llamadores y los recorridos descritos, con salida 0 desde el paquete. Las dos compilaciones limpias coinciden y el motor es idéntico al aceptado en RC2. Este documento conserva el protocolo reproducible. El informe posterior queda fuera del ZIP.
 
 ## Matriz
 

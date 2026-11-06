@@ -1,5 +1,7 @@
 # Revisión del escritorio de producto
 
+La revisión local más reciente corresponde al código `7c568d6`, con ayuda contextual, primer uso y aceptación automatizada desde el paquete. Su estado, hashes y limitación de captura están en [ENTREGA-INTERFAZ](../../ENTREGA-INTERFAZ.md) y su matriz en [INTERFAZ-PRODUCTO](../../INTERFAZ-PRODUCTO.md). Las revisiones siguientes conservan la evidencia histórica de los candidatos que identifican.
+
 La ventana de producto sigue siendo una vista previa. Esta evidencia cubre la distribución del panel y parte del recorrido de escritorio. V1-10 y las comprobaciones de accesibilidad EXT-05A, EXT-05B y EXT-05C conservan sus propios criterios.
 
 ## Revisión del cierre de software

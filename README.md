@@ -6,6 +6,8 @@
 
 **RC2 está publicada y verificada.** Corrige fallos de confinamiento del caché SQLite, coordinación de trabajos, estado de incidencias y otros casos de la auditoría. RC1 sigue retirada y conserva etiqueta, fuentes y evidencia histórica. Si la probaste, conserva configuración, diarios y respaldos sintéticos. El piloto y las validaciones externas siguen pendientes. [Publicación de RC2](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.2) · [Aviso de RC1](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1)
 
+La candidata local de interfaz `7c568d6` añade primer uso, ayuda contextual, diagnóstico revisable y acceso a la salida recuperada. Está disponible en `C:\FolderTwin-Producto\FolderTwin.exe` y como **FolderTwin candidata** en el Escritorio. Sus pruebas desde paquete y dos compilaciones reproducibles están registradas en el informe. [Aceptación local](ENTREGA-INTERFAZ.md)
+
 ## Leer primero
 
 Este proyecto está dedicado al respaldo cotidiano local de carpetas.
