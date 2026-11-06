@@ -13,6 +13,7 @@ Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 Esta entrega es **experimental y solo para datos sintéticos y carpetas desechables**. Para participar: [soporte](SUPPORT.md), [contribuciones](CONTRIBUTING.md), [reporte privado de vulnerabilidades](SECURITY.md) y [mantenimiento y futuras entregas](MANTENIMIENTO.md). No adjuntes respaldos, credenciales, configuraciones, logs completos ni rutas personales a las incidencias.
 
 - [Plan de trabajo](PLAN.md): experiencia, arquitectura, prioridades, pruebas y límites.
+- [Auditoría posterior a RC1](AUDITORIA.md): invariantes, fallos reproducidos, correcciones y evidencia de la candidata posterior.
 - [Publicación experimental](PUBLICACION.md): acceso público, etiqueta, hashes y comprobación de descargas sin autenticación.
 - [Guía de uso](GUIA.md): crear y operar los tres modos, verificar, resolver incidencias y recuperar desde la interfaz.
 - [Notas de versión](NOTAS.md): funciones de la vista previa, actualización y pendientes antes de cerrar v1.

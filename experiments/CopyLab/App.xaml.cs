@@ -14,7 +14,7 @@ public partial class App : Application
         bool labPreview = e.Args is ["--lab"];
         bool startupSmoke = e.Args is ["--product-startup-smoke"];
         bool productSyntheticPreview = e.Args is ["--product-synthetic-preview"] or ["--product-synthetic-preview", "compact" or "light" or "empty"];
-        bool productSmoke = e.Args is ["--product-smoke"] or ["--product-preserved-smoke"] or ["--product-surface-smoke"];
+        bool productSmoke = e.Args is ["--product-smoke"] or ["--product-preserved-smoke"] or ["--product-surface-smoke"] or ["--schedule-policy-audit"] or ["--history-audit"] or ["--tray-audit"] or ["--index-audit"];
         bool productScheduleSmoke = e.Args is ["--product-schedule-smoke"];
         bool heldProductChild = e.Args is ["--held-product-child", _, _];
         bool heldRestoreChild = e.Args is ["--held-restore-child", _, _, _];
@@ -76,6 +76,10 @@ public partial class App : Application
             if (productSmoke)
             {
                 if (e.Args[0] == "--product-preserved-smoke") await ProductWindow.RunPreservedJobSmokeAsync();
+                else if (e.Args[0] == "--schedule-policy-audit") SchedulePolicyAuditProbe.Run();
+                else if (e.Args[0] == "--history-audit") ProductHistoryAuditProbe.Run();
+                else if (e.Args[0] == "--tray-audit") ProductTrayAuditProbe.Run();
+                else if (e.Args[0] == "--index-audit") VersionIndexAuditProbe.Run();
                 else if (e.Args[0] == "--product-surface-smoke") await ProductWindow.RunSurfaceSmokeAsync();
                 else await ProductWindow.RunSmokeAsync();
                 Shutdown(0);

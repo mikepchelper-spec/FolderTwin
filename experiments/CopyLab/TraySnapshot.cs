@@ -78,9 +78,8 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
             if (history.Unreadable != 0) attention.Add($"{job.Id:N}-history");
             bool running = history.Runs.Any(run => run.Running);
             if (running) busy++; else runnable.Add(job.Id);
-            var protection = history.Runs.Where(run => run.Intent.Operation is ProductRunOperation.Backup or ProductRunOperation.Verify).ToArray();
-            var latest = protection.FirstOrDefault();
-            var result = protection.FirstOrDefault(run => run.Result is not null)?.Result;
+            var latestBackup = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Backup);
+            var latestVerification = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Verify);
             var activity = history.Runs.FirstOrDefault(run => run.Intent.Operation != ProductRunOperation.Restore);
             if (activity is { Running: false, Intent.Operation: ProductRunOperation.ReviewAbandon or ProductRunOperation.AbandonVersion })
                 attention.Add($"{job.Id:N}-pending-plan");
@@ -88,10 +87,17 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
                 (activity.Result?.State != ProductRunState.Confirmed || activity.Mirror is { ResumePending: true } or { Conflicts: > 0 } ||
                     activity.Mirror is { RequiresEmptyReview: true } or { RequiresMassReview: true }))
                 attention.Add($"{job.Id:N}-review");
-            if (latest is null) pending++;
-            else if (result is not null && result.State != ProductRunState.Confirmed)
-                attention.Add($"{job.Id:N}-{result.State}");
-            else if (latest.Result is null && !running) attention.Add($"{job.Id:N}-interrupted");
+            if (latestBackup is null) pending++;
+            // Verifying a previous point does not complete a failed or interrupted backup.
+            foreach (var latest in new[] { latestBackup, latestVerification })
+            {
+                if (latest?.Result is { State: not ProductRunState.Confirmed } result)
+                    attention.Add($"{job.Id:N}-{result.State}");
+                else if (latest?.Result is { Degraded: true })
+                    attention.Add($"{job.Id:N}-{latest.Intent.Operation}-replica");
+                else if (latest is { Result: null, Running: false })
+                    attention.Add($"{job.Id:N}-interrupted");
+            }
             var confirmed = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Backup &&
                 run.Result?.State == ProductRunState.Confirmed);
             if (confirmed is null) continue;

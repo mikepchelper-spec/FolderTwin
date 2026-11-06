@@ -134,7 +134,10 @@ internal static class VersionJob
             return new(id, clock?.Invoke() ?? DateTimeOffset.UtcNow, VersionJobState.Busy, null, 0);
         }
         using var jobLock = acquired;
-        long sequence = checked(History(workspace, id).Results.Select(result => result.Sequence).DefaultIfEmpty(0).Max() + 1);
+        long previousSequence = History(workspace, id).Results.Select(result => result.Sequence).DefaultIfEmpty(0).Max();
+        if (previousSequence == long.MaxValue)
+            throw new InvalidDataException("La secuencia de intentos está agotada; conserva el historial para revisión.");
+        long sequence = previousSequence + 1;
         try
         {
             string destination = Path.Combine(workspace.Root, definition.Destination);

@@ -93,16 +93,17 @@ internal sealed partial class ProductJobRegistry
 
     private static string SettingsName(long sequence) => sequence.ToString("D20", CultureInfo.InvariantCulture) + ".json";
 
-    internal ProductJob ReviewImportedSource(Guid id, string sourcePath)
+    internal ProductJob ReviewImportedSource(Guid id, string sourcePath, Action? beforeExecutionLock = null)
     {
         using var registryLock = OpenLock();
         using var job = OpenJob(id);
+        beforeExecutionLock?.Invoke();
+        using var execution = WindowsProbeNative.OpenPlainFile(job, "execution.lock", FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
+        using var scheduled = WindowsProbeNative.OpenPlainFile(job, "scheduled.lock", FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
         var intent = ReadIntent(job, id);
         var definition = ReadConfirmed(job, intent);
         if (!definition.Imported || definition.Enabled)
             throw new InvalidDataException("Deshabilita el trabajo importado antes de revisar su origen.");
-        using var execution = WindowsProbeNative.OpenPlainFile(job, "execution.lock", FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
-        using var scheduled = WindowsProbeNative.OpenPlainFile(job, "scheduled.lock", FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
         var source = LocalJobRoots.InspectSelected(sourcePath, writable: false);
         if (!source.Identity.AsSpan().SequenceEqual(intent.Source.Identity))
             throw new InvalidDataException("El origen elegido tiene otra identidad. Se conservó la configuración anterior.");

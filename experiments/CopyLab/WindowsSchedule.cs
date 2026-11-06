@@ -217,6 +217,8 @@ internal sealed class WindowsSchedule : IDisposable
         var settings = root?.Element(Schema + "Settings");
         var triggers = root?.Element(Schema + "Triggers")?.Elements().ToArray() ?? [];
         if (triggers.Length != 1) return "Triggers";
+        // Trigger.Enabled and AllowStartOnDemand default to true in the SDK schema.
+        if ((string?)triggers[0].Element(Schema + "Enabled") is not (null or "true")) return "Trigger.Enabled";
         if (owner.Tray && (triggers[0].Name != Schema + "LogonTrigger" || NormalizeSid((string?)triggers[0].Element(Schema + "UserId")) != user))
             return "LogonTrigger.UserId";
         if (!owner.Tray && triggers[0].Name != Schema + "TimeTrigger" && triggers[0].Name != Schema + "CalendarTrigger") return "TimeTrigger/CalendarTrigger";
@@ -225,6 +227,13 @@ internal sealed class WindowsSchedule : IDisposable
                 owner.DailyAt != TimeOnly.FromDateTime(start) || (string?)triggers[0].Element(Schema + "ScheduleByDay")?.Element(Schema + "DaysInterval") != "1"))
             return "CalendarTrigger.StartBoundary";
         if ((string?)settings?.Element(Schema + "MultipleInstancesPolicy") != "IgnoreNew") return "MultipleInstancesPolicy";
+        // Battery restrictions default to true; only an explicit false preserves our uninterrupted policy.
+        if ((string?)settings?.Element(Schema + "DisallowStartIfOnBatteries") != "false") return "DisallowStartIfOnBatteries";
+        if ((string?)settings?.Element(Schema + "StopIfGoingOnBatteries") != "false") return "StopIfGoingOnBatteries";
+        if ((string?)settings?.Element(Schema + "AllowStartOnDemand") is not (null or "true")) return "AllowStartOnDemand";
+        // Both constraints default to false; the local backup must not wait for idle or a network.
+        if ((string?)settings?.Element(Schema + "RunOnlyIfIdle") is not (null or "false")) return "RunOnlyIfIdle";
+        if ((string?)settings?.Element(Schema + "RunOnlyIfNetworkAvailable") is not (null or "false")) return "RunOnlyIfNetworkAvailable";
         if (!owner.Tray && (string?)settings?.Element(Schema + "StartWhenAvailable") != "true") return "StartWhenAvailable";
         if ((string?)settings?.Element(Schema + "ExecutionTimeLimit") != "PT0S") return "ExecutionTimeLimit";
         if (!owner.Tray && settings?.Element(Schema + "RestartOnFailure") is not null) return "RestartOnFailure";

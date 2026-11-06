@@ -62,6 +62,16 @@ if (args is ["--held-product-child", var productFixture, var heldId] && Guid.Try
     return ProductRunProbe.HeldChild(productFixture, heldJobId);
 if (args is ["--product-store"])
     return ProductStoreProbe.Run();
+if (args is ["--reader-audit"])
+    return ReaderAuditProbe.Run();
+if (args is ["--differential-audit"])
+    return DifferentialAuditProbe.Run();
+if (args is ["--recovery-audit"])
+    return RecoveryAuditProbe.Run();
+if (args is ["--concurrency-audit"])
+    return ProductConcurrencyAuditProbe.Run();
+if (args is ["--import-concurrency-audit"])
+    return ImportedSourceConcurrencyAuditProbe.Run();
 if (args is ["--accumulative"])
     return AccumulativeProbe.Run();
 if (args is ["--interrupt-accumulative-child", var cumulativeRoot])

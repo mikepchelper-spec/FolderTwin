@@ -32,7 +32,7 @@ internal sealed partial class ProductJobRegistry
     }
 
     internal ProductRunLease StartRun(Guid id, Func<DateTimeOffset>? clock = null, ProductRunOperation operation = ProductRunOperation.Backup,
-        Guid? restoreRequest = null)
+        Guid? restoreRequest = null, Action? beforeExecutionLock = null)
     {
         if (!Enum.IsDefined(operation) || !ValidRestoreReference(operation, restoreRequest))
             throw new ArgumentOutOfRangeException(nameof(operation));
@@ -40,15 +40,19 @@ internal sealed partial class ProductJobRegistry
         FileStream? execution = null;
         try
         {
+            beforeExecutionLock?.Invoke();
+            execution = WindowsProbeNative.OpenPlainFile(job, "execution.lock", FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
             var definition = ReadConfirmed(job, ReadIntent(job, id));
             if (operation is ProductRunOperation.Backup or ProductRunOperation.ReviewMirror && (!definition.Enabled || definition.Retired))
                 throw new InvalidDataException("El trabajo está deshabilitado o retirado. Sus respaldos se conservan para recuperar.");
-            execution = WindowsProbeNative.OpenPlainFile(job, "execution.lock", FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
             using var runs = WindowsProbeNative.OpenOrCreatePlainDirectory(job, "runs");
             var history = ReadRuns(job, runs, id);
             // Preserve unreadable records. Their directory sequence still reserves
             // the number, so a torn history write cannot cause sequence reuse.
-            long sequence = checked(WindowsProbeNative.ReadDirectory(runs).Select(entry => DirectorySequence(entry.Name)).DefaultIfEmpty(0).Max() + 1);
+            long previousSequence = WindowsProbeNative.ReadDirectory(runs).Select(entry => DirectorySequence(entry.Name)).DefaultIfEmpty(0).Max();
+            if (previousSequence == long.MaxValue)
+                throw new InvalidDataException("El historial alcanzó el límite de secuencia. Conserva los registros para revisión.");
+            long sequence = previousSequence + 1;
             Guid runId = Guid.NewGuid();
             var intent = new ProductRunIntent(1, id, runId, sequence, JobStamp(job), (clock?.Invoke() ?? DateTimeOffset.UtcNow).ToUniversalTime(), operation, restoreRequest);
             var directory = WindowsProbeNative.CreatePlainDirectory(runs, RunName(intent));

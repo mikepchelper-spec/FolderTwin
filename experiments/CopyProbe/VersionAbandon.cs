@@ -259,7 +259,7 @@ internal sealed partial class VersionStore
         if (plan.Version != 1 || plan.Marker != binding.Marker || !plan.Identity.AsSpan().SequenceEqual(binding.Identity) ||
             plan.Review.Generation != generation || plan.Review.DocumentHash is not { Length: 32 } ||
             plan.Review.RegistryHash is not { Length: 32 } || plan.Review.SourceIdentity is not { Length: 24 } ||
-            plan.Review.Files < 0 || plan.Review.Artifacts.Length > 5 ||
+            plan.Review.Files < 0 || plan.Review.Artifacts.Length > 5 || plan.Review.Artifacts.Any(artifact => artifact is null) ||
             plan.Review.Artifacts.Select(ArtifactArchiveName).Distinct(StringComparer.Ordinal).Count() != plan.Review.Artifacts.Length)
             throw new InvalidDataException("El abandono corresponde a otro almacén o tiene referencias inválidas.");
         _ = GenerationTime(generation);

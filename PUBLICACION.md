@@ -1,13 +1,15 @@
 # Publicación experimental de FolderTwin
 
-**v1.0.0-rc.1 está publicada como prerelease experimental, solo para datos sintéticos y carpetas desechables. No es una v1 definitiva ni una entrega aceptada para respaldos personales.**
+**RC1 retirada durante la auditoría posterior: no usar ni iniciar nuevas ejecuciones.** El ZIP oficial se eliminó y su URL devuelve 404; se conservan etiqueta, fuentes, hashes e informe histórico. Conserva configuración, diarios y respaldos sintéticos sin purgarlos. La retirada no puede revocar descargas anteriores o cachés externas. [Auditoría y correcciones en curso](AUDITORIA.md).
+
+El resto de esta sección registra la publicación y aceptación **históricas** de RC1. No describe una descarga actualmente disponible ni aprueba su uso. La candidata corregida tendrá otra etiqueta, aceptación y hashes. Sigue siendo una vista previa para datos sintéticos y carpetas desechables, sin v1 definitiva ni aceptación para respaldos personales.
 
 Publicación: **5 de noviembre de 2026, 23:01:28, America/Bogota (UTC−05:00)**. La API registra `2026-11-06T04:01:28Z`. Se publicó el borrador ya revisado, ID `435666824`, sin reconstruir ni sustituir sus archivos.
 
 ## Identidad y acceso público
 
 - [Página de la prerelease](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1).
-- [ZIP para Windows x64](https://github.com/mikepchelper-spec/FolderTwin/releases/download/v1.0.0-rc.1/FolderTwin-win-x64-e4e87b8.zip).
+- ZIP para Windows x64: retirado (el hash histórico se conserva abajo).
 - [Etiqueta y fuentes](https://github.com/mikepchelper-spec/FolderTwin/tree/v1.0.0-rc.1), resuelta a `e4e87b840eedc8139fd49e389f2cd143cd6ef61c` mediante la API pública y un fetch de la etiqueta.
 - [Metadatos públicos de la entrega](https://api.github.com/repos/mikepchelper-spec/FolderTwin/releases/tags/v1.0.0-rc.1): `draft=false`, `prerelease=true`, ID `435666824`. No se marcó Latest; la consulta pública `/releases/latest` devolvió 404 porque no hay una versión estable publicada.
 

@@ -105,7 +105,60 @@ internal static class InstallationProbe
             Reject(() => LabInstallation.RemoveAt(fixture.Installs, review));
             Check(File.Exists(executable), "A contradictory installation was partly deleted.");
         }
+        CheckLateForeignFiles();
         Console.Error.WriteLine("PASS package removal checks all handles and hashes before deleting, rejects busy/foreign/changed files, resumes every journal boundary, preserves other data, and permits reinstall without reusing old removal authority.");
+    }
+
+    private static void CheckLateForeignFiles()
+    {
+        foreach (string relative in new[] { "late-foreign.txt", Path.Combine("docs", "late-foreign.txt") })
+        {
+            using var fixture = new Fixture();
+            string executable = LabInstallation.EnsureAt(fixture.Package, fixture.Installs);
+            string root = Path.GetDirectoryName(executable)!;
+            string fingerprint = Path.GetFileName(root);
+            var review = LabInstallation.ReviewRemovalAt(fixture.Installs, fingerprint);
+            string foreign = Path.Combine(root, relative);
+            string preserved = Path.Combine(fixture.Workspace.Root, "independent-synthetic-backup.txt");
+            byte[] sentinel = "late synthetic foreign file must survive"u8.ToArray();
+            File.WriteAllText(preserved, "independent fixture data");
+            bool inserted = false;
+            int removed = 0;
+            Reject(() => LabInstallation.RemoveAt(fixture.Installs, review, step =>
+            {
+                if (step == InstallRemovalStep.Planned)
+                {
+                    // Visit has checked and retained all known file handles; no delete has run yet.
+                    File.WriteAllBytes(foreign, sentinel);
+                    inserted = true;
+                }
+                if (step == InstallRemovalStep.FileRemoved) removed++;
+            }));
+            Check(inserted && removed > 0 && Directory.Exists(root) && File.ReadAllBytes(foreign).AsSpan().SequenceEqual(sentinel),
+                "A foreign file inserted after inventory was deleted or did not exercise an interrupted removal.");
+            string journal = Path.Combine(fixture.Installs, ".removals", fingerprint);
+            Check(File.Exists(Path.Combine(journal, "plan")) && !File.Exists(Path.Combine(journal, "complete")),
+                "The incomplete removal lost its durable authority or published a false completion.");
+            var choice = LabInstallation.ListRemovalsAt(fixture.Installs).Single();
+            Check(choice.InProgress && choice.Review.Identity.AsSpan().SequenceEqual(review.Identity),
+                "A late foreign file hid the resumable removal from the application.");
+            string[] snapshot = Snapshot(root);
+            var reopened = LabInstallation.ReviewRemovalAt(fixture.Installs, fingerprint);
+            Reject(() => LabInstallation.RemoveAt(fixture.Installs, reopened));
+            Check(Snapshot(root).SequenceEqual(snapshot, StringComparer.Ordinal) && File.ReadAllText(preserved) == "independent fixture data",
+                "Retrying while a foreign file remained changed the partial installation or independent data.");
+            File.Delete(foreign); // Only this probe's explicitly inserted synthetic file.
+            LabInstallation.RemoveAt(fixture.Installs, reopened);
+            Check(!Directory.Exists(root) && File.Exists(Path.Combine(journal, "complete")) &&
+                File.ReadAllText(preserved) == "independent fixture data",
+                "Removal could not resume after its own late foreign fixture file was withdrawn.");
+        }
+        Console.Error.WriteLine("PASS late foreign files inserted in the root and nested directory after removal inventory survive; incomplete authority stays visible and resumable.");
+
+        static string[] Snapshot(string root) => Directory.GetFiles(root, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(root, path) + "=" + Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))))
+            .Concat(Directory.GetDirectories(root, "*", SearchOption.AllDirectories).Select(path => Path.GetRelativePath(root, path) + "/"))
+            .Order(StringComparer.Ordinal).ToArray();
     }
 
     internal sealed class Fixture : IDisposable

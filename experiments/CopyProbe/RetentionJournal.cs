@@ -50,11 +50,15 @@ internal static class RetentionJournal
             throw new InvalidDataException("El plan de cuarentena no pertenece al almacén o no es válido.");
         plan.Review.Policy.Validate();
         foreach (string generation in plan.Review.Keep.Concat(plan.Review.Expire))
+        {
+            if (generation is null)
+                throw new InvalidDataException("Una referencia de generación es nula en el plan de cuarentena.");
             _ = VersionStore.GenerationTime(generation);
+        }
         if (plan.Review.Keep.Concat(plan.Review.Expire).Distinct(StringComparer.Ordinal).Count() !=
             plan.Review.Keep.Length + plan.Review.Expire.Length || plan.Review.Keep.Length == 0 ||
             plan.Review.Objects.Distinct(StringComparer.Ordinal).Count() != plan.Review.Objects.Length ||
-            plan.Review.Objects.Any(digest => !IsDigest(digest)))
+            plan.Review.Objects.Any(digest => digest is null || !IsDigest(digest)))
             throw new InvalidDataException("Referencias inválidas o repetidas en el plan de cuarentena.");
         return plan;
     }

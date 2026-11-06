@@ -4,9 +4,13 @@ Serie candidata de FolderTwin 1.0, sin declaración de v1 definitiva. La identid
 
 ## Cambios de esta entrega
 
-- Las guías distribuidas se separan de los informes de aceptación de desarrollo. El ZIP identifica sus propias fuentes y runtime y no presenta un candidato anterior como actual.
-- Se conserva el foco al abrir recuperación y al realizar consultas consecutivas con Enter. La revisión de interfaz cubre también el retorno entre paneles, los controles de revisión y los estados sin puntos.
-- El historial conserva sus filas, selección y foco durante las consultas periódicas cuando su contenido no ha cambiado.
+- Candidata posterior a la retirada de RC1. Consulta la aceptación y el estado de publicación de esta compilación antes de ejecutarla; continúa siendo experimental y solo para datos sintéticos.
+- El inicio de un trabajo y la revisión de un origen importado respetan los ajustes confirmados antes de adquirir su bloqueo de ejecución.
+- La bandeja conserva por separado las incidencias del respaldo y de la verificación: verificar un punto anterior no resuelve un respaldo fallido.
+- La lectura de diarios rechaza elementos nulos y secuencias agotadas de forma controlada, conservando los registros para revisión.
+- La política de horarios detecta disparadores deshabilitados, restricciones de batería y ejecución manual deshabilitada.
+- El acumulativo conserva el nombre ya existente en destino ante cambios solo de mayúsculas, incluidos sus padres, y sigue detectando ediciones externas. Los cambios archivo↔carpeta se detienen para conservar el contenido del destino.
+- La auditoría añade oráculos independientes de contenido, intercalaciones de concurrencia, recuperación y limpieza offline, y retirada con archivos ajenos incorporados tarde. Los informes posteriores detallan resultados y límites; estas notas no anticipan su aprobación.
 
 ## Funciones disponibles
 

@@ -4,8 +4,8 @@ internal sealed partial class VersionStore
 {
     private static string[] AccumulativeConflicts(BatchPlan source, CatalogSnapshot? previous, BatchPlan current)
     {
-        var old = previous?.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal) ?? [];
-        var actual = current.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
+        var old = previous?.Files.ToDictionary(file => file.RelativePath, StringComparer.OrdinalIgnoreCase) ?? [];
+        var actual = current.Files.ToDictionary(file => file.RelativePath, StringComparer.OrdinalIgnoreCase);
         return source.Files.Where(file => old.TryGetValue(file.RelativePath, out var known) ?
                 !actual.TryGetValue(file.RelativePath, out var found) || !SameMirrorFile(known, found) :
                 actual.TryGetValue(file.RelativePath, out var collision) && !SameMirrorFile(file, collision))
@@ -14,12 +14,30 @@ internal sealed partial class VersionStore
 
     private BatchPlan MergeAccumulative(BatchPlan source, BatchPlan current)
     {
-        var names = source.Files.Select(file => file.RelativePath).ToHashSet(StringComparer.Ordinal);
+        // NTFS paths in this mode are case-insensitive. Retain current's spelling,
+        // including existing parents of new files, without changing the raw source inventory.
+        var currentPaths = current.Directories.Concat(current.Files.Select(file => file.RelativePath))
+            .ToDictionary(path => path, path => path, StringComparer.OrdinalIgnoreCase);
+        string Canonical(string path)
+        {
+            if (currentPaths.TryGetValue(path, out string? existing)) return existing;
+            string? parent = Path.GetDirectoryName(path);
+            return string.IsNullOrEmpty(parent) ? path : Path.Combine(Canonical(parent), Path.GetFileName(path));
+        }
+        var files = current.Files.ToDictionary(file => file.RelativePath, StringComparer.OrdinalIgnoreCase);
+        foreach (var file in source.Files)
+        {
+            string path = Canonical(file.RelativePath);
+            files[path] = file with { RelativePath = path };
+        }
+        var directories = current.Directories.Concat(source.Directories.Select(Canonical))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.Ordinal).ToArray();
+        if (directories.Any(files.ContainsKey))
+            throw new InvalidDataException("Una ruta cambia entre archivo y carpeta. La copia acumulativa conserva el destino para revisión.");
         var merged = source with
         {
-            Files = source.Files.Concat(current.Files.Where(file => !names.Contains(file.RelativePath)))
-                .OrderBy(file => file.RelativePath, StringComparer.Ordinal).ToArray(),
-            Directories = source.Directories.Union(current.Directories, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()
+            Files = files.Values.OrderBy(file => file.RelativePath, StringComparer.Ordinal).ToArray(),
+            Directories = directories
         };
         workspace.ValidatePlan(merged);
         return merged;

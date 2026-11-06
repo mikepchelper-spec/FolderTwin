@@ -10,13 +10,18 @@ internal sealed class LocalSqlite : IDisposable
     private nint database;
     private const string Library = "winsqlite3.dll";
 
-    internal LocalSqlite(string path, bool create)
+    internal LocalSqlite(string path, bool create, bool persistWal = false)
     {
         const int readWrite = 0x2, createFile = 0x4, noFollow = 0x01000000;
         try
         {
             Check(sqlite3_open_v2(path, out database, readWrite | noFollow | (create ? createFile : 0), 0));
             Check(sqlite3_busy_timeout(database, 1000));
+            if (persistWal)
+            {
+                int enabled = 1;
+                Check(sqlite3_file_control(database, "main", 10, ref enabled)); // SQLITE_FCNTL_PERSIST_WAL.
+            }
         }
         catch
         {
@@ -36,7 +41,7 @@ internal sealed class LocalSqlite : IDisposable
     private void Check(int result)
     {
         if (result != 0)
-            throw new IOException($"SQLite {result}. " +
+            throw new IOException($"SQLite {result}" + (database == 0 ? ". " : $"/{sqlite3_extended_errcode(database)}. ") +
                 (database == 0 ? "No se pudo abrir el índice." : Marshal.PtrToStringUTF8(sqlite3_errmsg(database))));
     }
 
@@ -79,7 +84,11 @@ internal sealed class LocalSqlite : IDisposable
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
     private static extern nint sqlite3_errmsg(nint database);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int sqlite3_extended_errcode(nint database);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
     private static extern int sqlite3_busy_timeout(nint database, int milliseconds);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int sqlite3_file_control(nint database, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, int operation, ref int argument);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
     private static extern int sqlite3_exec(nint database, [MarshalAs(UnmanagedType.LPUTF8Str)] string sql, nint callback, nint context, nint error);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]

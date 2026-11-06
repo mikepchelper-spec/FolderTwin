@@ -127,7 +127,20 @@ public partial class ProductWindow
     }
 
     private static string Date(DateTimeOffset? date) => date?.ToLocalTime().ToString("g") ?? "Todavía no disponible";
-    private static string Brief(ProductRunHistory history) => history.Runs.FirstOrDefault() is not { } last ? "Todavía sin ejecutar" :
+    internal static string Brief(ProductRunHistory history)
+    {
+        string text = ActivityBrief(history);
+        foreach (var (operation, label) in new[] { (ProductRunOperation.Backup, "respaldo"), (ProductRunOperation.Verify, "verificación") })
+        {
+            var latest = history.Runs.FirstOrDefault(run => run.Intent.Operation == operation);
+            if (latest is { Running: false } && latest != history.Runs.FirstOrDefault() &&
+                (latest.Result is null || latest.Result.State != ProductRunState.Confirmed || latest.Result.Degraded))
+                text += $" · Último intento de {label} requiere atención";
+        }
+        return text;
+    }
+
+    private static string ActivityBrief(ProductRunHistory history) => history.Runs.FirstOrDefault() is not { } last ? "Todavía sin ejecutar" :
         last.Running ? last.Progress?.Paused == true ? "Pausado" : "En ejecución" :
         last.Result is { } result ? result.State switch
         {

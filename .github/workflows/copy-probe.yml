@@ -11,7 +11,7 @@ permissions:
 jobs:
   windows:
     runs-on: windows-2025
-    timeout-minutes: 18
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -71,6 +71,13 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --catalog
       - name: Verify durable pending intent and worker termination recovery
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --resume
+      - name: Audit semantic readers, differential contents, offline references and lock boundaries
+        shell: pwsh
+        run: |
+          foreach ($audit in @('--reader-audit', '--differential-audit', '--recovery-audit', '--concurrency-audit', '--import-concurrency-audit')) {
+            dotnet run --project experiments/CopyProbe --configuration Release --no-build -- $audit
+            if ($LASTEXITCODE -ne 0) { throw "Audit failed: $audit" }
+          }
       - name: Build the portable app twice and verify the WPF flow from the package
         shell: pwsh
         run: |
@@ -118,6 +125,12 @@ jobs:
           $product = Start-Process -FilePath (Join-Path $outputA 'FolderTwin.exe') -WorkingDirectory $outputA -ArgumentList '--product-smoke' -WindowStyle Hidden -RedirectStandardError $productLog -PassThru -Wait
           Get-Content -LiteralPath $productLog
           if ($product.ExitCode -ne 0) { throw "The packaged product wizard exited with $($product.ExitCode)." }
+          foreach ($audit in @('--index-audit', '--tray-audit', '--schedule-policy-audit', '--history-audit')) {
+            $auditLog = Join-Path $env:RUNNER_TEMP ("FolderTwin" + $audit + '.err')
+            $auditProcess = Start-Process -FilePath (Join-Path $outputA 'FolderTwin.exe') -WorkingDirectory $outputA -ArgumentList $audit -WindowStyle Hidden -RedirectStandardError $auditLog -PassThru -Wait
+            Get-Content -LiteralPath $auditLog
+            if ($auditProcess.ExitCode -ne 0) { throw "Packaged audit failed: $audit ($($auditProcess.ExitCode))" }
+          }
           $scheduleLog = Join-Path $env:RUNNER_TEMP 'FolderTwin-schedule-smoke.err'
           $schedule = Start-Process -FilePath (Join-Path $outputA 'CopyLab.exe') -WorkingDirectory $outputA -ArgumentList '--schedule-smoke' -WindowStyle Hidden -RedirectStandardError $scheduleLog -PassThru
           $productScheduleLog = Join-Path $env:RUNNER_TEMP 'FolderTwin-product-schedule-smoke.err'

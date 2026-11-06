@@ -1,11 +1,12 @@
 using System.ComponentModel;
+using System.Buffers.Binary;
 using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
 namespace CopyLab;
 
-internal sealed class VersionIndex(Func<DirectoryFence> openScope)
+internal sealed class VersionIndex(Func<DirectoryFence> openScope, Action? beforeDatabaseOpen = null)
 {
     internal VersionIndex(LabWorkspace workspace) : this(workspace.OpenRegisteredRoot) { }
     internal const string CacheDirectory = ".foldertwin-index";
@@ -19,9 +20,6 @@ internal sealed class VersionIndex(Func<DirectoryFence> openScope)
     internal void Ensure(string key, Func<VersionBrowser> build) => Use(create: true, db =>
     {
         db.Execute("PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;");
-        using (var mode = db.Prepare("PRAGMA journal_mode=WAL"))
-            if (!mode.Step() || mode.Text(0) != "wal")
-                throw new IOException("SQLite no pudo activar WAL.");
         using (var sync = db.Prepare("PRAGMA synchronous"))
             if (!sync.Step() || sync.Int(0) != 2)
                 throw new IOException("SQLite no pudo activar synchronous=FULL.");
@@ -145,9 +143,30 @@ internal sealed class VersionIndex(Func<DirectoryFence> openScope)
         using var owner = OpenOwner(cache, create);
         foreach (string name in new[] { DatabaseName, DatabaseName + "-wal", DatabaseName + "-shm", DatabaseName + "-journal" })
             _ = WindowsProbeNative.PlainFileExists(cache, name);
+        // Keep each VFS pathname bound to the checked file while SQLite uses it. Share reads/writes,
+        // but not deletion/renaming; SQLite's WAL persistence avoids deleting these pinned sidecars.
+        using var databasePin = Pin(DatabaseName, create ? FileMode.OpenOrCreate : FileMode.Open);
+        bool empty = databasePin.Length == 0;
+        if (!empty)
+        {
+            Span<byte> header = stackalloc byte[100];
+            if (databasePin.Length < header.Length) throw new InvalidDataException("La cabecera del índice está incompleta.");
+            databasePin.ReadExactly(header);
+            if (!header[..16].SequenceEqual("SQLite format 3\0"u8) || BinaryPrimitives.ReadInt32BigEndian(header[68..72]) != ApplicationId)
+                throw new InvalidDataException("La base no pertenece al índice de FolderTwin.");
+        }
+        using var walPin = Pin(DatabaseName + "-wal");
+        using var shmPin = Pin(DatabaseName + "-shm");
+        using var journalPin = Pin(DatabaseName + "-journal");
+        if (empty && (!create || walPin.Length != 0 || shmPin.Length != 0 || journalPin.Length != 0))
+            throw new InvalidDataException("La base vacía tiene diarios pendientes o no se puede inicializar.");
+        beforeDatabaseOpen?.Invoke(); // Deterministic synthetic interleaving at the SQLite VFS boundary.
         string path = Path.Combine(WindowsProbeNative.VolumePath(cache), DatabaseName);
-        using var db = new LocalSqlite(path, create);
-        db.Execute("PRAGMA trusted_schema=OFF;");
+        using var db = new LocalSqlite(path, create, persistWal: true);
+        db.Execute("PRAGMA trusted_schema=OFF; PRAGMA synchronous=FULL;");
+        // Only a newly created empty cache uses an in-memory rollback journal while bootstrapping.
+        // It contains no prior data; subsequent cache transactions always use WAL and FULL.
+        if (empty) db.Execute("PRAGMA journal_mode=MEMORY;");
         int id;
         using (var application = db.Prepare("PRAGMA application_id"))
             id = application.Step() ? application.Int(0) : -1;
@@ -158,9 +177,18 @@ internal sealed class VersionIndex(Func<DirectoryFence> openScope)
             using (var existing = db.Prepare("SELECT 1 FROM sqlite_master LIMIT 1"))
                 if (existing.Step())
                     throw new InvalidDataException("La base ya contiene un esquema ajeno al índice.");
-            db.Execute($"PRAGMA application_id={ApplicationId}");
         }
+        if (id != ApplicationId) db.Execute($"PRAGMA application_id={ApplicationId}");
+        using (var mode = db.Prepare("PRAGMA journal_mode=WAL"))
+            if (!mode.Step() || mode.Text(0) != "wal" || mode.Step()) throw new IOException("SQLite no pudo activar WAL.");
         return action(db);
+
+        FileStream Pin(string name, FileMode mode = FileMode.OpenOrCreate)
+        {
+            var file = WindowsProbeNative.OpenPlainFile(cache, name, FileAccess.ReadWrite, FileShare.ReadWrite, mode);
+            try { WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, name); return file; }
+            catch { file.Dispose(); throw; }
+        }
     }
 
     private static FileStream OpenOwner(SafeFileHandle cache, bool create)

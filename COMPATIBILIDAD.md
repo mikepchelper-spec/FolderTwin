@@ -19,6 +19,8 @@ Una demostración pendiente se puede reintentar con su plan original. Cambiar el
 
 ## Trabajos de producto e importación
 
+La candidata posterior a RC1 conserva los formatos de respaldo, configuración e historial. RC1 está retirada: no uses su escritor para seguir trabajando. La campaña `experiments/CompatibilityProbe/Invoke-Compatibility.ps1` permite que el binario anterior real cree tres respaldos sintéticos y que el nuevo los abra, verifique y restaure sin origen; el informe de aceptación identifica ambos hashes. No equivale a una migración de datos personales, prueba de otra cuenta ni validación de downgrade.
+
 Los respaldos de producto `FTVERS03` se abren mediante su trabajo o una configuración exportada con **Importar configuración**. Revisa destino, marcador e identidad; la importación queda deshabilitada. Recuperar un punto confirmado no exige el origen. Revisa la identidad del origen antes de activar nuevas copias. [Protocolo](experiments/CopyProbe/CONFIGURACION.md).
 
 El registro de generaciones incorpora un evento nuevo al conservar un plan incompleto. Los lectores antiguos lo rechazan y no deben volver a escribir en ese almacén. Actualizar la aplicación no convierte ni reescribe los puntos confirmados. [Planes pendientes](experiments/CopyProbe/PENDIENTES.md).

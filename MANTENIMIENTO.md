@@ -25,7 +25,7 @@ Usa las etiquetas existentes `bug`, `question`, `documentation` o `accessibility
 
 ## Contener una entrega grave
 
-Esta es una instrucción para un incidente futuro, **no una retirada del candidato actual**.
+Este es el procedimiento general de contención. Ya se aplicó a RC1 durante la [auditoría posterior](AUDITORIA.md): su ZIP oficial está retirado y se conservan las fuentes y la evidencia histórica. Una futura candidata requiere su propia aceptación; este procedimiento no la aprueba.
 
 Conserva primero localmente el ZIP, manifiesto, informe, identificadores y hashes. Edita la release afectada con el título **RETIRADA — no usar** y un aviso que diga qué se conoce, qué permanece incierto y que deben detenerse nuevas ejecuciones del modo afectado. Quita del README sus enlaces de descarga y conserva el registro de la incidencia. Nunca recomiendes purgar o borrar diarios para solucionar el fallo.
 
