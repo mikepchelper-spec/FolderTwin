@@ -11,6 +11,7 @@ public partial class ProductWindow
     internal static async Task RunSmokeAsync()
     {
         InstallationProbe.Run();
+        await RunUsabilitySmokeAsync();
         await RunSurfaceSmokeAsync();
         var workspace = LabWorkspace.Create();
         try
@@ -215,7 +216,9 @@ public partial class ProductWindow
                 File.WriteAllText(Path.Combine(source, "datos.txt"), "tercera versión");
                 await Click(window, window.BackupJobButton);
                 Check(window.mirrorReview?.RequiresMassReview == true, "A mass mirror change was not reviewed.");
-                await Click(window, window.ApplyMirrorButton);
+                Check(!window.ApplyMirrorButton.IsEnabled, "Mass review left the apply action enabled without acceptance.");
+                window.ApplyMirrorButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await window.activeTask;
                 Check(File.ReadAllText(Path.Combine(mirrored.MirrorCurrentPath, "datos.txt")) == "actualizado",
                     "A mass mirror change was applied without review.");
                 window.AcceptMassChanges.IsChecked = true;

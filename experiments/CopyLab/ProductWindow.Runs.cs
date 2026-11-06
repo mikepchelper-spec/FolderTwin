@@ -92,10 +92,22 @@ public partial class ProductWindow
         var active = history.Runs.FirstOrDefault(run => run.Running);
         var correct = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Backup && run.Result?.State == ProductRunState.Confirmed);
         var verified = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Verify && run.Result?.State == ProductRunState.Confirmed);
+        var restored = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Restore &&
+            run.Result?.State == ProductRunState.Confirmed && run.Restore is not null);
+        OpenRestoredFolderButton.IsEnabled = OpenRecoveryOutputButton.IsEnabled = !busy && restored is not null;
+        NextProtectionStep.Text = job is null ? "" : active is not null ?
+            "Siguiente paso · Espera el resultado de la operación o usa Pausar y Cancelar ejecución." :
+            !job.Enabled || job.Retired ? "Trabajo deshabilitado. Puedes recuperar sus puntos y revisar la configuración para habilitar futuras copias." :
+            correct is null ?
+            "Siguiente paso · Pulsa Respaldar ahora para crear la primera copia." : verified is null || verified.Generation != correct.Generation ?
+            "Siguiente paso · Abre Recuperar archivos y verifica este respaldo. Después recupera una muestra en una carpeta nueva." :
+            restored is null ? "Siguiente paso · Recupera una muestra en una carpeta nueva y abre los archivos para comprobarlos." :
+            "Copia verificada. Puedes abrir la última carpeta recuperada de este trabajo.";
         var lastBackup = history.Runs.FirstOrDefault(run => run.Intent.Operation is ProductRunOperation.Backup or ProductRunOperation.ReviewMirror);
         BackupJobButton.Content = lastBackup is { Running: false, Result.State: not ProductRunState.Confirmed } or { Running: false, Result: null }
             ? "_Reintentar respaldo" : "_Respaldar ahora";
         RuntimeStatusText.Text = job is null ? "" : Brief(history) +
+            "\nOrigen · " + job.Source.VolumePath + "\nDestino · " + job.Destination.LastVolumePath +
             "\nÚltimo respaldo completo · " + Date(correct?.Result?.FinishedUtc) +
             "\nÚltima verificación completa · " + Date(verified?.Result?.FinishedUtc) +
             (correct?.Generation is { } generation ? $"\nPunto recuperable del {VersionStore.GenerationTime(generation).ToLocalTime():g}" : "") +
@@ -118,6 +130,7 @@ public partial class ProductWindow
         RunControlsPanel.Visibility = active is null ? Visibility.Collapsed : Visibility.Visible;
         OperationStatusText.Text = active?.Progress is { } current ?
             Phase(current.Work.Phase) + $" · {current.Work.Processed:N0}/{current.Work.Total:N0}" + (current.Paused ? " · Pausado" : "") : "";
+        OperationStatusText.Visibility = OperationStatusText.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         PauseRunButton.Content = active?.Progress?.Paused == true ? "_Continuar" : "_Pausar";
         RunProgress.Visibility = active is null ? Visibility.Collapsed : Visibility.Visible;
         RunProgress.IsIndeterminate = active?.Progress?.Paused != true && active?.Progress?.Work.Total is not > 0;
@@ -140,7 +153,7 @@ public partial class ProductWindow
         return text;
     }
 
-    private static string ActivityBrief(ProductRunHistory history) => history.Runs.FirstOrDefault() is not { } last ? "Todavía sin ejecutar" :
+    private static string ActivityBrief(ProductRunHistory history) => history.Runs.FirstOrDefault() is not { } last ? "Sin respaldos · Todavía sin ejecutar" :
         last.Running ? last.Progress?.Paused == true ? "Pausado" : "En ejecución" :
         last.Result is { } result ? result.State switch
         {
@@ -153,9 +166,9 @@ public partial class ProductWindow
                 ProductRunOperation.Verify => "Verificación completa",
                 _ => "Respaldo completo"
             },
-            ProductRunState.Cancelled => "Cancelado; puede haber trabajo pendiente",
+            ProductRunState.Cancelled => "Parcial · Cancelado; puede haber trabajo pendiente",
             ProductRunState.WaitingForSource => "Esperando origen",
-            ProductRunState.WaitingForDestination => "Esperando destino",
+            ProductRunState.WaitingForDestination => "Esperando disco de destino",
             ProductRunState.Busy => "Archivo o destino en uso",
             _ => "Requiere atención"
         } : "Interrumpido; revisa o reintenta";
@@ -185,10 +198,13 @@ public partial class ProductWindow
         ProductRunState.Cancelled when run.Intent.Operation == ProductRunOperation.ReviewMirror =>
             "Revisión cancelada. Repite el análisis para revisar el espejo antes de aplicarlo.",
         ProductRunState.Cancelled => "Operación cancelada en un límite recuperable. Reintenta para continuar el trabajo pendiente.",
-        ProductRunState.WaitingForSource => "El origen no está disponible. Reconéctalo y reintenta.",
-        ProductRunState.WaitingForDestination => "El destino no está disponible. Reconéctalo y reintenta.",
+        ProductRunState.WaitingForSource => "El origen no está disponible. Los puntos anteriores se conservan. Reconecta la misma carpeta y reintenta.",
+        ProductRunState.WaitingForDestination => "El disco o carpeta de destino no está disponible. Los resultados anteriores se conservan. Reconecta el destino registrado y reintenta.",
         ProductRunState.Busy => "Un archivo o el destino está en uso. Cierra la aplicación que lo usa o espera a que termine la otra operación. Luego reintenta.",
-        _ => result.Detail ?? "La operación necesita revisión antes de continuar."
+        _ when result.ErrorCode is { } code && (code & 0xffff) is 112 or 39 =>
+            "Espacio insuficiente. El intento queda parcial y conserva su diario. Libera espacio fuera de los archivos internos del respaldo y reintenta.",
+        _ => (result.Detail ?? "La operación necesita revisión antes de continuar.") +
+            " Conserva los datos y el historial. Comprueba las carpetas registradas y resuelve la incidencia antes de reintentar."
     }) + (result.RelativePath is { } path ? "\n" + path : "");
 
     private void PauseRunClick(object sender, RoutedEventArgs e) => SendRunAction(cancel: false);

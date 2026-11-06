@@ -20,7 +20,7 @@ public partial class ProductWindow
             Check(new ListBoxItemAutomationPeer(JobList.Items[0], new ListBoxAutomationPeer(JobList)).GetName() == ((JobRow)JobList.Items[0]).Label,
                 "The job list exposes an implementation type instead of its accessible name.");
             Check(JobDetailsScroll.ActualHeight > 0 && JobDetailsScroll.ActualWidth > 0,
-                "The dashboard lost access to its selected job details.");
+                $"The dashboard lost details at {size}: workspace={JobWorkspace.ActualWidth}x{JobWorkspace.ActualHeight}, panel={JobDetailsPanel.ActualWidth}x{JobDetailsPanel.ActualHeight}, scroll={JobDetailsScroll.ActualWidth}x{JobDetailsScroll.ActualHeight}, header={PrimaryJobActions.ActualHeight}, rows={JobWorkspace.RowDefinitions[0].ActualHeight}/{JobWorkspace.RowDefinitions[2].ActualHeight}.");
             if (size.Width >= 900)
                 Check(JobList.TranslatePoint(new Point(), JobWorkspace).X < JobDetailsScroll.TranslatePoint(new Point(), JobWorkspace).X,
                     "The desktop layout did not separate jobs and details.");

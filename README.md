@@ -16,6 +16,7 @@ Esta entrega es **experimental y solo para datos sintéticos y carpetas desechab
 - [Auditoría posterior a RC1](AUDITORIA.md): invariantes, fallos reproducidos, correcciones y evidencia de la candidata posterior.
 - [Publicación experimental](PUBLICACION.md): acceso público, etiqueta, hashes y comprobación de descargas sin autenticación.
 - [Guía de uso](GUIA.md): crear y operar los tres modos, verificar, resolver incidencias y recuperar desde la interfaz.
+- [Candidata local de interfaz](INTERFAZ-PRODUCTO.md): primer uso, ayuda contextual, estados, recuperación y aceptación del paquete local.
 - [Notas de versión](NOTAS.md): funciones de la vista previa, actualización y pendientes antes de cerrar v1.
 - [Matriz de aceptación](ACEPTACION.md): requisitos de las etapas 2 a 5, evidencia y validaciones pendientes del piloto.
 - [Alcance y aceptación de la v1](V1.md): trabajo de producto, criterios de salida y comprobaciones externas.

@@ -70,7 +70,7 @@ Primera pantalla: **¿Qué quieres proteger? → ¿Dónde guardarlo? → ¿Cómo
 
 Pantalla habitual: nombre de la tarea, origen → destino, último respaldo correcto, última verificación, próxima ejecución, espacio disponible y dos acciones: **Respaldar ahora** / **Recuperar archivos**. Detalles y exclusiones en un panel secundario. Estado separado: esperando disco, analizando, copiando, verificando, completo, parcial, interrumpido, requiere atención. Un archivo fallido u omitido por error impide mostrar «Todo protegido».
 
-**Pendiente de interfaz — ayuda contextual.** Inventariar botones, campos y opciones de producto y explicar en lenguaje sencillo qué hacen, cuándo usarlos y qué datos afectan. Usar iconos **ⓘ** donde haga falta ampliar la explicación y permitir abrirla con el mouse, con un clic y con el teclado. En controles deshabilitados, explicar el requisito que falta. Priorizar el asistente, recuperación, revisión del espejo, cuarentena, purga y retirada. Mantener las consecuencias irreversibles visibles en el flujo y comprobar la ayuda en claro y oscuro, con foco de teclado y lector de pantalla.
+**Interfaz de producto en validación local.** La ayuda contextual dispone de un inventario por control, hover y **ⓘ Ayuda y versión** con acceso F1. Incluye requisitos de acciones deshabilitadas, guía, soporte y diagnóstico revisable. El recorrido nuevo crea los tres modos desde vacío, verifica y recupera, conserva las acciones habituales visibles y permite abrir la salida. La matriz identifica qué se comprobó por software y qué depende del lector o DPI reales. [Matriz de interfaz](INTERFAZ-PRODUCTO.md)
 
 **Criterios básicos de la interfaz de producto**
 

@@ -5,6 +5,10 @@ namespace CopyLab;
 
 public partial class ProductWindow
 {
+    private void MirrorChoiceChanged(object sender, RoutedEventArgs e)
+    {
+        if (ApplyMirrorButton is not null) RefreshProductActions();
+    }
     private Process StartMirrorReviewProcess(string location, Guid id) =>
         testMirrorReviewWorker?.Invoke(location, id) ?? ProductWorker.StartMirrorReview(location, id);
 
@@ -37,6 +41,8 @@ public partial class ProductWindow
         AcceptEmptySource.Visibility = !review.ResumePending && review.RequiresEmptyReview ? Visibility.Visible : Visibility.Collapsed;
         AcceptMassChanges.Visibility = !review.ResumePending && review.RequiresMassReview ? Visibility.Visible : Visibility.Collapsed;
         ApplyMirrorButton.Content = review.ResumePending ? "Reanudar _actualización" : "Aplicar _espejo revisado";
-        ApplyMirrorButton.IsEnabled = !busy && job.Enabled && !job.Retired && review.Conflicts == 0;
+        ApplyMirrorButton.IsEnabled = !busy && job.Enabled && !job.Retired && review.Conflicts == 0 &&
+            (review.ResumePending || (!review.RequiresEmptyReview || AcceptEmptySource.IsChecked == true) &&
+                (!review.RequiresMassReview || AcceptMassChanges.IsChecked == true));
     }
 }

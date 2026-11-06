@@ -27,7 +27,7 @@ $actual = @(Get-ChildItem -LiteralPath $root -File -Recurse -Force | ForEach-Obj
     [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/')
 } | Where-Object { $_ -cne 'SHA256SUMS.txt' })
 if (-not $expected.SetEquals([string[]]$actual)) { throw 'El conjunto de archivos no coincide con el manifiesto.' }
-foreach ($required in @('README.md', 'NOTAS.md', 'GUIA.md', 'INSTALACION.md', 'COMPATIBILIDAD.md', 'PILOTO.md',
+foreach ($required in @('README.md', 'NOTAS.md', 'GUIA.md', 'SUPPORT.md', 'INSTALACION.md', 'COMPATIBILIDAD.md', 'PILOTO.md',
     'LICENSE', 'LICENSE-dotnet.txt', 'LICENSE-dotnet-desktop.txt', 'THIRD-PARTY-NOTICES-dotnet.txt', 'FolderTwin.exe')) {
     if (-not $expected.Contains($required)) { throw "Falta un componente obligatorio: $required" }
 }

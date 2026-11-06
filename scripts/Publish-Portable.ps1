@@ -55,7 +55,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $core 'LICENSE.TXT') -Destination (Join-Path $output 'LICENSE-dotnet.txt')
     Copy-Item -LiteralPath (Join-Path $core 'THIRD-PARTY-NOTICES.TXT') -Destination (Join-Path $output 'THIRD-PARTY-NOTICES-dotnet.txt')
     Copy-Item -LiteralPath (Join-Path $desktop 'LICENSE') -Destination (Join-Path $output 'LICENSE-dotnet-desktop.txt')
-    foreach ($guide in @('GUIA.md', 'NOTAS.md', 'PILOTO.md', 'COMPATIBILIDAD.md', 'INSTALACION.md', 'global.json')) {
+    foreach ($guide in @('GUIA.md', 'SUPPORT.md', 'NOTAS.md', 'PILOTO.md', 'COMPATIBILIDAD.md', 'INSTALACION.md', 'global.json')) {
         Copy-Item -LiteralPath (Join-Path $repo $guide) -Destination $output
     }
     Copy-Item -LiteralPath (Join-Path $repo 'distribucion/README.md') -Destination (Join-Path $output 'README.md')

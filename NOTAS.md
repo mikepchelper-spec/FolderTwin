@@ -4,6 +4,10 @@ Serie candidata de FolderTwin 1.0, sin declaración de v1 definitiva. La identid
 
 ## Cambios de esta entrega
 
+- Primer inicio con **Crear mi primer respaldo**, ejemplos de los tres modos y pasos para verificar y recuperar una muestra.
+- **ⓘ Ayuda y versión** y F1 ofrecen explicaciones por control, requisitos de acciones deshabilitadas, guía local y soporte. El diagnóstico permite revisar y copiar un resumen mínimo de versión y estados.
+- Las acciones habituales permanecen sobre los detalles desplazables. Una recuperación confirmada habilita **Abrir carpeta recuperada**.
+- El espejo habilita Aplicar después de aceptar las revisiones adicionales que requiere el inventario.
 - **Volver a trabajos** queda en la cabecera de Aplicación, Importar y Recuperar. La pantalla indica dónde estás y volver conserva el trabajo seleccionado.
 - Candidata posterior a la retirada de RC1. Consulta la aceptación y el estado de publicación de esta compilación antes de ejecutarla; continúa siendo experimental y solo para datos sintéticos.
 - El inicio de un trabajo y la revisión de un origen importado respetan los ajustes confirmados antes de adquirir su bloqueo de ejecución.

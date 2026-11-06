@@ -74,6 +74,7 @@ public partial class ProductWindow : Window
             return registry.OpenIndexScope();
         });
         InitializeComponent();
+        InitializeProductHelp();
         SizeChanged += (_, _) => UpdateWorkspaceLayout();
         UpdateWorkspaceLayout();
         runtimeTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background,
@@ -96,9 +97,10 @@ public partial class ProductWindow : Window
         JobWorkspace.ColumnDefinitions[2].Width = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         JobWorkspace.RowDefinitions[1].Height = new GridLength(wide ? 0 : 12);
         JobWorkspace.RowDefinitions[0].MinHeight = wide ? 0 : 80;
+        JobWorkspace.RowDefinitions[0].Height = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(80);
         JobWorkspace.RowDefinitions[2].Height = wide ? new GridLength(0) : new GridLength(2, GridUnitType.Star);
-        Grid.SetColumn(JobDetailsScroll, wide ? 2 : 0);
-        Grid.SetRow(JobDetailsScroll, wide ? 0 : 2);
+        Grid.SetColumn(JobDetailsPanel, wide ? 2 : 0);
+        Grid.SetRow(JobDetailsPanel, wide ? 0 : 2);
     }
 
     private void NewJobClick(object sender, RoutedEventArgs e)
@@ -203,7 +205,7 @@ public partial class ProductWindow : Window
                 SelectJob(current.Destination.FolderId);
                 if (current.Options.DailyAt is not null)
                     await ApplyScheduleAsync(location, current.Destination.FolderId);
-                else SetStatus("Trabajo guardado. Puedes ejecutarlo a demanda o editar su configuración.");
+                else SetStatus("Trabajo guardado. Pulsa Respaldar ahora para crear la primera copia.");
             }
             catch (Exception error) when (VersionJob.Expected(error))
             {
@@ -281,6 +283,8 @@ public partial class ProductWindow : Window
         JobList.ItemsSource = rows;
         JobList.SelectedItem = rows.FirstOrDefault(row => row.Id == previous) ?? rows.FirstOrDefault();
         EmptyJobsText.Visibility = rows.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ResumeRegistrationButton.Visibility = list.Pending.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        FirstBackupButton.Visibility = rows.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         SetStatus(list.Unreadable > 0 ? $"{list.Unreadable} registros necesitan revisión." : "");
     }
 
@@ -330,9 +334,9 @@ public partial class ProductWindow : Window
         if (ModeDetail is null) return;
         ModeDetail.Text = (ProductBackupMode)BackupMode.SelectedIndex switch
         {
-            ProductBackupMode.Accumulative => "Añade y actualiza archivos, conserva los exclusivos del destino y detiene los conflictos con ediciones externas.",
-            ProductBackupMode.Versions => "Conserva fechas recuperables, incluso si se borra un archivo del origen.",
-            ProductBackupMode.ProtectedMirror => "Mantiene una carpeta actual y conserva el contenido retirado.",
+            ProductBackupMode.Accumulative => "Añade y actualiza archivos y conserva los exclusivos del destino. Por ejemplo, si borras una foto del origen, la copia en destino permanece. Una edición externa en conflicto requiere revisión.",
+            ProductBackupMode.Versions => "Conserva fechas recuperables. Por ejemplo, puedes recuperar el documento de ayer aunque hoy lo hayas cambiado o borrado. La recuperación se hace desde la aplicación.",
+            ProductBackupMode.ProtectedMirror => "Mantiene una carpeta actual y conserva el contenido retirado. Por ejemplo, una foto borrada del origen se retira de la carpeta actual después de revisar los cambios y queda en un punto recuperable.",
             _ => ""
         };
     }

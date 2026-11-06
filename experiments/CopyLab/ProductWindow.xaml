@@ -18,8 +18,10 @@
         </Grid.RowDefinitions>
 
         <StackPanel Margin="0,0,0,16">
-            <TextBlock Text="FolderTwin" FontWeight="SemiBold" />
             <DockPanel Margin="0,4,0,0">
+                <Button x:Name="HelpButton" DockPanel.Dock="Right" Content="ⓘ _Ayuda y versión" Click="HelpClick"
+                        VerticalAlignment="Center" Margin="12,0,0,0"
+                        ToolTip="Explicaciones de esta pantalla, guía, versión y diagnóstico. También puedes pulsar F1." />
                 <Border DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,0,0,0">
                     <Border.Style>
                         <Style TargetType="Border">
@@ -77,14 +79,14 @@
                     <Button x:Name="RefreshJobsButton" Content="Act_ualizar" Click="RefreshJobsClick" Margin="0,0,8,4" />
                     <Button x:Name="ImportConfigurationButton" Content="_Importar configuración" Click="ImportConfigurationClick" Margin="0,0,8,4" />
                     <Button x:Name="ProductTrayButton" Content="Minimizar a _bandeja" Click="ProductTrayClick" Margin="0,0,8,4" />
-                    <Button x:Name="LegacyRecoveryButton" Content="Respaldos de _alfa" Click="LegacyRecoveryClick" Margin="0,0,8,4"
-                            ToolTip="Abre las herramientas compatibles para recuperar respaldos anteriores de laboratorio. No convierte ni adopta sus datos." />
                     <Button x:Name="ManageApplicationButton" Content="A_plicación" Click="ManageApplicationClick" Margin="0,0,8,4" />
                     <Button x:Name="ResumeRegistrationButton" Content="_Reanudar registro" Click="ResumeRegistrationClick"
-                            IsEnabled="False" Margin="0,0,8,4" />
+                            IsEnabled="False" Visibility="Collapsed" Margin="0,0,8,4" />
                 </WrapPanel>
                 <TextBlock x:Name="EmptyJobsText" Grid.Row="1" Text="Crea un trabajo para guardar su origen, destino y modo."
                            TextWrapping="Wrap" Margin="0,4,0,12" />
+                <Button x:Name="FirstBackupButton" Grid.Row="1" Content="_Crear mi primer respaldo" Click="NewJobClick"
+                        HorizontalAlignment="Left" Margin="0,28,0,12" />
                 <Grid x:Name="JobWorkspace" Grid.Row="2">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="280" />
@@ -114,27 +116,35 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-                <ScrollViewer x:Name="JobDetailsScroll" Grid.Column="2" VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
+                <Grid x:Name="JobDetailsPanel" Grid.Column="2">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                     <StackPanel>
-                        <TextBlock x:Name="SelectedJobTitle" Text="Selecciona un trabajo" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap" AutomationProperties.HeadingLevel="Level2" />
-                        <StackPanel x:Name="SelectedJobDetails" Visibility="Collapsed">
-                        <WrapPanel Margin="0,8,0,0">
+                        <TextBlock x:Name="SelectedJobTitle" Text="Selecciona un trabajo" FontSize="18" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                                   AutomationProperties.HeadingLevel="Level2" />
+                        <WrapPanel x:Name="PrimaryJobActions" Margin="0,8,0,0">
                             <Button x:Name="BackupJobButton" Content="_Respaldar ahora" Click="BackupJobClick" IsEnabled="False" Margin="0,0,8,4" />
                             <Button x:Name="RecoverJobButton" Content="Re_cuperar archivos" Click="RecoverJobClick" IsEnabled="False" Margin="0,0,8,4" />
-                            <Button x:Name="ExportConfigurationButton" Content="_Exportar configuración" Click="ExportConfigurationClick" IsEnabled="False" Margin="0,0,8,4" />
                         </WrapPanel>
+                    </StackPanel>
+                <ScrollViewer x:Name="JobDetailsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="SelectedJobDetails" Visibility="Collapsed">
                         <StackPanel x:Name="MirrorReviewPanel" Visibility="Collapsed" Margin="0,8,0,0">
                             <TextBlock x:Name="MirrorReviewText" TextWrapping="Wrap" />
-                            <CheckBox x:Name="AcceptEmptySource" Content="He revisado que el origen esté vacío" Margin="0,8,0,0" />
-                            <CheckBox x:Name="AcceptMassChanges" Content="He revisado el alcance de los cambios" Margin="0,4,0,0" />
+                            <CheckBox x:Name="AcceptEmptySource" Content="He revisado que el origen esté vacío"
+                                      Checked="MirrorChoiceChanged" Unchecked="MirrorChoiceChanged" Margin="0,8,0,0" />
+                            <CheckBox x:Name="AcceptMassChanges" Content="He revisado el alcance de los cambios"
+                                      Checked="MirrorChoiceChanged" Unchecked="MirrorChoiceChanged" Margin="0,4,0,0" />
                             <Button x:Name="ApplyMirrorButton" Content="Aplicar _espejo revisado" Click="ApplyMirrorClick"
                                     HorizontalAlignment="Left" Margin="0,8,0,0" />
                         </StackPanel>
                         <TextBlock x:Name="RuntimeStatusText" TextWrapping="Wrap" Margin="0,12,0,0" />
+                        <TextBlock x:Name="NextProtectionStep" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        <Button x:Name="OpenRestoredFolderButton" Content="Abrir carpeta _recuperada" Click="OpenRestoredFolderClick"
+                                HorizontalAlignment="Left" IsEnabled="False" Margin="0,8,0,0" />
                         <TextBlock x:Name="ScheduleStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
                         <TextBlock x:Name="SpaceStatusText" TextWrapping="Wrap" Margin="0,4,0,8" />
-                        <Expander Header="Carpetas del trabajo" Margin="0,4,0,4"><TextBlock x:Name="SelectedJobText" TextWrapping="Wrap" /></Expander>
+                        <Expander x:Name="JobFoldersPanel" Header="Carpetas del trabajo" Margin="0,4,0,4"><TextBlock x:Name="SelectedJobText" TextWrapping="Wrap" /></Expander>
                         <TextBlock Text="La pausa y la cancelación se atienden entre archivos o pasos recuperables. Puedes cerrar la ventana mientras el ejecutor sigue trabajando."
                                    TextWrapping="Wrap" Margin="0,4,0,4" />
                         <Expander x:Name="RunHistoryPanel" Header="Historial e incidencias" Margin="0,4,0,4">
@@ -166,6 +176,7 @@
                                 <WrapPanel Margin="0,8,0,0">
                                     <Button x:Name="ReviewImportedSourceButton" Content="Revisar origen importado" Click="ReviewImportedSourceClick" IsEnabled="False" Margin="0,0,8,4" />
                                     <Button x:Name="SaveSettingsButton" Content="Guardar _cambios" Click="SaveSettingsClick" Margin="0,0,8,4" />
+                                    <Button x:Name="ExportConfigurationButton" Content="_Exportar configuración" Click="ExportConfigurationClick" IsEnabled="False" Margin="0,0,8,4" />
                                     <Button x:Name="ApplyScheduleButton" Content="Reparar _horario" Click="ApplyScheduleClick" Margin="0,0,8,4" />
                                 </WrapPanel>
                             </StackPanel>
@@ -192,14 +203,16 @@
                                 <Button x:Name="PurgeProductRetentionButton" Content="Purgar tras el plazo de gracia" Click="PurgeProductRetentionClick" IsEnabled="False" HorizontalAlignment="Left" />
                             </StackPanel>
                         </Expander>
-                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
+                </Grid>
                 </Grid>
             </Grid>
 
             <ScrollViewer x:Name="ApplicationPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
+                    <Button x:Name="LegacyRecoveryButton" Content="Respaldos de _alfa" Click="LegacyRecoveryClick"
+                            HorizontalAlignment="Left" Margin="0,0,0,12" />
                     <TextBlock Text="Puedes usar la carpeta portable o preparar una copia estable para los horarios. Al actualizar, los trabajos habilitados usarán el nuevo ejecutor. Espera a que terminen los trabajadores y reintentos activos." TextWrapping="Wrap" Margin="0,8,0,12" />
                     <TextBlock x:Name="ApplicationReviewText" TextWrapping="Wrap" />
                     <CheckBox x:Name="AcceptApplicationUpdate" Content="He revisado los trabajos y quiero actualizar sus horarios propios" Checked="ApplicationChoiceChanged" Unchecked="ApplicationChoiceChanged" Margin="0,12,0,8" />
@@ -294,6 +307,8 @@
                         <Button x:Name="ReviewFileRestoreButton" Content="Recuperar _archivo elegido" Click="ReviewFileRestoreClick" IsEnabled="False" Margin="0,0,8,4" />
                         <Button x:Name="RestorePointButton" Content="Recuperar en carpeta _nueva" Click="RestorePointClick"
                                 IsEnabled="False" Margin="0,0,8,4" />
+                        <Button x:Name="OpenRecoveryOutputButton" Content="Abrir carpeta _recuperada" Click="OpenRestoredFolderClick"
+                                IsEnabled="False" Margin="0,0,8,4" />
                     </WrapPanel>
                 </StackPanel>
             </Grid>
@@ -308,7 +323,7 @@
                     <Button x:Name="BackStepButton" Content="_Atrás" Click="BackStepClick" TabIndex="3" Margin="0,0,8,4" />
                     <Button x:Name="NextStepButton" Content="_Siguiente" Click="NextStepClick" TabIndex="4" IsDefault="True" Margin="0,0,8,4" />
                     <Button x:Name="SaveJobButton" Content="_Guardar trabajo" Click="SaveJobClick" TabIndex="4" Visibility="Collapsed" Margin="0,0,8,4" />
-                    <Button Content="_Cancelar" Click="CancelWizardClick" TabIndex="5" Margin="0,0,8,4" />
+                    <Button x:Name="CancelWizardButton" Content="_Cancelar" Click="CancelWizardClick" TabIndex="5" Margin="0,0,8,4" />
                 </WrapPanel>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
@@ -355,7 +370,7 @@
                     <Button x:Name="PauseRunButton" Content="_Pausar" Click="PauseRunClick" IsEnabled="False" Margin="0,0,8,4" />
                     <Button x:Name="CancelRunButton" Content="_Cancelar ejecución" Click="CancelRunClick" IsEnabled="False" Margin="0,0,8,4" />
                 </WrapPanel>
-                <ScrollViewer MaxHeight="64" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ScrollViewer MaxHeight="44" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <TextBlock x:Name="StatusText" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
                 </ScrollViewer>
         </StackPanel>

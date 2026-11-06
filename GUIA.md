@@ -8,7 +8,15 @@ Descarga el artefacto del commit elegido desde [GitHub Actions](https://github.c
 
 Prepara una carpeta de origen con datos de prueba y otra ubicación local NTFS donde guardar los respaldos. Cada trabajo crea su propia subcarpeta dedicada en el destino. Evita rutas anidadas, enlaces y carpetas que otro programa use como respaldo. Las copias en el mismo disco físico sirven para ensayar, pero no protegen frente al fallo de ese disco.
 
+Si todavía no hay trabajos, **Crear mi primer respaldo** abre el asistente. Guardar crea la configuración y la carpeta dedicada. Después pulsa **Respaldar ahora**. Al terminar, el trabajo indica cómo verificar el punto y recuperar una muestra.
+
 En **Aplicación**, **Importar un trabajo** y **Recuperar archivos**, usa **Volver a trabajos** en la cabecera para regresar a la lista conservando tu selección. En el asistente, **Atrás** vuelve al paso anterior y **Cancelar** regresa a la lista.
+
+## Ayuda y versión
+
+**ⓘ Ayuda y versión**, arriba de la ventana, o **F1** abre las explicaciones de los controles visibles. Puedes expandir cada explicación con un clic o con el teclado. Al pasar el mouse sobre un control, aparece también su ayuda breve. Si está deshabilitado, la explicación indica qué falta para usarlo. Para consultar una sección plegada, ábrela antes de entrar en Ayuda.
+
+La ventana de ayuda incluye esta guía, soporte y el commit exacto del paquete. En **Diagnóstico**, pulsa **Preparar resumen**, revisa el texto y usa **Copiar resumen revisado**. El resumen contiene versión, entorno y recuentos de estado. Describe aparte el problema con datos inventados y revisa cualquier texto antes de enviarlo. El enlace de soporte abre el formulario público de GitHub.
 
 ## Crear un trabajo
 
@@ -43,6 +51,8 @@ En el espejo, **Respaldar ahora** prepara una revisión. Comprueba altas, modifi
 4. Pulsa **Recuperar punto completo**, o selecciona un archivo y **Recuperar archivo elegido**. Un archivo marcado como eliminado se toma del punto anterior que lo conserva.
 5. Elige dónde crear la salida. Revisa la fecha, el alcance y la carpeta nueva y pulsa **Recuperar en carpeta nueva**. Espera el resultado y abre los archivos restaurados para comprobarlos.
 
+Después de una recuperación confirmada, **Abrir carpeta recuperada** muestra su salida en el Explorador. El botón está disponible tanto en Recuperar como en los detalles del trabajo. Se vuelve a comprobar la identidad de la carpeta padre antes de abrirla.
+
 La salida debe estar separada de los orígenes, destinos y configuración de los trabajos. La aplicación crea una subcarpeta nueva y evita reemplazar una restauración anterior. Si se interrumpe una recuperación, conserva la salida parcial; para repetir, revisa otra carpeta nueva. Recuperar un punto confirmado no necesita que el origen siga conectado. Una fecha expirada requiere deshacer su cuarentena cuando todavía sea reversible.
 
 ## Resolver una incidencia
@@ -63,7 +73,7 @@ El historial puede mantener la incidencia anterior después de un intento correc
 
 En **Editar trabajo y horario**, cambia nombre, hora o **Trabajo habilitado** y pulsa **Guardar cambios**. **Retirar trabajo; conservar datos y recuperación** lo desactiva y mantiene sus respaldos accesibles. Para reactivarlo, desmarca la retirada y vuelve a habilitarlo. Cambiar carpetas o modo exige crear otro trabajo.
 
-**Exportar configuración** guarda opciones, rutas e identidades, sin credenciales ni historial. Las rutas pueden revelar información personal: revísalas antes de compartir el archivo. **Importar configuración** exige elegir el respaldo existente y comprobar sus identidades. Puedes elegir el origen para futuras copias o **Recuperar sin origen**. Acepta la revisión y **Guardar trabajo deshabilitado**. Para activarlo después, revisa el origen importado y habilítalo expresamente. La importación no reasigna un respaldo ajeno por tener el mismo nombre.
+Dentro de **Editar trabajo y horario**, **Exportar configuración** guarda opciones, rutas e identidades, sin credenciales ni historial. Las rutas pueden revelar información personal y se deben revisar antes de compartir el archivo. **Importar configuración** exige elegir el respaldo existente y comprobar sus identidades. Puedes elegir el origen para futuras copias o **Recuperar sin origen**. Acepta la revisión y **Guardar trabajo deshabilitado**. Para activarlo después, revisa el origen importado y habilítalo expresamente. La importación no reasigna un respaldo ajeno por tener el mismo nombre.
 
 ## Retención manual
 
@@ -75,7 +85,7 @@ El historial de cuarentenas permite **Reanudar movimientos** o **Deshacer cuaren
 
 Abre **Aplicación** para revisar los trabajos e **Instalar o actualizar ejecutor**. Al actualizar, se conservan las versiones anteriores y se redirigen solo los horarios propios habilitados. Espera a que terminen trabajadores y reintentos activos. Para retirar, quita primero los horarios, deshabilita los trabajos y revisa cada versión instalada. La versión abierta se retira desde otra copia portable. Se conservan los respaldos, configuración y resultados. [Pasos y límites de desinstalación](INSTALACION.md).
 
-Los formatos anteriores se abren con **Respaldos de alfa** según [COMPATIBILIDAD.md](COMPATIBILIDAD.md); no se convierten automáticamente. Conserva el paquete anterior hasta comprobar la reapertura y una restauración de muestra después de actualizar.
+Los formatos anteriores se abren desde **Aplicación → Respaldos de alfa**, según [COMPATIBILIDAD.md](COMPATIBILIDAD.md). Conserva el paquete anterior hasta comprobar la reapertura y una restauración de muestra después de actualizar.
 
 ## Alcance y comprobaciones pendientes
 
