@@ -1,0 +1,15 @@
+{
+  "blank_issues_enabled": true,
+  "contact_links": [
+    {
+      "name": "Guía de soporte y privacidad",
+      "url": "https://github.com/mikepchelper-spec/FolderTwin/blob/main/SUPPORT.md",
+      "about": "Lee las guías y la evidencia mínima antes de abrir una consulta pública."
+    },
+    {
+      "name": "Reportar una vulnerabilidad en privado",
+      "url": "https://github.com/mikepchelper-spec/FolderTwin/security/advisories/new",
+      "about": "No publiques detalles explotables en una incidencia."
+    }
+  ]
+}

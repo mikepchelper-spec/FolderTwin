@@ -6,6 +6,12 @@ Fecha de inicio 2026-10-29. Revisión del plan y los ensayos 2026-11-05, incluid
 
 ## 1. Resultado que buscamos
 
+### Publicación experimental y mantenimiento inicial
+
+El siguiente alcance es publicar la prerelease aceptada `e4e87b8`, conservando sus binarios, fuentes, hashes e informe de aceptación. La revisión añade contribución, soporte, reporte privado de vulnerabilidades habilitado en GitHub, formularios de errores y recuperación y un procedimiento de clasificación, contención y entregas posteriores. No cambia motores ni funciones y no necesita repetir las pruebas Windows ya aprobadas ni reconstruir el paquete para incluir documentación posterior.
+
+La publicación debe comprobar sin autenticación página, etiqueta, commit y descargas, cotejando los adjuntos con los hashes de ENTREGA. La evidencia posterior se guardará en un registro separado. El piloto y las validaciones externas siguen pendientes. El mantenimiento no ofrece un servicio de recuperación personal ni plazos de soporte garantizados. [Procedimiento](MANTENIMIENTO.md).
+
 ### Cierre independiente del candidato de software
 
 **Cerrado el alcance de software con e4e87b8.** La [aceptación Windows 42124550998](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42124550998) aprobó dos compilaciones limpias idénticas, revisión WPF del paquete y ensayos nativos de instalación, actualización, retirada y recuperación de los tres modos. Se descargó el artefacto y se comprobaron sus 499 archivos y el inventario exacto. [ENTREGA.md](ENTREGA.md) registra ZIP, hashes y límites. Los informes posteriores se adjuntan aparte y el ZIP no se reconstruye para incorporarlos.

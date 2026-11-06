@@ -8,6 +8,8 @@ App de respaldo para Windows 11 x64. El candidato de software **e4e87b8** está 
 
 Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 
+Esta entrega es **experimental y solo para datos sintéticos y carpetas desechables**. Para participar: [soporte](SUPPORT.md), [contribuciones](CONTRIBUTING.md), [reporte privado de vulnerabilidades](SECURITY.md) y [mantenimiento y futuras entregas](MANTENIMIENTO.md). No adjuntes respaldos, credenciales, configuraciones, logs completos ni rutas personales a las incidencias.
+
 - [Plan de trabajo](PLAN.md): experiencia, arquitectura, prioridades, pruebas y límites.
 - [Guía de uso](GUIA.md): crear y operar los tres modos, verificar, resolver incidencias y recuperar desde la interfaz.
 - [Notas de versión](NOTAS.md): funciones de la vista previa, actualización y pendientes antes de cerrar v1.
@@ -128,4 +130,4 @@ Este trabajo no sustituye el respaldo existente: no usar prototipos con datos pe
 
 ## Licencia
 
-El proyecto se distribuye bajo [GNU GPL versión 3](LICENSE).
+El proyecto se distribuye bajo [GNU GPL versión 3 o posterior](LICENSE), conforme a la declaración incluida en el paquete.

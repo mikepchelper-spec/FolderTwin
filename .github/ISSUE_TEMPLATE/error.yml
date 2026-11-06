@@ -1,0 +1,96 @@
+{
+  "name": "Error de la aplicación",
+  "description": "Fallo de interfaz, ejecución, instalación o programación con evidencia mínima sintética.",
+  "title": "[Error] ",
+  "labels": [
+    "bug"
+  ],
+  "body": [
+    {
+      "type": "markdown",
+      "attributes": {
+        "value": "Vista previa experimental: solo datos sintéticos y carpetas desechables. No adjuntes respaldos, catálogos, credenciales, configuraciones exportadas, logs completos, rutas personales ni capturas privadas. Para vulnerabilidades usa [el canal privado](https://github.com/mikepchelper-spec/FolderTwin/security/advisories/new)."
+      }
+    },
+    {
+      "type": "input",
+      "id": "version",
+      "attributes": {
+        "label": "Versión o commit del paquete",
+        "description": "Consulta COMPILACION.json o la entrega descargada. No pegues el archivo completo.",
+        "placeholder": "v1.0.0-rc.1 / e4e87b8"
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "input",
+      "id": "environment",
+      "attributes": {
+        "label": "Entorno general",
+        "description": "Edición/compilación de Windows y tipo de volumen. Sin nombre de equipo, números de serie ni rutas.",
+        "placeholder": "Windows 11 x64, compilación ..., NTFS local"
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "dropdown",
+      "id": "mode",
+      "attributes": {
+        "label": "Modo",
+        "description": "Selecciona el modo afectado.",
+        "options": [
+          "Copia acumulativa",
+          "Versionado",
+          "Espejo protegido",
+          "Aplicación o no aplica"
+        ]
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "textarea",
+      "id": "observed",
+      "attributes": {
+        "label": "Resultado esperado y observado",
+        "description": "Describe qué esperabas y qué ocurrió. Incluye solo el mensaje imprescindible ya anonimizado."
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "textarea",
+      "id": "reproduction",
+      "attributes": {
+        "label": "Pasos mínimos con datos sintéticos",
+        "description": "Describe las acciones y archivos inventados. Si no has podido reproducirlo sin datos personales, indícalo; no los adjuntes."
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "checkboxes",
+      "id": "privacy",
+      "attributes": {
+        "label": "Revisión antes de enviar",
+        "options": [
+          {
+            "label": "Revisé el texto y no contiene archivos personales, credenciales, rutas absolutas ni logs completos.",
+            "required": true
+          },
+          {
+            "label": "La reproducción descrita usa datos sintéticos, o indiqué que todavía no tengo una reproducción sintética.",
+            "required": true
+          }
+        ]
+      }
+    }
+  ]
+}
