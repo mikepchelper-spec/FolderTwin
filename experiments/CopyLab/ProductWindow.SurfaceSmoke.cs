@@ -69,25 +69,18 @@ public partial class ProductWindow
                 await FocusIs(window.RecoveryDates);
                 Check(window.RecoveryFiles.Items.Count == 0 && !window.RestorePointButton.IsEnabled,
                     "An empty point bypassed destination review.");
-                window.RestoreKeyboardFocus(window.ReturnToJobsButton);
-                await FocusIs(window.ReturnToJobsButton);
-                await Click(window, window.ReturnToJobsButton);
-                await FocusIs(window.NewJobButton);
+                await ReturnThroughHeaderAsync();
 
                 await Click(window, window.ManageApplicationButton);
                 await FocusIs(window.AcceptApplicationUpdate);
                 Check(!window.InstallApplicationButton.IsEnabled && !window.RemoveInstalledVersionButton.IsEnabled,
                     "Application management bypassed its review.");
-                window.ReturnFromApplicationClick(window, new RoutedEventArgs());
-                await window.activeTask;
-                await FocusIs(window.NewJobButton);
+                await ReturnThroughHeaderAsync();
 
                 await Click(window, window.ImportConfigurationButton);
                 await FocusIs(window.ChooseImportDestinationButton);
                 Check(!window.SaveImportButton.IsEnabled, "An unreviewed import could be saved.");
-                window.CancelImportClick(window, new RoutedEventArgs());
-                await window.activeTask;
-                await FocusIs(window.NewJobButton);
+                await ReturnThroughHeaderAsync();
 
                 window.SelectJob(job.Id);
                 window.RunHistoryList.SelectedIndex = 0;
@@ -112,7 +105,24 @@ public partial class ProductWindow
                     "Retention bypassed its review on an empty job.");
                 window.ProductRetentionPanel.IsExpanded = window.JobSettingsPanel.IsExpanded = false;
             }
-            Console.Error.WriteLine("PASS WPF light/dark, minimum size, wizard steps/error/cancel, empty recovery, application/import return focus, unchanged history retains its keyboard row, settings/retention Tab and review gates. This does not certify a screen reader or real DPI.");
+            Console.Error.WriteLine("PASS WPF light/dark, minimum size, wizard steps/error/cancel, empty recovery, visible return in recovery/application/import, unchanged history retains its keyboard row, settings/retention Tab and review gates. This does not certify a screen reader or real DPI.");
+
+            async Task ReturnThroughHeaderAsync()
+            {
+                var back = window.ReturnToJobsButton;
+                await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
+                var location = back.TranslatePoint(new Point(), window);
+                Check(back.IsVisible && back.IsEnabled && back.ActualHeight > 0 &&
+                    location.Y >= 0 && location.Y + back.ActualHeight <= 120 &&
+                    location.X >= 0 && location.X + back.ActualWidth <= window.ActualWidth,
+                    "The return action is not reachable in the top of this compact view.");
+                window.RestoreKeyboardFocus(back);
+                await FocusIs(back);
+                await Click(window, back);
+                await FocusIs(window.NewJobButton);
+                Check(window.JobListPanel.IsVisible && !back.IsVisible && (window.JobList.SelectedItem as JobRow)?.Id == job.Id,
+                    "Returning lost the selected job or left the navigation action visible.");
+            }
 
             async Task FocusIs(Control control)
             {

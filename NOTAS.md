@@ -4,6 +4,7 @@ Serie candidata de FolderTwin 1.0, sin declaración de v1 definitiva. La identid
 
 ## Cambios de esta entrega
 
+- **Volver a trabajos** queda en la cabecera de Aplicación, Importar y Recuperar. La pantalla indica dónde estás y volver conserva el trabajo seleccionado.
 - Candidata posterior a la retirada de RC1. Consulta la aceptación y el estado de publicación de esta compilación antes de ejecutarla; continúa siendo experimental y solo para datos sintéticos.
 - El inicio de un trabajo y la revisión de un origen importado respetan los ajustes confirmados antes de adquirir su bloqueo de ejecución.
 - La bandeja conserva por separado las incidencias del respaldo y de la verificación: verificar un punto anterior no resuelve un respaldo fallido.

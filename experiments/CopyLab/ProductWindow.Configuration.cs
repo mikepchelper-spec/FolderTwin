@@ -45,7 +45,6 @@ public partial class ProductWindow
         {
             importedConfiguration = await Task.Run(() => ProductJobRegistry.ReadConfiguration(file));
             importDestination = importSource = null;
-            JobList.SelectedItem = null;
             JobListPanel.Visibility = Wizard.Visibility = RecoveryPanel.Visibility = Visibility.Collapsed;
             ImportPanel.Visibility = Visibility.Visible;
             ImportDestinationText.Text = "Elige la carpeta dedicada que contiene el respaldo original.";

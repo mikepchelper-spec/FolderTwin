@@ -232,6 +232,9 @@ public partial class ProductWindow
 
     private void ReturnToJobsClick(object sender, RoutedEventArgs e)
     {
-        if (!busy) { ClearRestoreReview(); ShowJobs(); }
+        if (busy) return;
+        if (ApplicationPanel.IsVisible) ReturnFromApplicationClick(sender, e);
+        else if (ImportPanel.IsVisible) CancelImportClick(sender, e);
+        else if (RecoveryPanel.IsVisible) { ClearRestoreReview(); ShowJobs(); }
     }
 }

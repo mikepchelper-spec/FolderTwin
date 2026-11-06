@@ -19,8 +19,48 @@
 
         <StackPanel Margin="0,0,0,16">
             <TextBlock Text="FolderTwin" FontWeight="SemiBold" />
-            <TextBlock Text="Trabajos" FontSize="28" FontWeight="SemiBold" Margin="0,4,0,0"
-                       AutomationProperties.HeadingLevel="Level1" />
+            <DockPanel Margin="0,4,0,0">
+                <Border DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsVisible, ElementName=ApplicationPanel}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsVisible, ElementName=ImportPanel}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsVisible, ElementName=RecoveryPanel}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Button x:Name="ReturnToJobsButton" Content="← Volver a _trabajos" Click="ReturnToJobsClick" />
+                </Border>
+                <TextBlock FontSize="28" FontWeight="SemiBold" TextWrapping="Wrap" AutomationProperties.HeadingLevel="Level1">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Text" Value="Trabajos" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsVisible, ElementName=ApplicationPanel}" Value="True">
+                                    <Setter Property="Text" Value="Aplicación y horarios" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsVisible, ElementName=ImportPanel}" Value="True">
+                                    <Setter Property="Text" Value="Importar un trabajo" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsVisible, ElementName=RecoveryPanel}" Value="True">
+                                    <Setter Property="Text" Value="Recuperar archivos" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsVisible, ElementName=Wizard}" Value="True">
+                                    <Setter Property="Text" Value="Nuevo trabajo" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </DockPanel>
             <TextBlock Text="Vista previa de la v1. Usa carpetas desechables con datos de prueba."
                        TextWrapping="Wrap" Margin="0,4,0,0" />
         </StackPanel>
@@ -160,7 +200,6 @@
 
             <ScrollViewer x:Name="ApplicationPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
-                    <TextBlock Text="Aplicación y horarios" FontSize="22" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
                     <TextBlock Text="Puedes usar la carpeta portable o preparar una copia estable para los horarios. Al actualizar, los trabajos habilitados usarán el nuevo ejecutor. Espera a que terminen los trabajadores y reintentos activos." TextWrapping="Wrap" Margin="0,8,0,12" />
                     <TextBlock x:Name="ApplicationReviewText" TextWrapping="Wrap" />
                     <CheckBox x:Name="AcceptApplicationUpdate" Content="He revisado los trabajos y quiero actualizar sus horarios propios" Checked="ApplicationChoiceChanged" Unchecked="ApplicationChoiceChanged" Margin="0,12,0,8" />
@@ -177,13 +216,11 @@
                     <TextBlock x:Name="InstalledVersionDetail" TextWrapping="Wrap" />
                     <CheckBox x:Name="AcceptInstalledVersionRemoval" Content="Eliminar únicamente la versión instalada seleccionada" Checked="ApplicationChoiceChanged" Unchecked="ApplicationChoiceChanged" Margin="0,8,0,8" />
                     <Button x:Name="RemoveInstalledVersionButton" Content="Eliminar versión revisada" Click="RemoveInstalledVersionClick" IsEnabled="False" HorizontalAlignment="Left" />
-                    <Button Content="Volver a _trabajos" Click="ReturnFromApplicationClick" HorizontalAlignment="Left" Margin="0,16,0,0" />
                 </StackPanel>
             </ScrollViewer>
 
             <ScrollViewer x:Name="ImportPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
-                    <TextBlock Text="Importar un trabajo" FontSize="20" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
                     <TextBlock x:Name="ImportSummaryText" TextWrapping="Wrap" Margin="0,8,0,12" />
                     <Button x:Name="ChooseImportDestinationButton" Content="Elegir respaldo _existente" Click="ChooseImportDestinationClick" HorizontalAlignment="Left" />
                     <TextBlock x:Name="ImportDestinationText" TextWrapping="Wrap" Margin="0,4,0,8" />
@@ -197,7 +234,6 @@
                     <CheckBox x:Name="AcceptImport" Content="He revisado el modo y las carpetas del trabajo" Checked="ImportAcceptedChanged" Unchecked="ImportAcceptedChanged" />
                     <WrapPanel Margin="0,12,0,0">
                         <Button x:Name="SaveImportButton" Content="Guardar trabajo _deshabilitado" Click="SaveImportClick" IsEnabled="False" Margin="0,0,8,4" />
-                        <Button Content="Volver a _trabajos" Click="CancelImportClick" Margin="0,0,8,4" />
                     </WrapPanel>
                 </StackPanel>
             </ScrollViewer>
@@ -209,8 +245,6 @@
                 </Grid.RowDefinitions>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                   <StackPanel>
-                    <TextBlock Text="Recuperar archivos" FontSize="20" FontWeight="SemiBold"
-                               AutomationProperties.HeadingLevel="Level2" />
                     <Label Content="_Fecha del respaldo" Target="{Binding ElementName=RecoveryDates}" />
                     <ComboBox x:Name="RecoveryDates" DisplayMemberPath="Label" ItemContainerStyle="{StaticResource NamedDateChoice}" SelectionChanged="RecoveryDateChanged"
                               AutomationProperties.Name="Fecha del respaldo" />
@@ -260,7 +294,6 @@
                         <Button x:Name="ReviewFileRestoreButton" Content="Recuperar _archivo elegido" Click="ReviewFileRestoreClick" IsEnabled="False" Margin="0,0,8,4" />
                         <Button x:Name="RestorePointButton" Content="Recuperar en carpeta _nueva" Click="RestorePointClick"
                                 IsEnabled="False" Margin="0,0,8,4" />
-                        <Button x:Name="ReturnToJobsButton" Content="Volver a _trabajos" Click="ReturnToJobsClick" Margin="0,0,8,4" />
                     </WrapPanel>
                 </StackPanel>
             </Grid>

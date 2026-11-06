@@ -349,6 +349,7 @@ public partial class ProductWindow : Window
         var previousFocus = Keyboard.FocusedElement as Control;
         busy = true;
         Wizard.IsEnabled = JobListPanel.IsEnabled = RecoveryPanel.IsEnabled = ImportPanel.IsEnabled = ApplicationPanel.IsEnabled = false;
+        ReturnToJobsButton.IsEnabled = false;
         SetStatus("Comprobando la selección…");
         try { await action(); }
         catch (Exception error) when (ProductAutomation.Expected(error)) { SetStatus(error.Message); }
@@ -356,6 +357,7 @@ public partial class ProductWindow : Window
         {
             busy = false;
             Wizard.IsEnabled = JobListPanel.IsEnabled = RecoveryPanel.IsEnabled = ImportPanel.IsEnabled = ApplicationPanel.IsEnabled = true;
+            ReturnToJobsButton.IsEnabled = true;
             ResumeRegistrationButton.IsEnabled = JobList.SelectedItem is JobRow { Pending: true };
             RefreshProductActions();
             if (Wizard.Visibility == Visibility.Visible && previousStep != step) FocusCurrentStep();

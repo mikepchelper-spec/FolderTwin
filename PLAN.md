@@ -70,6 +70,20 @@ Primera pantalla: **¿Qué quieres proteger? → ¿Dónde guardarlo? → ¿Cómo
 
 Pantalla habitual: nombre de la tarea, origen → destino, último respaldo correcto, última verificación, próxima ejecución, espacio disponible y dos acciones: **Respaldar ahora** / **Recuperar archivos**. Detalles y exclusiones en un panel secundario. Estado separado: esperando disco, analizando, copiando, verificando, completo, parcial, interrumpido, requiere atención. Un archivo fallido u omitido por error impide mostrar «Todo protegido».
 
+**Pendiente de interfaz — ayuda contextual.** Inventariar botones, campos y opciones de producto y explicar en lenguaje sencillo qué hacen, cuándo usarlos y qué datos afectan. Usar iconos **ⓘ** donde haga falta ampliar la explicación y permitir abrirla con el mouse, con un clic y con el teclado. En controles deshabilitados, explicar el requisito que falta. Priorizar el asistente, recuperación, revisión del espejo, cuarentena, purga y retirada. Mantener las consecuencias irreversibles visibles en el flujo y comprobar la ayuda en claro y oscuro, con foco de teclado y lector de pantalla.
+
+**Criterios básicos de la interfaz de producto**
+
+| Área | Criterio |
+|---|---|
+| Navegación | Mostrar la pantalla actual y una salida visible sin desplazamiento. Conservar el trabajo seleccionado al volver. El asistente tiene Atrás y Cancelar. |
+| Primer respaldo | Guiar la elección de origen, destino y modo. Distinguir guardar la configuración de ejecutar la primera copia. |
+| Estado e incidencias | Separar último respaldo completo, verificación y operación activa. Indicar qué pasó y qué puede hacer la persona para resolverlo. |
+| Recuperación | Encontrar por archivo, carpeta o fecha y revisar una salida nueva antes de escribir. Mostrar el resultado y dónde quedaron los archivos. |
+| Acciones delicadas | Revisar datos afectados antes de aplicar un espejo, poner en cuarentena, purgar o retirar la aplicación. Explicar la diferencia entre acciones reversibles e irreversibles. |
+| Accesibilidad | Mantener foco visible, recorrido de teclado, nombres accesibles y controles utilizables en tamaño mínimo y ambos temas. Lector y DPI reales siguen en la matriz externa. |
+| Mantenimiento | Hacer visible la versión, facilitar acceso a la guía y ofrecer un diagnóstico que se pueda compartir sin exponer rutas personales. Revisar estos accesos antes de la versión estable. |
+
 Recuperación: buscar archivo → elegir fecha → previsualizar → recuperar en carpeta nueva. Sobrescribir el original es una acción explícita. Probar restauración es una función del producto, no una recomendación escondida.
 
 Permitir también navegar por carpetas sin conocer el nombre del archivo. En la etapa de versionado, añadir selector de punto de recuperación y filtro «Cambios respecto al respaldo anterior»: altas, modificaciones y eliminaciones por ruta. Mostrar ambos puntos comparados; no atribuir una hora exacta de modificación o eliminación al momento del respaldo. Los eliminados se recuperan desde el punto anterior que conserve su contenido. Si ese punto expiró, indicar que la comparación o recuperación no está disponible. Un renombrado puede aparecer como baja y alta inicialmente. Cargar el árbol por partes desde el índice reconstruible, sin crear cientos de miles de elementos visuales a la vez.

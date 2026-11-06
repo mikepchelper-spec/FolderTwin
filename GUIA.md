@@ -8,6 +8,8 @@ Descarga el artefacto del commit elegido desde [GitHub Actions](https://github.c
 
 Prepara una carpeta de origen con datos de prueba y otra ubicación local NTFS donde guardar los respaldos. Cada trabajo crea su propia subcarpeta dedicada en el destino. Evita rutas anidadas, enlaces y carpetas que otro programa use como respaldo. Las copias en el mismo disco físico sirven para ensayar, pero no protegen frente al fallo de ese disco.
 
+En **Aplicación**, **Importar un trabajo** y **Recuperar archivos**, usa **Volver a trabajos** en la cabecera para regresar a la lista conservando tu selección. En el asistente, **Atrás** vuelve al paso anterior y **Cancelar** regresa a la lista.
+
 ## Crear un trabajo
 
 1. Pulsa **Nuevo trabajo** y **Elegir origen**. Selecciona la carpeta con los archivos y pulsa **Siguiente**.
