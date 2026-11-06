@@ -2,7 +2,9 @@
 
 *Copias locales. Versiones recuperables.*
 
-App de respaldo para Windows 11 x64. El candidato de software **e4e87b8** está cerrado: tres modos desde WPF, revisión de interfaz, corrección del foco del historial y paquete reproducible con guías e identidad coherentes. Pasó la aceptación Windows desde el paquete y se comprobaron los 499 archivos del ZIP descargado. El piloto y las validaciones externas siguen pendientes; no se declara v1 definitiva. [Artefacto, resultados y límites](ENTREGA.md).
+**Vista previa experimental para Windows 11 x64: usa solo datos sintéticos y carpetas desechables. No es una v1 definitiva ni está aceptada para respaldos personales.**
+
+Ya está publicada [v1.0.0-rc.1](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1), con el candidato de software **e4e87b8**. Ofrece los tres modos desde WPF y un paquete reproducible con runtime, fuentes, licencias y guías. La aceptación Windows pasó y la descarga pública se comprobó contra los 499 archivos del manifiesto. [Publicación, descargas y hashes](PUBLICACION.md) · [Aceptación previa y límites](ENTREGA.md). El piloto y las validaciones externas siguen pendientes.
 
 ## Leer primero
 
@@ -11,6 +13,7 @@ Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 Esta entrega es **experimental y solo para datos sintéticos y carpetas desechables**. Para participar: [soporte](SUPPORT.md), [contribuciones](CONTRIBUTING.md), [reporte privado de vulnerabilidades](SECURITY.md) y [mantenimiento y futuras entregas](MANTENIMIENTO.md). No adjuntes respaldos, credenciales, configuraciones, logs completos ni rutas personales a las incidencias.
 
 - [Plan de trabajo](PLAN.md): experiencia, arquitectura, prioridades, pruebas y límites.
+- [Publicación experimental](PUBLICACION.md): acceso público, etiqueta, hashes y comprobación de descargas sin autenticación.
 - [Guía de uso](GUIA.md): crear y operar los tres modos, verificar, resolver incidencias y recuperar desde la interfaz.
 - [Notas de versión](NOTAS.md): funciones de la vista previa, actualización y pendientes antes de cerrar v1.
 - [Matriz de aceptación](ACEPTACION.md): requisitos de las etapas 2 a 5, evidencia y validaciones pendientes del piloto.
@@ -30,7 +33,7 @@ El panel de producto separa lista y detalles, y los apila en ventanas estrechas.
 
 ## Paquete portable de Windows
 
-El candidato comprobado está en el [resultado de Windows de e4e87b8](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42124550998), artefacto `FolderTwin-win-x64-e4e87b840eedc8139fd49e389f2cd143cd6ef61c`. ENTREGA fija su ZIP y hashes. La entrada de producto es `FolderTwin.exe`, sin argumentos, después de extraer todo el contenido. El paquete incluye .NET, código fuente, licencias y documentación. El borrador se gestiona en [Releases](https://github.com/mikepchelper-spec/FolderTwin/releases). Las compilaciones posteriores de desarrollo no sustituyen automáticamente al candidato. [Guía de uso](GUIA.md) · [Notas](NOTAS.md) · [Matriz de v1](V1.md).
+Descarga el [ZIP experimental de v1.0.0-rc.1](https://github.com/mikepchelper-spec/FolderTwin/releases/download/v1.0.0-rc.1/FolderTwin-win-x64-e4e87b8.zip) y los manifiestos de su [página de entrega](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1). [PUBLICACION](PUBLICACION.md) fija la comprobación pública y [ENTREGA](ENTREGA.md), la aceptación previa. El [resultado de Windows de e4e87b8](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42124550998) conserva el artefacto de desarrollo durante su plazo de retención. La entrada es `FolderTwin.exe`, sin argumentos, después de extraer todo el contenido. Incluye .NET, fuentes, licencias y guías. Las compilaciones posteriores no sustituyen automáticamente al candidato. [Guía](GUIA.md) · [Notas](NOTAS.md) · [Matriz](V1.md).
 
 Para producir el paquete desde el código, instala el SDK indicado en [global.json](global.json) y ejecuta en PowerShell 7 para Windows:
 

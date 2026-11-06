@@ -8,9 +8,11 @@ Fecha de inicio 2026-10-29. Revisión del plan y los ensayos 2026-11-05, incluid
 
 ### Publicación experimental y mantenimiento inicial
 
-El siguiente alcance es publicar la prerelease aceptada `e4e87b8`, conservando sus binarios, fuentes, hashes e informe de aceptación. La revisión añade contribución, soporte, reporte privado de vulnerabilidades habilitado en GitHub, formularios de errores y recuperación y un procedimiento de clasificación, contención y entregas posteriores. No cambia motores ni funciones y no necesita repetir las pruebas Windows ya aprobadas ni reconstruir el paquete para incluir documentación posterior.
+**Publicado y comprobado:** [v1.0.0-rc.1](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1), el 5 de noviembre de 2026 a las 23:01:28 de America/Bogota. La etiqueta fija `e4e87b8`; se conservaron binarios, fuentes, hashes e informe de aceptación. Se prepararon contribución, soporte, reporte privado de vulnerabilidades habilitado en GitHub, formularios de errores y recuperación y un procedimiento de clasificación, contención y entregas posteriores. No cambió el motor ni se reconstruyó el paquete.
 
-La publicación debe comprobar sin autenticación página, etiqueta, commit y descargas, cotejando los adjuntos con los hashes de ENTREGA. La evidencia posterior se guardará en un registro separado. El piloto y las validaciones externas siguen pendientes. El mantenimiento no ofrece un servicio de recuperación personal ni plazos de soporte garantizados. [Procedimiento](MANTENIMIENTO.md).
+La página, API, etiqueta y las cuatro descargas se comprobaron sin autenticación. Sus tamaños y hashes coinciden con ENTREGA y el ZIP público pasó inventario y 499 hashes. Sigue siendo prerelease y no Latest. La evidencia posterior está en [PUBLICACION.md](PUBLICACION.md), fuera del ZIP. Los cambios de comunidad se comprobaron sin repetir los arneses del software aceptado. El mantenimiento no ofrece un servicio de recuperación personal ni plazos de soporte garantizados. [Procedimiento](MANTENIMIENTO.md).
+
+El siguiente trabajo real es clasificar las incidencias que lleguen, reproducir fallos confirmados con datos sintéticos y, cuando exista entorno, ejecutar el piloto y las validaciones externas pendientes. No hay un bloqueo de publicación por esos pendientes ni una observación de piloto ya realizada. No se añaden funciones para prolongar el goal de publicación.
 
 ### Cierre independiente del candidato de software
 
