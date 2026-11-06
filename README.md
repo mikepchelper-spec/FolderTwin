@@ -4,7 +4,7 @@
 
 **Vista previa experimental para Windows 11 x64: usa solo datos sintéticos y carpetas desechables. No es una v1 definitiva ni está aceptada para respaldos personales.**
 
-Ya está publicada [v1.0.0-rc.1](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1), con el candidato de software **e4e87b8**. Ofrece los tres modos desde WPF y un paquete reproducible con runtime, fuentes, licencias y guías. La aceptación Windows pasó y la descarga pública se comprobó contra los 499 archivos del manifiesto. [Publicación, descargas y hashes](PUBLICACION.md) · [Aceptación previa y límites](ENTREGA.md). El piloto y las validaciones externas siguen pendientes.
+**RC1 está retirada; no hay ZIP oficial disponible.** La [publicación histórica](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1) conserva etiqueta, fuentes, hashes e informe. La auditoría posterior reprodujo fallos de coordinación de trabajos y de presentación de incidencias. No se ha demostrado pérdida de contenido. Detén nuevos intentos con RC1 y conserva configuración, diarios y respaldos sintéticos; no purgues sus datos. Se prepara una candidata corregida con nueva etiqueta. El piloto y las validaciones externas siguen pendientes.
 
 ## Leer primero
 
@@ -33,7 +33,7 @@ El panel de producto separa lista y detalles, y los apila en ventanas estrechas.
 
 ## Paquete portable de Windows
 
-Descarga el [ZIP experimental de v1.0.0-rc.1](https://github.com/mikepchelper-spec/FolderTwin/releases/download/v1.0.0-rc.1/FolderTwin-win-x64-e4e87b8.zip) y los manifiestos de su [página de entrega](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1). [PUBLICACION](PUBLICACION.md) fija la comprobación pública y [ENTREGA](ENTREGA.md), la aceptación previa. El [resultado de Windows de e4e87b8](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42124550998) conserva el artefacto de desarrollo durante su plazo de retención. La entrada es `FolderTwin.exe`, sin argumentos, después de extraer todo el contenido. Incluye .NET, fuentes, licencias y guías. Las compilaciones posteriores no sustituyen automáticamente al candidato. [Guía](GUIA.md) · [Notas](NOTAS.md) · [Matriz](V1.md).
+**Descarga binaria retirada durante la auditoría.** Consulta el aviso en la [publicación RC1](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1). Las comprobaciones de [PUBLICACION](PUBLICACION.md) y [ENTREGA](ENTREGA.md) son evidencia histórica del candidato e4e87b8; no sustituyen la revisión posterior ni autorizan su uso. Los archivos ya descargados o las cachés externas no pueden revocarse.
 
 Para producir el paquete desde el código, instala el SDK indicado en [global.json](global.json) y ejecuta en PowerShell 7 para Windows:
 

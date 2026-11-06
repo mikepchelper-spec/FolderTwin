@@ -1,5 +1,7 @@
 # Plan de trabajo — FolderTwin
 
+> Estado posterior a publicación: RC1 retirada durante la auditoría profunda. Se confirmaron una carrera entre deshabilitación e inicio de trabajo y la ocultación de una incidencia de respaldo tras verificar un punto anterior. El ZIP oficial se retiró; se conservan etiqueta, fuentes, hashes e informe histórico. No hay pérdida de contenido demostrada. La candidata corregida requiere nuevas regresiones y aceptación. Las validaciones externas siguen pendientes.
+
 *Copias locales. Versiones recuperables.*
 
 Fecha de inicio 2026-10-29. Revisión del plan y los ensayos 2026-11-05, incluidas dos opiniones externas. El plan distingue las decisiones de diseño, las capacidades verificadas del laboratorio y las validaciones externas pendientes. Fundamento, evaluación de propuestas y enlaces en [INVESTIGACION.md](INVESTIGACION.md).
