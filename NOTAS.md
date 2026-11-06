@@ -10,6 +10,7 @@ Serie candidata de FolderTwin 1.0, sin declaración de v1 definitiva. La identid
 - La lectura de diarios rechaza elementos nulos y secuencias agotadas de forma controlada, conservando los registros para revisión.
 - La política de horarios detecta disparadores deshabilitados, restricciones de batería y ejecución manual deshabilitada.
 - El acumulativo conserva el nombre ya existente en destino ante cambios solo de mayúsculas, incluidos sus padres, y sigue detectando ediciones externas. Los cambios archivo↔carpeta se detienen para conservar el contenido del destino.
+- El índice local mantiene abiertos los archivos validados mientras SQLite los usa. Si falta su base y quedan diarios, la interfaz conserva esos archivos y navega desde los catálogos. Puede reconstruir el índice cuando falte la caché completa.
 - La auditoría añade oráculos independientes de contenido, intercalaciones de concurrencia, recuperación y limpieza offline, y retirada con archivos ajenos incorporados tarde. Los informes posteriores detallan resultados y límites; estas notas no anticipan su aprobación.
 
 ## Funciones disponibles

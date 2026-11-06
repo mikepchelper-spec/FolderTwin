@@ -141,11 +141,15 @@ internal sealed class VersionIndex(Func<DirectoryFence> openScope, Action? befor
         using var cache = create ? WindowsProbeNative.OpenOrCreatePlainDirectory(scope.Root, CacheDirectory) :
             WindowsProbeNative.OpenPlainDirectory(scope.Root, CacheDirectory);
         using var owner = OpenOwner(cache, create);
-        foreach (string name in new[] { DatabaseName, DatabaseName + "-wal", DatabaseName + "-shm", DatabaseName + "-journal" })
-            _ = WindowsProbeNative.PlainFileExists(cache, name);
+        bool databaseExists = WindowsProbeNative.PlainFileExists(cache, DatabaseName);
+        bool sidecarExists = false;
+        foreach (string suffix in new[] { "-wal", "-shm", "-journal" })
+            sidecarExists |= WindowsProbeNative.PlainFileExists(cache, DatabaseName + suffix);
+        if (!databaseExists && sidecarExists)
+            throw new InvalidDataException("Falta la base del índice y se conservan sus diarios. Se usarán los catálogos.");
         // Keep each VFS pathname bound to the checked file while SQLite uses it. Share reads/writes,
         // but not deletion/renaming; SQLite's WAL persistence avoids deleting these pinned sidecars.
-        using var databasePin = Pin(DatabaseName, create ? FileMode.OpenOrCreate : FileMode.Open);
+        using var databasePin = Pin(DatabaseName, create && !databaseExists ? FileMode.CreateNew : FileMode.Open);
         bool empty = databasePin.Length == 0;
         if (!empty)
         {

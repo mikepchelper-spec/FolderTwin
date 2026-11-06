@@ -74,6 +74,8 @@ SQLite puede crear temporales de ordenación bajo el VFS y el temporal del siste
 
 Un fallo durante la inicialización MEMORY o un rollback journal antiguo puede dejar la caché inutilizable; se conserva y la interfaz usa los catálogos mediante el fallback. No se afirma haber validado cada estado de crash interno de SQLite. Los respaldos no dependen de esa base. Las pruebas de reapertura/reconstrucción y el recorrido WPF validan el camino normal y el fallback ante caché perdida/dañada; no prueban durabilidad física.
 
+La primera aceptación empaquetada, [42210266286](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42210266286), pasó los arneses del motor y reprodujo el manifiesto en dos árboles, pero se detuvo al borrar solo `index.db` en el smoke de versiones. Con PERSIST_WAL ese escenario deja diarios, así que la apertura ahora distingue una caché ausente de una caché incompleta. Conserva todos los archivos de una caché incompleta sin crear una base vacía y permite seguir desde los catálogos. La prueba exige ese resultado y después una reconstrucción al apartar toda la caché sintética. SQLite documenta que el WAL puede contener transacciones confirmadas que aún pertenecen a la base original. [Persistencia del WAL](https://www.sqlite.org/wal.html#the_wal_file)
+
 Un segundo agente revisó de forma independiente el orden y duración de locks/pins, bootstrap, bases ajenas y fallback; también revisó los cambios de acumulativo, bandeja, límites de secuencia y guards de lectores sin hallar otro defecto por lectura. El autor de una corrección no fue su único revisor. Root revisó código y reproduce las regresiones integradas; la aceptación del paquete sigue siendo un hito distinto.
 
 ## Recursos y resultados pendientes

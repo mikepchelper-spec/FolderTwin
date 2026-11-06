@@ -80,8 +80,26 @@ public partial class VersionWindow
                 await reopened.activeTask;
                 Check(File.ReadAllText(Path.Combine(outputFile, "Carpeta ñ", "borrado.txt")) == "contenido eliminado" &&
                     !File.Exists(Path.Combine(outputFile, "Carpeta ñ", "informe.txt")), "The deleted file did not restore independently.");
-                string indexPath = Path.Combine(workspace.Root, VersionIndex.CacheDirectory, VersionIndex.DatabaseName);
+                string cache = Path.Combine(workspace.Root, VersionIndex.CacheDirectory);
+                string indexPath = Path.Combine(cache, VersionIndex.DatabaseName);
                 File.Delete(indexPath);
+                var orphaned = Directory.GetFiles(cache).ToDictionary(path => path, File.ReadAllBytes, StringComparer.Ordinal);
+                Check(orphaned.ContainsKey(indexPath + "-wal") && orphaned.ContainsKey(indexPath + "-shm"),
+                    "The partial cache fixture did not retain both WAL sidecars.");
+                Click(reopened.RefreshButton);
+                await reopened.activeTask;
+                Check(reopened.indexKey is null && reopened.browser is not null && !File.Exists(indexPath) &&
+                    Directory.GetFiles(cache).Length == orphaned.Count &&
+                    orphaned.All(file => File.ReadAllBytes(file.Key).AsSpan().SequenceEqual(file.Value)) &&
+                    reopened.Files.Items.Cast<VersionEntry>().Single().Path == "Carpeta ñ",
+                    "A missing database with orphaned sidecars did not preserve the cache and show the catalogs.");
+                string archived = Path.Combine(workspace.Root, "owned-partial-index");
+                workspace.CheckChild(archived);
+                using (var scope = workspace.OpenRegisteredRoot())
+                {
+                    using (WindowsProbeNative.OpenPlainDirectory(scope.Root, VersionIndex.CacheDirectory)) { }
+                    Directory.Move(cache, archived);
+                }
                 Click(reopened.RefreshButton);
                 await reopened.activeTask;
                 Check(reopened.indexKey is not null && File.Exists(indexPath) &&
