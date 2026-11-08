@@ -8,23 +8,30 @@ internal sealed partial class ProductJobRegistry
     private sealed record JobSettings(int Version, Guid Job, byte[] JobStamp, long Sequence, string Name,
         TimeOnly? DailyAt, bool Enabled, bool Retired, byte[] PreviousHash,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LocalJobRoot? ReviewedSource = null,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? SourceAliases = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string[]? SourceAliases = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] ProductWatchMode WatchMode = ProductWatchMode.Off);
 
-    internal ProductJob UpdateSettings(Guid id, string name, TimeOnly? dailyAt, bool enabled, bool retired)
+    internal ProductJob UpdateSettings(Guid id, string name, TimeOnly? dailyAt, bool enabled, bool retired,
+        ProductWatchMode? watchMode = null)
     {
         using var job = OpenJob(id);
         using var execution = WindowsProbeNative.OpenPlainFile(job, "execution.lock", FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
-        return UpdateSettingsLocked(job, id, name, dailyAt, enabled, retired);
+        return UpdateSettingsLocked(job, id, name, dailyAt, enabled, retired, watchMode);
     }
 
-    private ProductJob UpdateSettingsLocked(SafeFileHandle job, Guid id, string name, TimeOnly? dailyAt, bool enabled, bool retired)
+    private ProductJob UpdateSettingsLocked(SafeFileHandle job, Guid id, string name, TimeOnly? dailyAt, bool enabled, bool retired,
+        ProductWatchMode? watchMode = null)
     {
         var intent = ReadIntent(job, id);
         var definition = ReadConfirmed(job, intent);
         var options = intent.Options with { Name = name, DailyAt = dailyAt };
         options.Validate();
         if (retired && enabled) throw new InvalidDataException("Un trabajo retirado no puede permanecer habilitado.");
-        if (enabled && definition.Imported)
+        var nextWatchMode = watchMode ?? (enabled ? definition.WatchMode : ProductWatchMode.Off);
+        if (!Enum.IsDefined(nextWatchMode) || !enabled && nextWatchMode != ProductWatchMode.Off ||
+            nextWatchMode == ProductWatchMode.Paused && definition.WatchMode == ProductWatchMode.Off)
+            throw new InvalidDataException("El estado de vigilancia no corresponde a la configuración del trabajo.");
+        if (enabled && (definition.Imported || nextWatchMode == ProductWatchMode.Watching && definition.WatchMode == ProductWatchMode.Off))
         {
             if (!definition.SourceReviewed) throw new InvalidDataException("Revisa el origen importado antes de habilitar el trabajo.");
             using var roots = LocalJobRoots.Reopen(new(definition.Source, new(definition.Destination.LastVolumePath, definition.Destination.Identity), 0, false));
@@ -33,7 +40,7 @@ internal sealed partial class ProductJobRegistry
         using var operation = WindowsProbeNative.OpenPlainFile(job, "settings.lock", FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
         var (previous, hash) = ReadSettings(job, id);
         var settings = new JobSettings(1, id, JobStamp(job), checked((previous?.Sequence ?? 0) + 1), name,
-            dailyAt, enabled, retired, hash, previous?.ReviewedSource, previous?.SourceAliases);
+            dailyAt, enabled, retired, hash, previous?.ReviewedSource, previous?.SourceAliases, nextWatchMode);
         using var revisions = WindowsProbeNative.OpenOrCreatePlainDirectory(job, "settings");
         RetentionJournal.WriteFile(revisions, SettingsName(settings.Sequence), Encode(settings));
         return ReadConfirmed(job, intent);
@@ -55,7 +62,8 @@ internal sealed partial class ProductJobRegistry
             Enabled = settings.Enabled, Retired = settings.Retired,
             Source = settings.ReviewedSource ?? definition.Source,
             SourceAliases = settings.SourceAliases ?? definition.SourceAliases,
-            SourceReviewed = settings.ReviewedSource is not null || definition.SourceReviewed
+            SourceReviewed = settings.ReviewedSource is not null || definition.SourceReviewed,
+            WatchMode = settings.WatchMode
         };
     }
 
@@ -83,7 +91,9 @@ internal sealed partial class ProductJobRegistry
             else if (settings.SourceAliases is not null) throw new InvalidDataException("Las rutas de origen carecen de revisión.");
             if (settings.Version != 1 || settings.Job != id || settings.Sequence != (latest?.Sequence ?? 0) + 1 ||
                 entry.Name != SettingsName(settings.Sequence) || !settings.JobStamp.AsSpan().SequenceEqual(stamp) ||
-                !settings.PreviousHash.AsSpan().SequenceEqual(hash) || settings.Retired && settings.Enabled)
+                !settings.PreviousHash.AsSpan().SequenceEqual(hash) || settings.Retired && settings.Enabled ||
+                !Enum.IsDefined(settings.WatchMode) || !settings.Enabled && settings.WatchMode != ProductWatchMode.Off ||
+                settings.WatchMode == ProductWatchMode.Paused && (latest?.WatchMode ?? ProductWatchMode.Off) == ProductWatchMode.Off)
                 throw new InvalidDataException("La configuración tiene una revisión ausente, contradictoria o de otro trabajo.");
             hash = SHA256.HashData(Encode(settings));
             latest = settings;

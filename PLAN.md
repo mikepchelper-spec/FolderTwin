@@ -8,6 +8,8 @@ Fecha de inicio 2026-10-29. Estado de entrega actualizado el 2026-11-06. El plan
 
 ## 1. Resultado que buscamos
 
+La vigilancia continua es el objetivo de la próxima candidata local. El disparador automático se configura aparte del modo de almacenamiento. La [matriz de automatización](AUTOMATIZACION.md) define el alcance, el contrato de seguridad y las pruebas pendientes.
+
 ### Publicación experimental y mantenimiento inicial
 
 **Publicado y comprobado.** RC2 salió el 6 de noviembre de 2026 a las 06:57:12 de America/Bogota. Su etiqueta fija `d902f4c` y los cuatro adjuntos públicos coinciden con los hashes revisados. La aceptación incluye dos compilaciones limpias, WPF y horarios desde el paquete y restauración de respaldos creados con el binario de RC1. [Registro de publicación](PUBLICACION.md)

@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Win32.SafeHandles;
 
 internal enum ProductBackupMode { Accumulative, Versions, ProtectedMirror }
+internal enum ProductWatchMode { Off, Watching, Paused }
 internal enum ProductRegistrationStep { Prepared, DestinationRecorded, MarkerWritten, Confirmed }
 internal sealed record ProductJobOptions(string Name, ProductBackupMode Mode, TimeOnly? DailyAt)
 {
@@ -14,7 +15,8 @@ internal sealed record ProductJobOptions(string Name, ProductBackupMode Mode, Ti
     }
 }
 internal sealed record ProductJob(Guid Id, ProductJobOptions Options, LocalJobRoot Source, DestinationBinding Destination,
-    bool Enabled = true, bool Retired = false, bool Imported = false, bool SourceReviewed = true, string[]? SourceAliases = null);
+    bool Enabled = true, bool Retired = false, bool Imported = false, bool SourceReviewed = true, string[]? SourceAliases = null,
+    ProductWatchMode WatchMode = ProductWatchMode.Off);
 internal sealed record ProductJobList(ProductJob[] Jobs, Guid[] Pending, int Unreadable);
 
 internal sealed partial class ProductJobRegistry : IDisposable
@@ -94,6 +96,10 @@ internal sealed partial class ProductJobRegistry : IDisposable
         using var operation = OpenLock();
         return ReadList();
     }
+
+    internal FileStream AcquireMonitorLock() =>
+        WindowsProbeNative.OpenPlainFile(directory.Root, ".foldertwin-monitor.lock",
+            FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
 
     internal DirectoryFence OpenIndexScope()
     {

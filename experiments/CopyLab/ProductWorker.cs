@@ -9,6 +9,11 @@ internal static class ProductWorker
     internal static Process Start(string registry, Guid id, Guid? approval = null)
         => Launch(["--run-product-job", registry, id.ToString("N"), .. approval is { } selected ? new[] { selected.ToString("N") } : []]);
 
+    internal static Process StartAutomatic(string registry, Guid id) =>
+        Launch(["--run-automatic-product-job", registry, id.ToString("N")]);
+
+    internal static Process StartMonitor(string registry) => Launch(["--watch-product-jobs", registry]);
+
     internal static Process StartVerification(string registry, Guid id, string generation) =>
         Launch(["--verify-product-job", registry, id.ToString("N"), generation]);
 

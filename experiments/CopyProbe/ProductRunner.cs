@@ -80,9 +80,9 @@ internal static partial class ProductRunner
     }
 
     internal static ProductRunResult Run(ProductJobRegistry registry, Guid id, Guid? approvalId = null,
-        Action<WorkProgress>? checkpoint = null, Func<DateTimeOffset>? clock = null)
+        Action<WorkProgress>? checkpoint = null, Func<DateTimeOffset>? clock = null, bool automatic = false)
     {
-        using var run = registry.StartRun(id, clock);
+        using var run = registry.StartRun(id, clock, automatic: automatic);
         var control = new Controller(run, checkpoint);
         var job = run.Job;
         try
@@ -158,6 +158,26 @@ internal static partial class ProductRunner
         catch (Exception error) when (VersionJob.Expected(error))
         {
             Console.Error.WriteLine("El trabajo no pudo completar su registro local. " + error.Message);
+            return VersionJob.SharingViolation(error) ? 2 : 1;
+        }
+    }
+
+    internal static int RunAutomaticCommand(string registryPath, Guid id)
+    {
+        try
+        {
+            using var registry = new ProductJobRegistry(registryPath);
+            return Run(registry, id, automatic: true).State switch
+            {
+                ProductRunState.Confirmed => 0,
+                ProductRunState.Busy or ProductRunState.WaitingForDestination => 2,
+                ProductRunState.WaitingForSource => 3,
+                _ => 1
+            };
+        }
+        catch (Exception error) when (VersionJob.Expected(error))
+        {
+            Console.Error.WriteLine(error.Message);
             return VersionJob.SharingViolation(error) ? 2 : 1;
         }
     }

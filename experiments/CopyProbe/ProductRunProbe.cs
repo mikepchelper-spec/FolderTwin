@@ -103,6 +103,7 @@ internal static class ProductRunProbe
                 File.ReadAllText(Path.Combine(torn, "intent.tmp")) == "partial synthetic intent",
                 "A torn history record was removed, reused its sequence or stopped independent backup work.");
             CheckScheduledRetries(registry, versioned, settings).GetAwaiter().GetResult();
+            CheckContinuousAdmission(registry, versioned, settings);
             CheckWorkers();
             Console.WriteLine("PASS persistent product attempts execute all three modes, retain issues, order independently of the clock and require mirror approval.");
             return 0;
@@ -113,6 +114,26 @@ internal static class ProductRunProbe
             Directory.Delete(workspace.Root, recursive: true);
         }
         string Folder(string name) => Directory.CreateDirectory(Path.Combine(workspace.Root, name)).FullName;
+    }
+
+    private static void CheckContinuousAdmission(ProductJobRegistry registry, ProductJob job, string location)
+    {
+        var current = registry.Get(job.Id);
+        Check(current.WatchMode == ProductWatchMode.Off, "Existing jobs must default to manual or scheduled execution.");
+        Reject(() => registry.StartRun(job.Id, automatic: true).Dispose());
+        registry.UpdateSettings(job.Id, current.Options.Name, null, true, false, ProductWatchMode.Watching);
+        using var reopened = new ProductJobRegistry(location);
+        Check(reopened.Get(job.Id).WatchMode == ProductWatchMode.Watching, "Watch mode did not survive reopening.");
+        using (var active = registry.StartRun(job.Id, automatic: true))
+            Reject(() => registry.UpdateSettings(job.Id, current.Options.Name, null, true, false, ProductWatchMode.Paused));
+
+        Reject(() => registry.StartRun(job.Id, automatic: true, beforeExecutionLock: () =>
+            reopened.UpdateSettings(job.Id, current.Options.Name, null, true, false, ProductWatchMode.Paused)).Dispose());
+        Check(registry.Get(job.Id).WatchMode == ProductWatchMode.Paused, "A stale dispatch ignored a committed pause.");
+        using (registry.StartRun(job.Id)) { }
+        registry.UpdateSettings(job.Id, current.Options.Name, null, false, false);
+        registry.UpdateSettings(job.Id, current.Options.Name, null, true, false);
+        Check(reopened.Get(job.Id).WatchMode == ProductWatchMode.Off, "Re-enabling the job silently restored continuous consent.");
     }
 
     private static async Task CheckScheduledRetries(ProductJobRegistry registry, ProductJob job, string location)

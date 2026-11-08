@@ -12,6 +12,8 @@ La revisión local **Ruta** muestra las carpetas del trabajo como un trayecto de
 
 ## Leer primero
 
+La próxima candidata local incorpora la vigilancia continua al alcance de desarrollo. Consulta la [matriz de automatización](AUTOMATIZACION.md) para distinguir requisitos y evidencia de lo que ya está disponible en RC2.
+
 Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 
 Esta entrega es **experimental y solo para datos sintéticos y carpetas desechables**. Para participar: [soporte](SUPPORT.md), [contribuciones](CONTRIBUTING.md), [reporte privado de vulnerabilidades](SECURITY.md) y [mantenimiento y futuras entregas](MANTENIMIENTO.md). No adjuntes respaldos, credenciales, configuraciones, logs completos ni rutas personales a las incidencias.

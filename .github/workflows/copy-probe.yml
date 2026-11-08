@@ -41,6 +41,8 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --accumulative
       - name: Verify persistent product workers, pause, cancellation and process termination
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-runs
+      - name: Verify coalescing and native file change signals
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-watch
       - name: Verify reviewed restoration workers, cancellation, interruption and route exclusion
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-restore
       - name: Verify durable controllable mirror analysis and bound approvals
@@ -125,7 +127,7 @@ jobs:
           $product = Start-Process -FilePath (Join-Path $outputA 'FolderTwin.exe') -WorkingDirectory $outputA -ArgumentList '--product-smoke' -WindowStyle Hidden -RedirectStandardError $productLog -PassThru -Wait
           Get-Content -LiteralPath $productLog
           if ($product.ExitCode -ne 0) { throw "The packaged product wizard exited with $($product.ExitCode)." }
-          foreach ($audit in @('--index-audit', '--tray-audit', '--schedule-policy-audit', '--history-audit')) {
+          foreach ($audit in @('--index-audit', '--tray-audit', '--schedule-policy-audit', '--history-audit', '--product-monitor-smoke')) {
             $auditLog = Join-Path $env:RUNNER_TEMP ("FolderTwin" + $audit + '.err')
             $auditProcess = Start-Process -FilePath (Join-Path $outputA 'FolderTwin.exe') -WorkingDirectory $outputA -ArgumentList $audit -WindowStyle Hidden -RedirectStandardError $auditLog -PassThru -Wait
             Get-Content -LiteralPath $auditLog

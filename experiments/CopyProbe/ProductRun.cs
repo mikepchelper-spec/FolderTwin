@@ -32,7 +32,7 @@ internal sealed partial class ProductJobRegistry
     }
 
     internal ProductRunLease StartRun(Guid id, Func<DateTimeOffset>? clock = null, ProductRunOperation operation = ProductRunOperation.Backup,
-        Guid? restoreRequest = null, Action? beforeExecutionLock = null)
+        Guid? restoreRequest = null, Action? beforeExecutionLock = null, bool automatic = false)
     {
         if (!Enum.IsDefined(operation) || !ValidRestoreReference(operation, restoreRequest))
             throw new ArgumentOutOfRangeException(nameof(operation));
@@ -45,6 +45,8 @@ internal sealed partial class ProductJobRegistry
             var definition = ReadConfirmed(job, ReadIntent(job, id));
             if (operation is ProductRunOperation.Backup or ProductRunOperation.ReviewMirror && (!definition.Enabled || definition.Retired))
                 throw new InvalidDataException("El trabajo está deshabilitado o retirado. Sus respaldos se conservan para recuperar.");
+            if (automatic && (operation != ProductRunOperation.Backup || definition.WatchMode != ProductWatchMode.Watching))
+                throw new InvalidDataException("La vigilancia de este trabajo está pausada o desactivada.");
             using var runs = WindowsProbeNative.OpenOrCreatePlainDirectory(job, "runs");
             var history = ReadRuns(job, runs, id);
             // Preserve unreadable records. Their directory sequence still reserves

@@ -23,9 +23,12 @@ public partial class App : Application
         bool trayStartup = e.Args is ["--tray-workspace", _];
         bool scheduled = e.Args is ["--run-scheduled-version-job", _, _];
         bool productScheduled = e.Args is ["--run-scheduled-product-job", _, _];
+        bool productMonitor = e.Args is ["--watch-product-jobs", _];
+        bool automaticWorker = e.Args is ["--run-automatic-product-job", _, _];
+        bool monitorSmoke = e.Args is ["--product-monitor-smoke"];
         bool productWorker = productScheduled || e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _] or ["--restore-product-job", _, _, _] or ["--review-product-mirror", _, _] or ["--review-product-pending", _, _] or ["--abandon-product-version", _, _, _];
         bool worker = productWorker || scheduled || e.Args is ["--run-version-job", _, _];
-        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !labPreview && !startupSmoke && !productSyntheticPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !heldMirrorChild && !heldAbandonChild && !productScheduleSmoke)
+        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !labPreview && !startupSmoke && !productSyntheticPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !heldMirrorChild && !heldAbandonChild && !productScheduleSmoke && !productMonitor && !automaticWorker && !monitorSmoke)
         {
             Shutdown(2);
             return;
@@ -33,6 +36,23 @@ public partial class App : Application
 
         try
         {
+            if (monitorSmoke)
+            {
+                await ProductMonitorProbe.RunAsync();
+                Shutdown(0);
+                return;
+            }
+            if (productMonitor)
+            {
+                Shutdown(await Task.Run(() => ProductMonitor.RunAsync(e.Args[1])));
+                return;
+            }
+            if (automaticWorker)
+            {
+                Shutdown(Guid.TryParseExact(e.Args[2], "N", out var id)
+                    ? await Task.Run(() => ProductRunner.RunAutomaticCommand(e.Args[1], id)) : 1);
+                return;
+            }
             if (startupSmoke)
             {
                 await ProductStartupProbe.RunAsync();
@@ -201,7 +221,7 @@ public partial class App : Application
         }
         catch (Exception error)
         {
-            if (smoke || indexScale || worker || scheduleSmoke || productSmoke || heldProductChild || heldRestoreChild || heldMirrorChild || heldAbandonChild || productScheduleSmoke || startupSmoke)
+            if (smoke || indexScale || worker || scheduleSmoke || productSmoke || heldProductChild || heldRestoreChild || heldMirrorChild || heldAbandonChild || productScheduleSmoke || startupSmoke || productMonitor || automaticWorker || monitorSmoke)
                 Console.Error.WriteLine(error);
             else
                 MessageBox.Show(error.Message, "FolderTwin", MessageBoxButton.OK, MessageBoxImage.Error);
