@@ -116,21 +116,24 @@ public partial class ProductWindow : Window
         else if (!wide) JobRail.ClearValue(HeightProperty);
         Grid.SetColumn(JobRail, wide ? 2 : 0);
         Grid.SetRow(JobDetailsPanel, wide ? 0 : 2);
-        var routeHost = wide ? WideRouteHost : CompactRouteHost;
+        ArrangeRoute();
+    }
+
+    private void ArrangeRoute()
+    {
+        bool reviewing = MirrorReviewPanel.Visibility == Visibility.Visible;
+        var routeHost = Grid.GetColumn(JobRail) == 2 && !reviewing ? WideRouteHost : CompactRouteHost;
         if (BackupRoute.Parent is Border previous && previous != routeHost)
         {
             previous.Child = null;
             routeHost.Child = BackupRoute;
+            if (reviewing) JobDetailsScroll.ScrollToTop();
         }
-        ArrangeRouteActions();
-    }
 
-    private void ArrangeRouteActions()
-    {
         var host = WideRouteHost.Child is not null && BackupRoute.Visibility == Visibility.Visible
             ? WideRouteActions : CompactRouteActions;
-        if (PrimaryJobActions.Parent is not Border previous || previous == host) return;
-        previous.Child = null;
+        if (PrimaryJobActions.Parent is not Border oldActionsHost || oldActionsHost == host) return;
+        oldActionsHost.Child = null;
         host.Child = PrimaryJobActions;
     }
 

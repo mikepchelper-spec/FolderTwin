@@ -36,7 +36,6 @@ public partial class ProductWindow
         bool available = !busy && job is not null && !executing;
         SelectedJobTitle.Text = job is null ? "" : $"{job.Options.Name} · {ModeName(job.Options.Mode)}";
         BackupRoute.Visibility = job is null ? Visibility.Collapsed : Visibility.Visible;
-        ArrangeRouteActions();
         SelectedJobDetails.Visibility = job is null ? Visibility.Collapsed : Visibility.Visible;
         RecoverJobButton.IsEnabled = available;
         BackupJobButton.IsEnabled = available && job is { Enabled: true, Retired: false };
@@ -47,6 +46,7 @@ public partial class ProductWindow
         SelectedJobText.Text = job is null ? "" : $"Origen\n{job.Source.VolumePath}\nDestino\n{job.Destination.LastVolumePath}";
         if (mirrorJobId != job?.Id) ResetProductActions();
         RefreshMirrorReviewDisplay(job, executing);
+        ArrangeRoute();
         RefreshPendingReviewDisplay(job, executing);
         RefreshRuntimeDisplay();
         RefreshProductRetentionActions();
