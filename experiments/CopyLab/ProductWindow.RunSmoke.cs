@@ -65,7 +65,8 @@ public partial class ProductWindow
                 await window.InitializeAsync();
                 window.SelectJob(job.Id);
                 await window.RefreshRuntimeAsync();
-                Check(window.RuntimeStatusText.Text.Contains("Último respaldo completo", StringComparison.Ordinal) &&
+                var history = window.runSnapshots[job.Id];
+                Check(window.RouteBackupDate.Text == RouteDate(history.Runs.First(run => run.Intent.Operation == ProductRunOperation.Backup).Result?.FinishedUtc) &&
                     window.runSnapshots[job.Id].Runs[0].Result?.State == ProductRunState.Confirmed &&
                     !VersionStore.OpenProduct(job).Verify(window.runSnapshots[job.Id].Runs[0].Generation!),
                     "The reopened UI did not recover the worker's completed result.");
@@ -171,7 +172,7 @@ public partial class ProductWindow
                 var history = window.runSnapshots[job.Id];
                 Check(history.Runs[0].Result?.State == (action == "cancel" ? ProductRunState.Cancelled : ProductRunState.Confirmed) &&
                     history.Runs.Single(run => run.Intent.Operation == ProductRunOperation.Backup).Result?.FinishedUtc == backup.FinishedUtc &&
-                    window.RuntimeStatusText.Text.Contains("Último respaldo completo", StringComparison.Ordinal),
+                    window.RouteBackupDate.Text == RouteDate(backup.FinishedUtc),
                     "Reopening lost restoration state or changed backup age.");
                 if (action != "cancel") Check(File.ReadAllText(Path.Combine(target.Parent.VolumePath, target.FolderName, "datos.txt")) ==
                     "restauración controlada", "The WPF-controlled restore lost its verified content.");

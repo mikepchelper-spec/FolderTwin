@@ -10,7 +10,7 @@ public partial class ProductWindow
     private async Task CheckDesktopLayoutAsync()
     {
         Show();
-        foreach (var size in new[] { new Size(1040, 740), new Size(760, 620), new Size(600, 500) })
+        foreach (var size in new[] { new Size(1040, 740), new Size(1040, 500), new Size(760, 620), new Size(600, 500) })
         {
             Width = size.Width; Height = size.Height;
             await Dispatcher.InvokeAsync(() => { UpdateWorkspaceLayout(); UpdateLayout(); }, DispatcherPriority.ApplicationIdle);
@@ -21,7 +21,7 @@ public partial class ProductWindow
                 "The job list exposes an implementation type instead of its accessible name.");
             Check(JobDetailsScroll.ActualHeight > 0 && JobDetailsScroll.ActualWidth > 0,
                 $"The dashboard lost details at {size}: workspace={JobWorkspace.ActualWidth}x{JobWorkspace.ActualHeight}, panel={JobDetailsPanel.ActualWidth}x{JobDetailsPanel.ActualHeight}, scroll={JobDetailsScroll.ActualWidth}x{JobDetailsScroll.ActualHeight}, header={PrimaryJobActions.ActualHeight}, rows={JobWorkspace.RowDefinitions[0].ActualHeight}/{JobWorkspace.RowDefinitions[2].ActualHeight}.");
-            if (size.Width >= 900)
+            if (size.Width >= 900 && size.Height >= 650)
             {
                 Check(JobList.TranslatePoint(new Point(), JobWorkspace).X > JobDetailsScroll.TranslatePoint(new Point(), JobWorkspace).X,
                     "The desktop layout did not put the job list to the right of the route.");
@@ -38,9 +38,9 @@ public partial class ProductWindow
         Check((JobList.SelectedItem as JobRow)?.Id == selected, "Refreshing the dashboard lost the selected job.");
         var job = ((JobRow)JobList.SelectedItem).Job!;
         await RefreshScheduleAsync();
-        Check(BackupRoute.IsVisible && RouteMode.Text == ModeName(job.Options.Mode) &&
-            RouteSource.Text == DisplayRoutePath(job.Source.VolumePath) &&
-            RouteDestination.Text == DisplayRoutePath(job.Destination.LastVolumePath) &&
+        Check(BackupRoute.IsVisible && SelectedJobTitle.Text == $"{job.Options.Name} · {ModeName(job.Options.Mode)}" &&
+            Equals(RouteSource.ToolTip, DisplayRoutePath(job.Source.VolumePath)) &&
+            Equals(RouteDestination.ToolTip, DisplayRoutePath(job.Destination.LastVolumePath)) &&
             RouteSource.Text != RouteDestination.Text, "The route did not follow the selected job.");
         await Click(this, RecoverJobButton);
         foreach (var size in new[] { new Size(1040, 740), new Size(600, 500) })

@@ -68,8 +68,9 @@ public partial class ProductWindow
             foreach (var (id, history) in snapshots)
             {
                 runSnapshots[id] = history;
-                jobs.Single(row => row.Id == id).SetRuntime("\n" + Brief(history) +
-                    (history.Unreadable > 0 ? " · Historial requiere revisión" : ""));
+                var row = jobs.Single(row => row.Id == id);
+                row.SetRuntime("\n" + Brief(history) + (history.Unreadable > 0 ? " · Historial requiere revisión" : ""),
+                    RouteState(row.Job!, history));
                 if (history.Runs.FirstOrDefault() is { Result: { } result } latest &&
                     (!reportedResults.TryGetValue(id, out long sequence) || latest.Intent.Sequence > sequence))
                 {
@@ -105,10 +106,17 @@ public partial class ProductWindow
             "Copia verificada. Puedes abrir la última carpeta recuperada de este trabajo.";
         var lastBackup = history.Runs.FirstOrDefault(run => run.Intent.Operation is ProductRunOperation.Backup or ProductRunOperation.ReviewMirror);
         BackupJobButton.Content = lastBackup is { Running: false, Result.State: not ProductRunState.Confirmed } or { Running: false, Result: null }
-            ? "_Reintentar respaldo" : "_Respaldar ahora";
+            ? "↻ _Reintentar respaldo" : "▷ _Respaldar ahora";
+        if (job is not null)
+        {
+            var badge = RouteState(job, history);
+            RouteBadgeText.Text = badge.Label;
+            RouteBadge.Tag = badge.Tone;
+        }
+        RouteBackupDate.Text = RouteDate(correct?.Result?.FinishedUtc);
+        RouteVerifyDate.Text = RouteDate(verified?.Result?.FinishedUtc);
+        RefreshRouteNextAttempt();
         RuntimeStatusText.Text = job is null ? "" : Brief(history) +
-            "\nÚltimo respaldo completo · " + Date(correct?.Result?.FinishedUtc) +
-            "\nÚltima verificación completa · " + Date(verified?.Result?.FinishedUtc) +
             (correct?.Generation is { } generation ? $"\nPunto recuperable del {VersionStore.GenerationTime(generation).ToLocalTime():g}" : "") +
             (verified?.Generation is { } verifiedGeneration ? $"\nPunto verificado del {VersionStore.GenerationTime(verifiedGeneration).ToLocalTime():g}" : "") +
             (active?.Progress is { } progress ? $"\n{Phase(progress.Work.Phase)} · {progress.Work.Processed:N0}/{progress.Work.Total:N0}" +
@@ -138,7 +146,40 @@ public partial class ProductWindow
         if (latest is null && job is not null && IsJobRunning(job.Id)) RuntimeStatusText.Text = "Iniciando ejecutor…";
     }
 
-    private static string Date(DateTimeOffset? date) => date?.ToLocalTime().ToString("g") ?? "Todavía no disponible";
+    private static string RouteDate(DateTimeOffset? date) =>
+        date?.ToLocalTime().ToString("d MMM yyyy · HH:mm", System.Globalization.CultureInfo.GetCultureInfo("es-CO")) ?? "Todavía no disponible";
+
+    private void RefreshRouteNextAttempt()
+    {
+        var job = (JobList.SelectedItem as JobRow)?.Job;
+        const string next = "Próximo horario · ";
+        string schedule = ScheduleStatusText.Text;
+        RouteNextAttempt.Text = job is null ? "" : !job.Enabled || job.Retired ? "Desactivado" :
+            runSnapshots.TryGetValue(job.Id, out var history) &&
+                history.Runs.FirstOrDefault(run => run.RetryRunning)?.Retry is { } retry ? RouteDate(retry.NextUtc) :
+            schedule.StartsWith(next, StringComparison.Ordinal) ? schedule[next.Length..].Replace(" · Requiere sesión iniciada", "", StringComparison.Ordinal) :
+            job.Options.DailyAt is null ? "A demanda" : "Consulta el horario";
+    }
+
+    private static (string Label, string Tone) RouteState(ProductJob job, ProductRunHistory history)
+    {
+        if (job.Retired || !job.Enabled) return (job.Retired ? "Retirado" : "Deshabilitado", "Attention");
+        string activity = ActivityBrief(history);
+        if (history.Unreadable > 0 || Brief(history) != activity) return ("Requiere atención", "Attention");
+        return activity switch
+        {
+            "Verificación completa" => (history.Runs.FirstOrDefault(run =>
+                run.Intent.Operation == ProductRunOperation.Backup && run.Result?.State == ProductRunState.Confirmed)?.Generation
+                == history.Runs[0].Generation ? "✓ Verificado" : "✓ Punto verificado", ""),
+            "Respaldo completo" => ("✓ Completo", ""),
+            "Recuperación completa" => ("✓ Recuperado", ""),
+            "Esperando disco de destino" => ("Esperando disco", "Attention"),
+            "Revisión del espejo lista" => ("Revisión pendiente", "Attention"),
+            "Pausado" or "En ejecución" => (activity, ""),
+            _ when history.Runs.Length == 0 => ("Sin respaldos", ""),
+            _ => ("Requiere atención", "Attention")
+        };
+    }
     internal static string Brief(ProductRunHistory history)
     {
         string text = ActivityBrief(history);

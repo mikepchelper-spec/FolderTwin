@@ -16,9 +16,8 @@ public partial class ProductWindow
         EditDailyTime.Text = job?.Options.DailyAt?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "";
         EditEnabled.IsChecked = job?.Enabled == true;
         EditRetired.IsChecked = job?.Retired == true;
-        RouteMode.Text = job is null ? "" : ModeName(job.Options.Mode);
-        RouteSource.Text = job?.Source.VolumePath ?? "";
-        RouteDestination.Text = job?.Destination.LastVolumePath ?? "";
+        SetRouteEndpoint(RouteSource, RouteSourceVolume, job?.Source.VolumePath, "Carpeta de origen");
+        SetRouteEndpoint(RouteDestination, RouteDestinationVolume, job?.Destination.LastVolumePath, "Volumen local");
         scheduleObserved = 0;
         ScheduleStatusText.Text = "";
         SpaceStatusText.Text = "";
@@ -113,8 +112,9 @@ public partial class ProductWindow
         {
             ScheduleStatusText.Text = observed.Schedule;
             SpaceStatusText.Text = observed.Space;
-            RouteSource.Text = observed.Source;
-            RouteDestination.Text = observed.Destination;
+            SetRouteEndpoint(RouteSource, RouteSourceVolume, observed.Source, "Carpeta de origen");
+            SetRouteEndpoint(RouteDestination, RouteDestinationVolume, observed.Destination, "Volumen local");
+            RefreshRouteNextAttempt();
         }
 
         string ReadSchedule()
@@ -132,6 +132,16 @@ public partial class ProductWindow
             }
             catch (Exception error) when (ProductAutomation.Expected(error)) { return "Revisa el horario · " + error.Message; }
         }
+    }
+
+    private static void SetRouteEndpoint(System.Windows.Controls.TextBlock address,
+        System.Windows.Controls.TextBlock volume, string? path, string label)
+    {
+        address.ToolTip = path;
+        System.Windows.Automation.AutomationProperties.SetName(address, path ?? "");
+        bool drive = path is { Length: >= 3 } && char.IsAsciiLetter(path[0]) && path[1] == ':' && path[2] == '\\';
+        volume.Text = drive ? $"{path![..2]} · {label}" : label;
+        address.Text = drive && path!.Length > 40 ? $@"{path[..2]}\…\{Path.GetFileName(path)}" : path ?? "";
     }
 
     private static string DisplayRoutePath(string path)

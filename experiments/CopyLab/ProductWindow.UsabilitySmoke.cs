@@ -100,7 +100,7 @@ public partial class ProductWindow
             ProductJob versioned;
             using (var registry = Open()) versioned = registry.List().Jobs.Single(job => job.Options.Mode == ProductBackupMode.Versions);
             window.SelectJob(versioned.Id);
-            string completeDate = window.RuntimeStatusText.Text.Split('\n').Single(line => line.StartsWith("Último respaldo completo", StringComparison.Ordinal));
+            string completeDate = window.RouteBackupDate.Text;
             using (var occupied = new FileStream(Path.Combine(source, "sample.txt"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             {
                 await Click(window, window.BackupJobButton);
@@ -116,7 +116,7 @@ public partial class ProductWindow
                 await Click(window, window.VerifyPointButton);
                 await Click(window, window.ReturnToJobsButton);
                 Check(window.RuntimeStatusText.Text.Contains("respaldo requiere atención", StringComparison.Ordinal) &&
-                    window.RuntimeStatusText.Text.Contains(completeDate, StringComparison.Ordinal),
+                    window.RouteBackupDate.Text == completeDate,
                     "Verifying an old point hid an unresolved backup or changed its date.");
             }
             finally { Directory.Move(detached, source); }

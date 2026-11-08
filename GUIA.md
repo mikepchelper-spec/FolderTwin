@@ -35,7 +35,7 @@ El horario funciona con tu sesión iniciada. Si su preparación falla después d
 
 ## Revisar el estado y ejecutar
 
-En la vista **Ruta de respaldo**, selecciona un trabajo para ver las tarjetas **Origen** y **Destino**. La flecha indica la dirección de la copia. Si el volumen tiene una letra visible en Windows, la tarjeta la muestra para facilitar la lectura. Puedes pasar el mouse sobre la ruta para leerla completa y abrir **Carpetas del trabajo** para consultar las rutas registradas.
+En **Ruta de respaldo**, selecciona un trabajo para ver las tarjetas **Origen** y **Destino**, su estado y las fechas de respaldo y verificación. La flecha indica la dirección de la copia. Si el volumen tiene una letra visible en Windows, la tarjeta la muestra y abrevia las rutas largas. Pasa el mouse sobre la ruta para leerla completa o abre **Carpetas del trabajo** para consultar las rutas registradas.
 
 Selecciona un trabajo para consultar el último respaldo completo, la última verificación explícita, el punto recuperable, el horario o próximo reintento y el espacio observado. Un intento fallido y una restauración no cambian la fecha del último respaldo completo. **Historial e incidencias** conserva los resultados y la ruta afectada cuando está disponible.
 

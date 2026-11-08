@@ -21,12 +21,19 @@ public partial class ProductWindow : Window
         public ProductJob? Job => job;
         private string runtime = "";
         public string Detail => detail + runtime;
+        public string Summary => detail;
+        public string BadgeText { get; private set; } = pending ? "Pendiente" : "Sin respaldos";
+        public string BadgeTone { get; private set; } = pending ? "Attention" : "";
         public event PropertyChangedEventHandler? PropertyChanged;
-        internal void SetRuntime(string text)
+        internal void SetRuntime(string text, (string Label, string Tone) badge)
         {
-            if (runtime == text) return;
+            if (runtime == text && BadgeText == badge.Label && BadgeTone == badge.Tone) return;
             runtime = text;
+            BadgeText = badge.Label;
+            BadgeTone = badge.Tone;
             PropertyChanged?.Invoke(this, new(nameof(Detail)));
+            PropertyChanged?.Invoke(this, new(nameof(BadgeText)));
+            PropertyChanged?.Invoke(this, new(nameof(BadgeTone)));
         }
     }
     private readonly Func<ProductJobRegistry> openRegistry;
@@ -91,15 +98,23 @@ public partial class ProductWindow : Window
 
     private void UpdateWorkspaceLayout()
     {
-        bool wide = (ActualWidth > 0 ? ActualWidth : Width) >= 900;
+        bool wide = (ActualWidth > 0 ? ActualWidth : Width) >= 900 &&
+            (ActualHeight > 0 ? ActualHeight : Height) >= 650;
         JobWorkspace.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
-        JobWorkspace.ColumnDefinitions[1].Width = new GridLength(wide ? 20 : 0);
-        JobWorkspace.ColumnDefinitions[2].Width = new GridLength(wide ? 280 : 0);
+        JobWorkspace.ColumnDefinitions[1].Width = new GridLength(wide ? 16 : 0);
+        JobWorkspace.ColumnDefinitions[2].Width = new GridLength(wide ? 294 : 0);
         JobWorkspace.RowDefinitions[1].Height = new GridLength(wide ? 0 : 12);
         JobWorkspace.RowDefinitions[0].MinHeight = wide ? 0 : 80;
         JobWorkspace.RowDefinitions[0].Height = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(80);
         JobWorkspace.RowDefinitions[2].Height = wide ? new GridLength(0) : new GridLength(2, GridUnitType.Star);
-        Grid.SetColumn(JobList, wide ? 2 : 0);
+        JobRailLabel.Visibility = RouteEyebrow.Visibility = RouteSubtitle.Visibility = wide ? Visibility.Visible : Visibility.Collapsed;
+        JobRail.Padding = wide ? new Thickness(12) : new Thickness(6, 3, 6, 3);
+        JobRail.VerticalAlignment = wide ? VerticalAlignment.Top : VerticalAlignment.Stretch;
+        JobRail.MinHeight = wide ? 190 : 0;
+        if (wide && JobRail.GetBindingExpression(HeightProperty) is null)
+            JobRail.SetBinding(HeightProperty, new System.Windows.Data.Binding(nameof(ActualHeight)) { Source = BackupRoute });
+        else if (!wide) JobRail.ClearValue(HeightProperty);
+        Grid.SetColumn(JobRail, wide ? 2 : 0);
         Grid.SetRow(JobDetailsPanel, wide ? 0 : 2);
         var routeHost = wide ? WideRouteHost : CompactRouteHost;
         if (BackupRoute.Parent is Border previous && previous != routeHost)
@@ -107,6 +122,16 @@ public partial class ProductWindow : Window
             previous.Child = null;
             routeHost.Child = BackupRoute;
         }
+        ArrangeRouteActions();
+    }
+
+    private void ArrangeRouteActions()
+    {
+        var host = WideRouteHost.Child is not null && BackupRoute.Visibility == Visibility.Visible
+            ? WideRouteActions : CompactRouteActions;
+        if (PrimaryJobActions.Parent is not Border previous || previous == host) return;
+        previous.Child = null;
+        host.Child = PrimaryJobActions;
     }
 
     private void NewJobClick(object sender, RoutedEventArgs e)

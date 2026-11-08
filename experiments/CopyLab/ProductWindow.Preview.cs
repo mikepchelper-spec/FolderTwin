@@ -26,19 +26,23 @@ public partial class ProductWindow
             using var registry = Open();
             foreach (var mode in Enum.GetValues<ProductBackupMode>())
             {
-                string source = Directory.CreateDirectory(Path.Combine(fixture.Root, "source-" + mode)).FullName;
+                string name = mode switch
+                {
+                    ProductBackupMode.Accumulative => "Fotos",
+                    ProductBackupMode.Versions => "Documentos",
+                    _ => "Proyectos"
+                };
+                string source = Directory.CreateDirectory(Path.Combine(fixture.Root, name)).FullName;
                 string parent = Directory.CreateDirectory(Path.Combine(fixture.Root, "target-" + mode)).FullName;
                 string documents = Directory.CreateDirectory(Path.Combine(source, "Documentos")).FullName;
                 File.WriteAllText(Path.Combine(documents, "Propuesta.txt"), "Contenido sintético de la propuesta.");
                 File.WriteAllText(Path.Combine(source, "Notas.txt"), "Contenido sintético de notas.");
-                var job = registry.Create(new(mode switch
-                {
-                    ProductBackupMode.Accumulative => "Documentos · copia acumulativa",
-                    ProductBackupMode.Versions => "Proyectos · versiones",
-                    _ => "Archivo · espejo protegido"
-                }, mode, null), LocalJobRoots.ReviewDedicatedDestination(source, parent));
+                var job = registry.Create(new(name, mode, null), LocalJobRoots.ReviewDedicatedDestination(source, parent));
                 var result = ProductRunner.Run(registry, job.Id);
                 if (result.State != ProductRunState.Confirmed) throw new IOException(result.Detail ?? "No se pudo crear el respaldo sintético.");
+                if (mode == ProductBackupMode.Versions &&
+                    ProductRunner.Verify(registry, job.Id, result.Generation!).State != ProductRunState.Confirmed)
+                    throw new IOException("No se pudo verificar el respaldo sintético.");
             }
         });
         string installations = Directory.CreateDirectory(Path.Combine(fixture.Root, "installations")).FullName;
@@ -46,6 +50,7 @@ public partial class ProductWindow
             testPackageInstall: () => LabInstallation.EnsureAt(AppContext.BaseDirectory, installations), testInstallations: installations,
             testFolderWorkspace: variant == "empty" ? fixture : null)
         { Title = "FolderTwin · Prueba desechable" };
+        window.RouteContext.Text = "DATOS DE EJEMPLO";
         if (variant == "compact") { window.Width = 600; window.Height = 500; }
         // The pinned WPF SDK still labels the theme API experimental; this override is confined to the visual fixture.
 #pragma warning disable WPF0001

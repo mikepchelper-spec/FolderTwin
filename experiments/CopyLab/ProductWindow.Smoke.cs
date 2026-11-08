@@ -121,7 +121,7 @@ public partial class ProductWindow
                     await Click(window, window.BackupJobButton);
                     Check(window.StatusText.Text.Contains("está en uso", StringComparison.Ordinal) &&
                         window.StatusText.Text.Contains("datos.txt", StringComparison.Ordinal) &&
-                        Equals(window.BackupJobButton.Content, "_Reintentar respaldo") && store.ListPoints().Length == 1,
+                        Equals(window.BackupJobButton.Content, "↻ _Reintentar respaldo") && store.ListPoints().Length == 1,
                         "The product lost the busy-file path, retry action or confirmed-point distinction.");
                 }
                 File.WriteAllText(Path.Combine(source, "datos.txt"), "actualizado");
