@@ -22,8 +22,12 @@ public partial class ProductWindow
             Check(JobDetailsScroll.ActualHeight > 0 && JobDetailsScroll.ActualWidth > 0,
                 $"The dashboard lost details at {size}: workspace={JobWorkspace.ActualWidth}x{JobWorkspace.ActualHeight}, panel={JobDetailsPanel.ActualWidth}x{JobDetailsPanel.ActualHeight}, scroll={JobDetailsScroll.ActualWidth}x{JobDetailsScroll.ActualHeight}, header={PrimaryJobActions.ActualHeight}, rows={JobWorkspace.RowDefinitions[0].ActualHeight}/{JobWorkspace.RowDefinitions[2].ActualHeight}.");
             if (size.Width >= 900)
+            {
                 Check(JobList.TranslatePoint(new Point(), JobWorkspace).X > JobDetailsScroll.TranslatePoint(new Point(), JobWorkspace).X,
                     "The desktop layout did not put the job list to the right of the route.");
+                Check(BackupRoute.IsVisible && BackupRoute.ActualHeight > 0 && !BackupRoute.IsDescendantOf(JobDetailsScroll),
+                    "The route scrolls out of view in the desktop layout.");
+            }
             else
                 Check(JobList.TranslatePoint(new Point(), JobWorkspace).Y < JobDetailsScroll.TranslatePoint(new Point(), JobWorkspace).Y,
                     "The compact layout did not stack jobs and scrollable details.");

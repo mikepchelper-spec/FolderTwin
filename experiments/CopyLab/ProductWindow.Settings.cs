@@ -139,8 +139,7 @@ public partial class ProductWindow
         // A drive letter is for display only. Keep the registered volume path for all operations.
         string? volume = Path.GetPathRoot(path);
         if (volume is null || !volume.StartsWith(@"\\?\Volume{", StringComparison.OrdinalIgnoreCase)) return path;
-        volume = Path.TrimEndingDirectorySeparator(volume) + @"\";
-        if (!path.StartsWith(volume, StringComparison.OrdinalIgnoreCase)) return path;
+        if (!volume.EndsWith('\\')) return path;
         var names = new char[512];
         if (!GetVolumePathNamesForVolumeName(volume, names, (uint)names.Length, out _)) return path;
         foreach (string mount in new string(names).Split('\0', StringSplitOptions.RemoveEmptyEntries))

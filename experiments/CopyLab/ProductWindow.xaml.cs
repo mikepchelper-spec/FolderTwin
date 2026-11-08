@@ -101,6 +101,12 @@ public partial class ProductWindow : Window
         JobWorkspace.RowDefinitions[2].Height = wide ? new GridLength(0) : new GridLength(2, GridUnitType.Star);
         Grid.SetColumn(JobList, wide ? 2 : 0);
         Grid.SetRow(JobDetailsPanel, wide ? 0 : 2);
+        var routeHost = wide ? WideRouteHost : CompactRouteHost;
+        if (BackupRoute.Parent is Border previous && previous != routeHost)
+        {
+            previous.Child = null;
+            routeHost.Child = BackupRoute;
+        }
     }
 
     private void NewJobClick(object sender, RoutedEventArgs e)
@@ -254,6 +260,7 @@ public partial class ProductWindow : Window
 
     private void JobSelected(object sender, SelectionChangedEventArgs e)
     {
+        JobDetailsScroll.ScrollToTop();
         if (ResumeRegistrationButton is not null)
             ResumeRegistrationButton.IsEnabled = !busy && JobList.SelectedItem is JobRow { Pending: true };
         if (BackupJobButton is not null) { RefreshProductActions(); ShowJobSettings(); }

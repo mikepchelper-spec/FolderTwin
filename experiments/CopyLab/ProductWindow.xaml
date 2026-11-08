@@ -135,9 +135,14 @@
                                    AutomationProperties.HeadingLevel="Level2" />
                         <WrapPanel x:Name="PrimaryJobActions" Margin="0,8,0,0">
                             <Button x:Name="BackupJobButton" Content="_Respaldar ahora" Click="BackupJobClick" IsEnabled="False" Margin="0,0,8,4"
-                                    Style="{DynamicResource AccentButtonStyle}" />
+                                    Style="{DynamicResource AccentButtonStyle}">
+                                <Button.ContentTemplate>
+                                    <DataTemplate><AccessText Text="{Binding}" /></DataTemplate>
+                                </Button.ContentTemplate>
+                            </Button>
                             <Button x:Name="RecoverJobButton" Content="Re_cuperar archivos" Click="RecoverJobClick" IsEnabled="False" Margin="0,0,8,4" />
                         </WrapPanel>
+                        <Border x:Name="WideRouteHost" />
                     </StackPanel>
                 <ScrollViewer x:Name="JobDetailsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel x:Name="SelectedJobDetails" Visibility="Collapsed">
@@ -150,7 +155,8 @@
                             <Button x:Name="ApplyMirrorButton" Content="Aplicar _espejo revisado" Click="ApplyMirrorClick"
                                     HorizontalAlignment="Left" Margin="0,8,0,0" />
                         </StackPanel>
-                        <Border x:Name="BackupRoute" Margin="0,8,0,0" Padding="12" CornerRadius="16"
+                        <Border x:Name="CompactRouteHost">
+                        <Border x:Name="BackupRoute" Margin="0,8,0,8" Padding="12" CornerRadius="16"
                                 Background="#1D28997F" BorderThickness="1" BorderBrush="#553B9E88">
                             <StackPanel>
                                 <TextBlock x:Name="RouteMode" Style="{StaticResource RouteLabel}" Margin="0,0,0,8" />
@@ -181,12 +187,13 @@
                                         </StackPanel>
                                     </Border>
                                 </Grid>
-                                <Border Style="{StaticResource RouteCard}" Margin="0,8,0,0">
-                                    <StackPanel>
-                                        <TextBlock x:Name="RuntimeStatusText" TextWrapping="Wrap" />
-                                        <TextBlock x:Name="ScheduleStatusText" TextWrapping="Wrap" Margin="0,4,0,0" />
-                                    </StackPanel>
-                                </Border>
+                            </StackPanel>
+                        </Border>
+                        </Border>
+                        <Border Style="{StaticResource RouteCard}" Margin="0,4,0,0">
+                            <StackPanel>
+                                <TextBlock x:Name="RuntimeStatusText" TextWrapping="Wrap" />
+                                <TextBlock x:Name="ScheduleStatusText" TextWrapping="Wrap" Margin="0,4,0,0" />
                             </StackPanel>
                         </Border>
                         <TextBlock x:Name="NextProtectionStep" TextWrapping="Wrap" Margin="0,8,0,0" />
