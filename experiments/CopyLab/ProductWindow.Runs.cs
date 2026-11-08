@@ -107,7 +107,6 @@ public partial class ProductWindow
         BackupJobButton.Content = lastBackup is { Running: false, Result.State: not ProductRunState.Confirmed } or { Running: false, Result: null }
             ? "_Reintentar respaldo" : "_Respaldar ahora";
         RuntimeStatusText.Text = job is null ? "" : Brief(history) +
-            "\nOrigen · " + job.Source.VolumePath + "\nDestino · " + job.Destination.LastVolumePath +
             "\nÚltimo respaldo completo · " + Date(correct?.Result?.FinishedUtc) +
             "\nÚltima verificación completa · " + Date(verified?.Result?.FinishedUtc) +
             (correct?.Generation is { } generation ? $"\nPunto recuperable del {VersionStore.GenerationTime(generation).ToLocalTime():g}" : "") +

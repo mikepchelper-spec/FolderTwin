@@ -92,14 +92,14 @@ public partial class ProductWindow : Window
     private void UpdateWorkspaceLayout()
     {
         bool wide = (ActualWidth > 0 ? ActualWidth : Width) >= 900;
-        JobWorkspace.ColumnDefinitions[0].Width = wide ? new GridLength(280) : new GridLength(1, GridUnitType.Star);
+        JobWorkspace.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
         JobWorkspace.ColumnDefinitions[1].Width = new GridLength(wide ? 20 : 0);
-        JobWorkspace.ColumnDefinitions[2].Width = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        JobWorkspace.ColumnDefinitions[2].Width = new GridLength(wide ? 280 : 0);
         JobWorkspace.RowDefinitions[1].Height = new GridLength(wide ? 0 : 12);
         JobWorkspace.RowDefinitions[0].MinHeight = wide ? 0 : 80;
         JobWorkspace.RowDefinitions[0].Height = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(80);
         JobWorkspace.RowDefinitions[2].Height = wide ? new GridLength(0) : new GridLength(2, GridUnitType.Star);
-        Grid.SetColumn(JobDetailsPanel, wide ? 2 : 0);
+        Grid.SetColumn(JobList, wide ? 2 : 0);
         Grid.SetRow(JobDetailsPanel, wide ? 0 : 2);
     }
 

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 
 namespace CopyLab;
@@ -15,6 +16,9 @@ public partial class ProductWindow
         EditDailyTime.Text = job?.Options.DailyAt?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "";
         EditEnabled.IsChecked = job?.Enabled == true;
         EditRetired.IsChecked = job?.Retired == true;
+        RouteMode.Text = job is null ? "" : ModeName(job.Options.Mode);
+        RouteSource.Text = job?.Source.VolumePath ?? "";
+        RouteDestination.Text = job?.Destination.LastVolumePath ?? "";
         scheduleObserved = 0;
         ScheduleStatusText.Text = "";
         SpaceStatusText.Text = "";
@@ -102,12 +106,15 @@ public partial class ProductWindow
                 space = $"Espacio disponible en el destino comprobado · {LabWorkspace.AvailableSpace(target.Root) / (1024d * 1024 * 1024):N1} GiB";
             }
             catch (Exception error) when (VersionJob.Expected(error)) { space = "Destino no consultable · " + error.Message; }
-            return (Space: space, Schedule: ReadSchedule());
+            return (Space: space, Schedule: ReadSchedule(),
+                Source: DisplayRoutePath(job.Source.VolumePath), Destination: DisplayRoutePath(job.Destination.LastVolumePath));
         });
         if (!closed && (JobList.SelectedItem as JobRow)?.Id == job.Id)
         {
             ScheduleStatusText.Text = observed.Schedule;
             SpaceStatusText.Text = observed.Space;
+            RouteSource.Text = observed.Source;
+            RouteDestination.Text = observed.Destination;
         }
 
         string ReadSchedule()
@@ -126,4 +133,23 @@ public partial class ProductWindow
             catch (Exception error) when (ProductAutomation.Expected(error)) { return "Revisa el horario · " + error.Message; }
         }
     }
+
+    private static string DisplayRoutePath(string path)
+    {
+        // A drive letter is for display only. Keep the registered volume path for all operations.
+        string? volume = Path.GetPathRoot(path);
+        if (volume is null || !volume.StartsWith(@"\\?\Volume{", StringComparison.OrdinalIgnoreCase)) return path;
+        volume = Path.TrimEndingDirectorySeparator(volume) + @"\";
+        if (!path.StartsWith(volume, StringComparison.OrdinalIgnoreCase)) return path;
+        var names = new char[512];
+        if (!GetVolumePathNamesForVolumeName(volume, names, (uint)names.Length, out _)) return path;
+        foreach (string mount in new string(names).Split('\0', StringSplitOptions.RemoveEmptyEntries))
+            if (mount.Length == 3 && char.IsAsciiLetter(mount[0]) && mount[1] == ':' && mount[2] == '\\')
+                return mount + path[volume.Length..];
+        return path;
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "GetVolumePathNamesForVolumeNameW", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetVolumePathNamesForVolumeName(string volume, [Out] char[] paths, uint capacity, out uint required);
 }

@@ -72,6 +72,10 @@ Pantalla habitual: nombre de la tarea, origen → destino, último respaldo corr
 
 **Interfaz de producto aceptada como candidata local.** El paquete `7c568d6` está en `C:\FolderTwin-Producto`. Tiene ayuda para 85 controles, acceso F1, guía, soporte y diagnóstico revisable. El recorrido desde vacío crea los tres modos, verifica y recupera, conserva acciones visibles y permite abrir la salida. Dos builds limpios coinciden. El piloto sigue en pausa y las pruebas externas conservan sus pendientes. [Matriz de interfaz](INTERFAZ-PRODUCTO.md) · [Aceptación](ENTREGA-INTERFAZ.md)
 
+**Ruta es la vista de Trabajos en la revisión local siguiente.** Representa el origen y el destino como dos tarjetas conectadas, coloca el selector de trabajos a la derecha en ventanas amplias y lo apila arriba en ventanas compactas. Las acciones habituales permanecen visibles. La letra de unidad que aparece cuando Windows la puede resolver sirve como referencia visual. El motor opera con las identidades registradas.
+
+**Vistas pendientes.** Centro (resumen por tarjetas), Mesa (tabla compacta), Archivo (recuperación por fecha) y Pulso (incidencias primero) quedan como propuestas. Una futura opción de Apariencia podrá elegir la vista y, de forma independiente, el tema claro, oscuro o del sistema. Archivo es la propuesta para renovar la pantalla de recuperación.
+
 **Criterios básicos de la interfaz de producto**
 
 | Área | Criterio |

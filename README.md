@@ -8,6 +8,8 @@
 
 La candidata local de interfaz `7c568d6` añade primer uso, ayuda contextual, diagnóstico revisable y acceso a la salida recuperada. Está disponible en `C:\FolderTwin-Producto\FolderTwin.exe` y como **FolderTwin candidata** en el Escritorio. Sus pruebas desde paquete y dos compilaciones reproducibles están registradas en el informe. [Aceptación local](ENTREGA-INTERFAZ.md)
 
+La revisión local **Ruta** muestra las carpetas del trabajo como un trayecto de origen a destino y mantiene las acciones principales a la vista. Centro, Mesa, Archivo y Pulso quedan en el [plan de interfaz](PLAN.md).
+
 ## Leer primero
 
 Este proyecto está dedicado al respaldo cotidiano local de carpetas.
