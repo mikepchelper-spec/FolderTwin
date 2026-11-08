@@ -105,7 +105,7 @@ public partial class ProductWindow
             restored is null ? "Siguiente paso · Recupera una muestra en una carpeta nueva y abre los archivos para comprobarlos." :
             "Copia verificada. Puedes abrir la última carpeta recuperada de este trabajo.";
         var lastBackup = history.Runs.FirstOrDefault(run => run.Intent.Operation is ProductRunOperation.Backup or ProductRunOperation.ReviewMirror);
-        BackupJobButton.Content = lastBackup is { Running: false, Result.State: not ProductRunState.Confirmed } or { Running: false, Result: null }
+        BackupJobButton.Content = lastBackup is { Running: false, Result.State: not (ProductRunState.Confirmed or ProductRunState.Unchanged) } or { Running: false, Result: null }
             ? "↻ _Reintentar respaldo" : "▷ _Respaldar ahora";
         if (job is not null)
         {
@@ -172,6 +172,7 @@ public partial class ProductWindow
                 run.Intent.Operation == ProductRunOperation.Backup && run.Result?.State == ProductRunState.Confirmed)?.Generation
                 == history.Runs[0].Generation ? "✓ Verificado" : "✓ Punto verificado", ""),
             "Respaldo completo" => ("✓ Completo", ""),
+            "Sin cambios desde el último punto" => ("Sin cambios", ""),
             "Recuperación completa" => ("✓ Recuperado", ""),
             "Esperando disco de destino" => ("Esperando disco", "Attention"),
             "Revisión del espejo lista" => ("Revisión pendiente", "Attention"),
@@ -187,7 +188,7 @@ public partial class ProductWindow
         {
             var latest = history.Runs.FirstOrDefault(run => run.Intent.Operation == operation);
             if (latest is { Running: false } && latest != history.Runs.FirstOrDefault() &&
-                (latest.Result is null || latest.Result.State != ProductRunState.Confirmed || latest.Result.Degraded))
+                (latest.Result is null || latest.Result.State is not (ProductRunState.Confirmed or ProductRunState.Unchanged) || latest.Result.Degraded))
                 text += $" · Último intento de {label} requiere atención";
         }
         return text;
@@ -210,6 +211,7 @@ public partial class ProductWindow
             ProductRunState.WaitingForSource => "Esperando origen",
             ProductRunState.WaitingForDestination => "Esperando disco de destino",
             ProductRunState.Busy => "Archivo o destino en uso",
+            ProductRunState.Unchanged => "Sin cambios desde el último punto",
             _ => "Requiere atención"
         } : "Interrumpido; revisa o reintenta";
 
@@ -241,6 +243,7 @@ public partial class ProductWindow
         ProductRunState.WaitingForSource => "El origen no está disponible. Los puntos anteriores se conservan. Reconecta la misma carpeta y reintenta.",
         ProductRunState.WaitingForDestination => "El disco o carpeta de destino no está disponible. Los resultados anteriores se conservan. Reconecta el destino registrado y reintenta.",
         ProductRunState.Busy => "Un archivo o el destino está en uso. Cierra la aplicación que lo usa o espera a que termine la otra operación. Luego reintenta.",
+        ProductRunState.Unchanged => "La comparación no encontró cambios. La fecha del último respaldo completo y la última verificación se conservan.",
         _ when result.ErrorCode is { } code && (code & 0xffff) is 112 or 39 =>
             "Espacio insuficiente. El intento queda parcial y conserva su diario. Libera espacio fuera de los archivos internos del respaldo y reintenta.",
         _ => (result.Detail ?? "La operación necesita revisión antes de continuar.") +

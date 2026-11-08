@@ -72,6 +72,8 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
         var runnable = new List<Guid>();
         int busy = 0, pending = 0;
         if (list.Unreadable != 0 || list.Pending.Length != 0) attention.Add("job-definitions");
+        if (jobs.Any(job => job.WatchMode == ProductWatchMode.Watching) && registry.ReadMonitorProcess() is null)
+            attention.Add("monitor-stopped");
         foreach (var job in jobs)
         {
             var history = registry.RunHistory(job.Id);
@@ -91,7 +93,7 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
             // Verifying a previous point does not complete a failed or interrupted backup.
             foreach (var latest in new[] { latestBackup, latestVerification })
             {
-                if (latest?.Result is { State: not ProductRunState.Confirmed } result)
+                if (latest?.Result is { State: not (ProductRunState.Confirmed or ProductRunState.Unchanged) } result)
                     attention.Add($"{job.Id:N}-{result.State}");
                 else if (latest?.Result is { Degraded: true })
                     attention.Add($"{job.Id:N}-{latest.Intent.Operation}-replica");

@@ -100,10 +100,15 @@ internal static partial class ProductRunner
                     .FirstOrDefault(item => item.Generation is not null)?.Generation;
                 if (previous is not null && store.IsAbandonedGeneration(previous)) previous = null;
                 string generation = pending.SingleOrDefault()?.Id ?? previous ?? VersionStore.NewGenerationId();
-                run.SetGeneration(generation);
-                if (pending.Length == 1 || store.ListPoints().Any(point => point.Id == generation))
+                if (!automatic) run.SetGeneration(generation);
+                if (pending.Length == 1 || previous is not null && store.HasCommittedPoint(generation))
+                {
+                    if (automatic) run.SetGeneration(generation);
                     store.ResumePoint(generation, expectedSourceIdentity: job.Source.Identity);
-                else store.CreatePoint(job.Source.VolumePath, generation);
+                }
+                else if (!store.CreatePoint(job.Source.VolumePath, generation,
+                    beforeAutomaticPublication: automatic ? () => run.SetGeneration(generation) : null))
+                    return run.Finish(ProductRunState.Unchanged, clock: clock);
             }
             else
             {
@@ -128,6 +133,9 @@ internal static partial class ProductRunner
                     if (review.Conflicts.Length > 0)
                         return run.Finish(ProductRunState.Review, review.Conflicts[0], clock: clock,
                             detail: "Hay ediciones externas en el destino. Consérvalas y resuelve el conflicto antes de reintentar.");
+                    if (automatic && review.Previous is not null && !review.RequiresEmptyReview &&
+                        review is { Added: 0, Replaced: 0, Removed: 0, AddedDirectories: 0, RemovedDirectories: 0 })
+                        return run.Finish(ProductRunState.Unchanged, clock: clock);
                     if (job.Options.Mode == ProductBackupMode.ProtectedMirror && approval is null &&
                         (review.Removed > 0 || review.RemovedDirectories > 0 || review.RequiresEmptyReview || review.RequiresMassReview))
                         return run.Finish(ProductRunState.Review, clock: clock,
@@ -169,7 +177,7 @@ internal static partial class ProductRunner
             using var registry = new ProductJobRegistry(registryPath);
             return Run(registry, id, automatic: true).State switch
             {
-                ProductRunState.Confirmed => 0,
+                ProductRunState.Confirmed or ProductRunState.Unchanged => 0,
                 ProductRunState.Busy or ProductRunState.WaitingForDestination => 2,
                 ProductRunState.WaitingForSource => 3,
                 _ => 1

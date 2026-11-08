@@ -85,9 +85,9 @@ internal sealed partial class VersionStore
     internal static string NewGenerationId() =>
         DateTimeOffset.UtcNow.ToString(TimeFormat, CultureInfo.InvariantCulture) + "-" + Guid.NewGuid().ToString("N");
 
-    internal void CreatePoint(string source, string generation, Action<CatalogStep>? checkpoint = null,
+    internal bool CreatePoint(string source, string generation, Action<CatalogStep>? checkpoint = null,
         Action<PendingStep>? pendingCheckpoint = null, Action<CopyStep, string>? objectCheckpoint = null,
-        Action<RegistryStep>? registryCheckpoint = null)
+        Action<RegistryStep>? registryCheckpoint = null, Action? beforeAutomaticPublication = null)
     {
         if (workspace.IsAccumulative)
             throw new InvalidDataException("La copia acumulativa se publica mediante su actualización de carpeta actual.");
@@ -108,6 +108,20 @@ internal sealed partial class VersionStore
         var plan = AnalyzeSource(source, identity);
         workspace.ValidatePlan(plan);
         FolderBatch.RequireSameInventory(plan);
+        if (beforeAutomaticPublication is not null)
+        {
+            var ledger = GenerationRegistry.Read(store.Root, binding);
+            string? previous = ledger.RegistrationOrder.LastOrDefault(id => !ledger.Expired.Contains(id));
+            if (previous is not null)
+            {
+                var catalog = ReadPoint(store.Root, previous, requireBoth: true);
+                if (!catalog.DocumentHash.AsSpan().SequenceEqual(ledger.Generations[previous]))
+                    throw new InvalidDataException("El último punto no coincide con el registro de generaciones.");
+                if (BatchCatalog.WriteMetadata(Stream.Null, plan, previous).AsSpan().SequenceEqual(catalog.DocumentHash))
+                    return false;
+            }
+            beforeAutomaticPublication();
+        }
         using var pending = WindowsProbeNative.OpenOrCreatePlainDirectory(store.Root, PendingDirectory);
         var files = IntentFiles(pending, generation);
         if (WindowsProbeNative.PlainFileExists(pending, files.Location))
@@ -121,6 +135,16 @@ internal sealed partial class VersionStore
         workspace.SaveIntent(plan, scope.Root, files, pendingCheckpoint);
         RecordExpected(store.Root, plan, generation, registryCheckpoint);
         CopyAndConfirm(store.Root, plan, generation, checkpoint, objectCheckpoint);
+        return true;
+    }
+
+    internal bool HasCommittedPoint(string generation)
+    {
+        using var scope = workspace.OpenRegisteredRoot();
+        using var store = new DirectoryFence(Destination);
+        using var marker = binding.OpenVerifiedMarker(store.Root);
+        using var operation = OpenLock(store.Root, FileAccess.Read);
+        return IsCommitted(store.Root, generation);
     }
 
     internal PendingVersion[] ListPending()

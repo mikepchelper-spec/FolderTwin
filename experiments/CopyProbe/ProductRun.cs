@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 using Microsoft.Win32.SafeHandles;
 
-internal enum ProductRunState { Confirmed, Cancelled, WaitingForSource, WaitingForDestination, Busy, Review }
+internal enum ProductRunState { Confirmed, Cancelled, WaitingForSource, WaitingForDestination, Busy, Review, Unchanged }
 internal enum ProductRunAction { Pause, Resume, Cancel }
 internal enum ProductRunOperation { Backup, Verify, Restore, ReviewMirror, ReviewAbandon, AbandonVersion }
 internal enum WorkPhase { Analyzing, Copying, Verifying, Publishing, Restoring, Preparing }
@@ -226,7 +226,9 @@ internal sealed partial class ProductJobRegistry
         if (result.Generation != generation) generation = ReadGeneration(run, intent);
         if (result.Version != 1 || !result.IntentHash.AsSpan().SequenceEqual(IntentHash(intent)) ||
             !Enum.IsDefined(result.State) || result.Generation != generation || result.FinishedUtc.Offset != TimeSpan.Zero ||
-            result.State == ProductRunState.Confirmed && generation is null || !ValidRelative(result.RelativePath) || result.Detail?.Length > 2000)
+            result.State == ProductRunState.Confirmed && generation is null ||
+            result.State == ProductRunState.Unchanged && (generation is not null || intent.Operation != ProductRunOperation.Backup) ||
+            !ValidRelative(result.RelativePath) || result.Detail?.Length > 2000)
             throw new InvalidDataException("El resultado no corresponde al intento.");
         return result;
     }
@@ -330,7 +332,8 @@ internal sealed partial class ProductJobRegistry
         internal ProductRunResult Finish(ProductRunState state, string? path = null, int? errorCode = null, Func<DateTimeOffset>? clock = null,
             string? detail = null, bool degraded = false)
         {
-            if (!ValidRelative(path) || !Enum.IsDefined(state) || state == ProductRunState.Confirmed && Generation is null)
+            if (!ValidRelative(path) || !Enum.IsDefined(state) || state == ProductRunState.Confirmed && Generation is null ||
+                state == ProductRunState.Unchanged && (Generation is not null || Intent.Operation != ProductRunOperation.Backup))
                 throw new InvalidDataException("El resultado necesita un estado, una generación y una ruta relativa válidos.");
             var result = new ProductRunResult(1, IntentHash(Intent), state, (clock?.Invoke() ?? DateTimeOffset.UtcNow).ToUniversalTime(),
                 Generation, path, errorCode, detail is { Length: > 2000 } ? detail[..2000] : detail, degraded);

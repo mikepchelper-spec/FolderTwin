@@ -124,6 +124,20 @@ internal static class ProductRunProbe
         registry.UpdateSettings(job.Id, current.Options.Name, null, true, false, ProductWatchMode.Watching);
         using var reopened = new ProductJobRegistry(location);
         Check(reopened.Get(job.Id).WatchMode == ProductWatchMode.Watching, "Watch mode did not survive reopening.");
+        var initial = ProductRunner.Run(registry, job.Id);
+        Check(initial.State == ProductRunState.Confirmed, initial.Detail ?? "The comparison fixture lacked a baseline.");
+        var store = VersionStore.OpenProduct(job);
+        int points = store.ListPoints().Length;
+        Check(ProductRunner.Run(registry, job.Id, automatic: true) is { State: ProductRunState.Unchanged, Generation: null } &&
+            store.ListPoints().Length == points, "Unchanged automatic reconciliation created another generation.");
+        string file = Path.Combine(job.Source.VolumePath, "datos.txt");
+        var time = File.GetLastWriteTimeUtc(file);
+        byte[] changed = File.ReadAllBytes(file);
+        changed[0] ^= 1;
+        File.WriteAllBytes(file, changed);
+        File.SetLastWriteTimeUtc(file, time);
+        Check(ProductRunner.Run(registry, job.Id, automatic: true).State == ProductRunState.Confirmed &&
+            store.ListPoints().Length == points + 1, "A same-size, same-time edit was lost during reconciliation.");
         using (var active = registry.StartRun(job.Id, automatic: true))
             Reject(() => registry.UpdateSettings(job.Id, current.Options.Name, null, true, false, ProductWatchMode.Paused));
 
