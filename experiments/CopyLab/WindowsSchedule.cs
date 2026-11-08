@@ -293,7 +293,7 @@ internal sealed class WindowsSchedule : IDisposable
         using var scope = registry.OpenIndexScope();
         string stamp = Convert.ToHexStringLower(WindowsProbeNative.DirectoryIdentity(scope.Root));
         return new($"FolderTwin-Monitor-{user}-{stamp}", $"FolderTwin vigilancia v1 {stamp}",
-            $"--watch-scheduled-product-jobs \"{registry.Location}\"", false, true, Monitor: true);
+            $"--supervise-product-monitor \"{registry.Location}\"", false, true, Monitor: true);
     }
 
     private static Owner LabOwner(LabWorkspace workspace, Guid id, bool tray = false)

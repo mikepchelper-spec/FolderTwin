@@ -10,6 +10,22 @@ internal static class ProductMonitor
     private static readonly TimeSpan ReconcileInterval = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan Poll = TimeSpan.FromSeconds(1);
 
+    internal static async Task<int> SuperviseAsync(string location)
+    {
+        using var registry = new ProductJobRegistry(location);
+        for (int failures = 0; ; failures++)
+        {
+            if (!ProductAutomation.CanMonitor(registry)) return 0;
+            long started = Stopwatch.GetTimestamp();
+            using var monitor = ProductWorker.StartScheduledMonitor(registry.Location);
+            await monitor.WaitForExitAsync().ConfigureAwait(false);
+            if (monitor.ExitCode == 0 || !ProductAutomation.CanMonitor(registry)) return 0;
+            if (Stopwatch.GetElapsedTime(started) >= TimeSpan.FromMinutes(10)) failures = 0;
+            if (failures == 3) return 1;
+            await Task.Delay(TimeSpan.FromSeconds(5 << failures)).ConfigureAwait(false);
+        }
+    }
+
     internal static async Task<int> RunAsync(string location, bool scheduled = false)
     {
         using var registry = new ProductJobRegistry(location);

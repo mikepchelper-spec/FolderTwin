@@ -23,7 +23,7 @@ public partial class App : Application
         bool trayStartup = e.Args is ["--tray-workspace", _];
         bool scheduled = e.Args is ["--run-scheduled-version-job", _, _];
         bool productScheduled = e.Args is ["--run-scheduled-product-job", _, _];
-        bool productMonitor = e.Args is ["--watch-product-jobs" or "--watch-scheduled-product-jobs", _];
+        bool productMonitor = e.Args is ["--watch-product-jobs" or "--watch-scheduled-product-jobs" or "--supervise-product-monitor", _];
         bool automaticWorker = e.Args is ["--run-automatic-product-job", _, _];
         bool monitorSmoke = e.Args is ["--product-monitor-smoke" or "--product-monitor-schedule-smoke"];
         bool productWorker = productScheduled || e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _] or ["--restore-product-job", _, _, _] or ["--review-product-mirror", _, _] or ["--review-product-pending", _, _] or ["--abandon-product-version", _, _, _];
@@ -45,7 +45,9 @@ public partial class App : Application
             }
             if (productMonitor)
             {
-                Shutdown(await Task.Run(() => ProductMonitor.RunAsync(e.Args[1], e.Args[0] == "--watch-scheduled-product-jobs")));
+                Shutdown(await Task.Run(() => e.Args[0] == "--supervise-product-monitor"
+                    ? ProductMonitor.SuperviseAsync(e.Args[1])
+                    : ProductMonitor.RunAsync(e.Args[1], e.Args[0] == "--watch-scheduled-product-jobs")));
                 return;
             }
             if (automaticWorker)
