@@ -1,9 +1,84 @@
+using System.Diagnostics;
 using System.IO;
 
 namespace CopyLab;
 
 internal static class ProductMonitorProbe
 {
+    internal static async Task RunScheduledAsync()
+    {
+        var fixture = LabWorkspace.Create();
+        string source = Directory.CreateDirectory(Path.Combine(fixture.Root, "source")).FullName;
+        string parent = Directory.CreateDirectory(Path.Combine(fixture.Root, "destinations")).FullName;
+        string settings = Directory.CreateDirectory(Path.Combine(fixture.Root, "settings")).FullName;
+        string file = Path.Combine(source, "synthetic.txt");
+        File.WriteAllText(file, "before crash");
+        using (var registry = new ProductJobRegistry(settings))
+        using (var scheduler = new WindowsSchedule())
+        {
+            var job = registry.Create(new("Synthetic native monitor", ProductBackupMode.Versions, null),
+                LocalJobRoots.ReviewDedicatedDestination(source, parent));
+            registry.UpdateSettings(job.Id, job.Options.Name, null, true, false, ProductWatchMode.Watching);
+            try
+            {
+                string installed = LabInstallation.EnsureWorker(product: true);
+                scheduler.RegisterMonitor(registry, installed, atLogon: true);
+                if (scheduler.ReadMonitor(registry) is not { Enabled: true, MeetsPolicy: true, AtLogon: true })
+                    throw new InvalidOperationException("The native logon monitor policy did not verify.");
+                ProductAutomation.StartMonitor(registry, atLogon: false);
+                if (scheduler.ReadMonitor(registry) is not { Enabled: true, MeetsPolicy: true, AtLogon: false })
+                    throw new InvalidOperationException("The native on-demand monitor policy did not verify.");
+                await WaitAsync(() => registry.ReadMonitorProcess() is not null &&
+                    registry.RunHistory(job.Id).Runs.Any(run => run.Result?.State == ProductRunState.Confirmed && !run.Running),
+                    "The registered task did not launch its monitor and back up the source.");
+                long previous = registry.RunHistory(job.Id).Runs[0].Intent.Sequence;
+                int pid = registry.ReadMonitorProcess()!.Value;
+                using (var process = Process.GetProcessById(pid))
+                {
+                    if (!string.Equals(process.MainModule?.FileName, installed, StringComparison.OrdinalIgnoreCase) ||
+                        scheduler.ReadMonitor(registry) is not { Running: true })
+                        throw new InvalidOperationException("The observed process is not the installed synthetic monitor.");
+                    process.Kill();
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    await process.WaitForExitAsync(timeout.Token);
+                }
+                File.WriteAllText(file, "saved while offline");
+                await WaitAsync(() => registry.ReadMonitorProcess() is { } restarted && restarted != pid &&
+                    registry.RunHistory(job.Id).Runs.Any(run => run.Intent.Sequence > previous &&
+                        run.Result?.State == ProductRunState.Confirmed && !run.Running),
+                    "Windows did not restart the failed monitor and reconcile the offline edit.", TimeSpan.FromMinutes(2));
+                string generation = registry.RunHistory(job.Id).Runs[0].Generation!;
+                scheduler.RemoveMonitor(registry);
+                await WaitAsync(() => registry.ReadMonitorProcess() is null, "Removing the task did not stop future dispatch.");
+                Directory.Move(source, Path.Combine(fixture.Root, "offline"));
+                string restore = Directory.CreateDirectory(Path.Combine(fixture.Root, "restore")).FullName;
+                VersionStore.OpenProduct(job).Restore(generation, restore);
+                if (File.ReadAllText(Path.Combine(restore, "synthetic.txt")) != "saved while offline")
+                    throw new InvalidOperationException("The recovered monitor did not capture the offline bytes.");
+            }
+            finally
+            {
+                scheduler.RemoveMonitor(registry);
+                await WaitAsync(() => registry.ReadMonitorProcess() is null, "The synthetic monitor still owns the registry.");
+            }
+        }
+        using (fixture.OpenRegisteredRoot()) { }
+        Directory.Delete(fixture.Root, recursive: true);
+        Console.Error.WriteLine("PASS native monitor task validates optional logon, restarts after real termination, restores an offline edit and withdraws.");
+    }
+
+    private static async Task WaitAsync(Func<bool> predicate, string failure, TimeSpan? timeout = null)
+    {
+        var timer = Stopwatch.StartNew();
+        do
+        {
+            if (predicate()) return;
+            await Task.Delay(250);
+        }
+        while (timer.Elapsed < (timeout ?? TimeSpan.FromSeconds(20)));
+        throw new InvalidOperationException(failure);
+    }
+
     internal static async Task RunAsync()
     {
         var workspace = LabWorkspace.Create();

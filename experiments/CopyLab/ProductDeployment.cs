@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 
 namespace CopyLab;
@@ -10,6 +11,7 @@ internal static class ProductDeployment
         using var maintenance = registry.BeginMaintenance(review);
         using var scheduler = configure is null ? new WindowsSchedule() : null;
         Preflight(scheduler, registry, maintenance.Jobs);
+        var monitor = scheduler?.ReadMonitor(registry);
         string executable = (install ?? (() => LabInstallation.EnsureWorker(product: true)))();
         foreach (var job in maintenance.Jobs)
         {
@@ -23,6 +25,13 @@ internal static class ProductDeployment
             }
             else scheduler!.RemoveProductReviewed(registry, job);
         }
+        if (monitor is { Enabled: true } && !string.Equals(monitor.Executable, executable, StringComparison.OrdinalIgnoreCase))
+        {
+            scheduler!.RegisterMonitor(registry, executable, monitor.AtLogon);
+            WaitMonitorStopped(registry);
+            if (maintenance.Jobs.Any(job => job.Enabled && job.WatchMode == ProductWatchMode.Watching))
+                scheduler.RunMonitorNow(registry);
+        }
         return executable;
     }
 
@@ -32,6 +41,8 @@ internal static class ProductDeployment
         using var maintenance = registry.BeginMaintenance(review);
         using var scheduler = configure is null ? new WindowsSchedule() : null;
         Preflight(scheduler, registry, maintenance.Jobs);
+        scheduler?.RemoveMonitor(registry);
+        if (scheduler is not null) WaitMonitorStopped(registry);
         foreach (var job in maintenance.Jobs)
         {
             if (configure is not null) configure(job, null);
@@ -48,6 +59,17 @@ internal static class ProductDeployment
                 throw new IOException("Hay un horario en ejecución. Espera a que termine antes de gestionar la aplicación.");
     }
 
+    private static void WaitMonitorStopped(ProductJobRegistry registry)
+    {
+        var timer = Stopwatch.StartNew();
+        while (registry.MonitorOwnsRegistry())
+        {
+            if (timer.Elapsed >= TimeSpan.FromSeconds(15))
+                throw new IOException("El monitor sigue activo. Espera a que libere la configuración y vuelve a revisar.");
+            Thread.Sleep(100);
+        }
+    }
+
     internal static void RemoveVersion(ProductJobRegistry registry, ProductMaintenanceReview review, string installations,
         InstallRemovalReview version, Action? checkTasks = null, Action<InstallRemovalStep>? checkpoint = null)
     {
@@ -56,6 +78,8 @@ internal static class ProductDeployment
         using var scheduler = checkTasks is null ? new WindowsSchedule() : null;
         if (scheduler is not null)
         {
+            if (scheduler.ReadMonitor(registry) is not null || registry.MonitorOwnsRegistry())
+                throw new InvalidDataException("Retira primero la vigilancia antes de borrar una versión instalada.");
             foreach (var job in maintenance.Jobs)
                 if (scheduler.ReadProductReviewed(registry, job) is not null)
                     throw new InvalidDataException("Quedan horarios propios. Retíralos antes de borrar una versión instalada.");

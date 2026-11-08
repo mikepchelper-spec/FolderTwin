@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -99,7 +100,40 @@ internal sealed partial class ProductJobRegistry : IDisposable
 
     internal FileStream AcquireMonitorLock() =>
         WindowsProbeNative.OpenPlainFile(directory.Root, ".foldertwin-monitor.lock",
-            FileAccess.ReadWrite, FileShare.None, FileMode.OpenOrCreate);
+            FileAccess.ReadWrite, FileShare.Read, FileMode.OpenOrCreate);
+
+    internal bool MonitorOwnsRegistry()
+    {
+        const string name = ".foldertwin-monitor.lock";
+        if (!WindowsProbeNative.PlainFileExists(directory.Root, name)) return false;
+        try
+        {
+            using var idle = WindowsProbeNative.OpenPlainFile(directory.Root, name, FileAccess.ReadWrite, FileShare.Read);
+            return false;
+        }
+        catch (Exception error) when (VersionJob.SharingViolation(error)) { return true; }
+    }
+
+    internal int? ReadMonitorProcess()
+    {
+        if (!MonitorOwnsRegistry()) return null;
+        using var heartbeat = WindowsProbeNative.OpenPlainFile(directory.Root, ".foldertwin-monitor.lock", FileAccess.Read, FileShare.ReadWrite);
+        Span<byte> bytes = stackalloc byte[12];
+        if (heartbeat.ReadAtLeast(bytes, bytes.Length, false) != bytes.Length) return null;
+        int process = BinaryPrimitives.ReadInt32LittleEndian(bytes);
+        long age = Environment.TickCount64 - BinaryPrimitives.ReadInt64LittleEndian(bytes[4..]);
+        return process > 0 && age is >= 0 and < 15_000 ? process : null;
+    }
+
+    internal static void WriteMonitorHeartbeat(FileStream lease)
+    {
+        Span<byte> bytes = stackalloc byte[12];
+        BinaryPrimitives.WriteInt32LittleEndian(bytes, Environment.ProcessId);
+        BinaryPrimitives.WriteInt64LittleEndian(bytes[4..], Environment.TickCount64);
+        lease.Position = 0;
+        lease.Write(bytes);
+        lease.Flush(); // Volatile health indication, not an execution record.
+    }
 
     internal DirectoryFence OpenIndexScope()
     {

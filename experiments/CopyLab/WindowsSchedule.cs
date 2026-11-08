@@ -8,13 +8,15 @@ using System.Xml.Linq;
 namespace CopyLab;
 
 internal sealed record ScheduleInfo(bool Enabled, DateTime NextRun, DateTime LastRun, uint LastResult,
-    string Executable, bool MeetsPolicy, bool Running);
+    string Executable, bool MeetsPolicy, bool Running, bool AtLogon = false);
 
 internal sealed class WindowsSchedule : IDisposable
 {
     private static readonly XNamespace Schema = "http://schemas.microsoft.com/windows/2004/02/mit/task";
+    private const string MonitorRestartInterval = "PT1M";
+    private const int MonitorRestartCount = 3;
     private sealed record Owner(string Name, string Description, string Arguments, bool Tray, bool Product,
-        string? LegacyArguments = null, TimeOnly? DailyAt = null);
+        string? LegacyArguments = null, TimeOnly? DailyAt = null, bool Monitor = false);
     private readonly dynamic service;
     private readonly dynamic folder;
     private readonly string user;
@@ -32,6 +34,7 @@ internal sealed class WindowsSchedule : IDisposable
     internal ScheduleInfo? ReadTray(LabWorkspace workspace) => ReadTask(LabOwner(workspace, ScopeId(workspace), tray: true));
     internal ScheduleInfo? ReadProduct(ProductJobRegistry registry, Guid id) => ReadTask(ProductOwner(registry, id));
     internal ScheduleInfo? ReadProductReviewed(ProductJobRegistry registry, ProductJob job) => ReadTask(ProductOwner(registry, job));
+    internal ScheduleInfo? ReadMonitor(ProductJobRegistry registry) => ReadTask(MonitorOwner(registry));
 
     private ScheduleInfo? ReadTask(Owner owner)
     {
@@ -39,9 +42,11 @@ internal sealed class WindowsSchedule : IDisposable
         if (task is null) return null;
         try
         {
-            string executable = VerifyOwnership((string)task.Xml, owner);
+            string xml = (string)task.Xml;
+            string executable = VerifyOwnership(xml, owner);
             return new((bool)task.Enabled, (DateTime)task.NextRunTime, (DateTime)task.LastRunTime,
-                unchecked((uint)(int)task.LastTaskResult), executable, PolicyProblem((string)task.Xml, owner, ReadRunLevel(task)) is null, (int)task.State == 4);
+                unchecked((uint)(int)task.LastTaskResult), executable, PolicyProblem(xml, owner, ReadRunLevel(task)) is null, (int)task.State == 4,
+                owner.Monitor && XDocument.Parse(xml).Root?.Element(Schema + "Triggers")?.Element(Schema + "LogonTrigger") is not null);
         }
         finally { Marshal.FinalReleaseComObject(task); }
     }
@@ -62,12 +67,16 @@ internal sealed class WindowsSchedule : IDisposable
         Register(ProductOwner(registry, job), executable, firstRun, daily);
     }
 
-    private void Register(Owner owner, string executable, DateTime firstRun, bool daily)
+    internal void RegisterMonitor(ProductJobRegistry registry, string executable, bool atLogon) =>
+        Register(MonitorOwner(registry), executable, default, daily: false, atLogon);
+
+    private void Register(Owner owner, string executable, DateTime firstRun, bool daily, bool atLogon = false)
     {
         if (!LabInstallation.IsInstalledWorker(executable, owner.Product))
             throw new InvalidDataException("El horario requiere un ejecutor instalado y comprobado en su ubicación estable.");
         bool exists = ReadTask(owner) is not null;
-        XElement trigger = owner.Tray ? Element("LogonTrigger", Element("Enabled", true), Element("UserId", user), Element("Delay", "PT30S")) :
+        XElement? trigger = owner.Monitor && !atLogon ? null :
+            owner.Tray || owner.Monitor ? Element("LogonTrigger", Element("Enabled", true), Element("UserId", user), Element("Delay", "PT30S")) :
             Element(daily ? "CalendarTrigger" : "TimeTrigger",
                 Element("StartBoundary", firstRun.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture)), Element("Enabled", true),
                 daily ? Element("ScheduleByDay", Element("DaysInterval", 1)) : null);
@@ -76,8 +85,9 @@ internal sealed class WindowsSchedule : IDisposable
             Element("Principals", new XElement(Schema + "Principal", new XAttribute("id", "Author"),
                 Element("UserId", user), Element("LogonType", "InteractiveToken"), Element("RunLevel", "LeastPrivilege"))),
             Element("Settings", Element("MultipleInstancesPolicy", "IgnoreNew"), Element("DisallowStartIfOnBatteries", false),
-                Element("StopIfGoingOnBatteries", false), Element("AllowHardTerminate", false), Element("StartWhenAvailable", !owner.Tray),
-                Element("AllowStartOnDemand", true), Element("Enabled", false), Element("ExecutionTimeLimit", "PT0S")),
+                Element("StopIfGoingOnBatteries", false), Element("AllowHardTerminate", false), Element("StartWhenAvailable", !owner.Tray && !owner.Monitor),
+                Element("AllowStartOnDemand", true), Element("Enabled", false), Element("ExecutionTimeLimit", "PT0S"),
+                owner.Monitor ? Element("RestartOnFailure", Element("Interval", MonitorRestartInterval), Element("Count", MonitorRestartCount)) : null),
             new XElement(Schema + "Actions", new XAttribute("Context", "Author"), Element("Exec", Element("Command", executable),
                 Element("Arguments", owner.Arguments), Element("WorkingDirectory", Path.GetDirectoryName(executable))))));
         dynamic registered = folder.RegisterTask(owner.Name, document.ToString(), exists ? 6 : 2, user, null, 3, null);
@@ -95,6 +105,7 @@ internal sealed class WindowsSchedule : IDisposable
     internal void Remove(LabWorkspace workspace, Guid id) => Remove(LabOwner(workspace, id));
     internal void RemoveProduct(ProductJobRegistry registry, Guid id) => Remove(ProductOwner(registry, id));
     internal void RemoveProductReviewed(ProductJobRegistry registry, ProductJob job) => Remove(ProductOwner(registry, job));
+    internal void RemoveMonitor(ProductJobRegistry registry) => Remove(MonitorOwner(registry));
     private void Remove(Owner owner)
     {
         if (ReadTask(owner) is not null) folder.DeleteTask(owner.Name, 0);
@@ -102,6 +113,7 @@ internal sealed class WindowsSchedule : IDisposable
 
     internal void RunNow(LabWorkspace workspace, Guid id) => RunNow(LabOwner(workspace, id));
     internal void RunProductNow(ProductJobRegistry registry, Guid id) => RunNow(ProductOwner(registry, id));
+    internal void RunMonitorNow(ProductJobRegistry registry) => RunNow(MonitorOwner(registry));
     private void RunNow(Owner owner)
     {
         dynamic task = Find(owner.Name) ?? throw new InvalidDataException("Este trabajo no tiene horario.");
@@ -216,15 +228,21 @@ internal sealed class WindowsSchedule : IDisposable
         var root = XDocument.Parse(xml).Root;
         var settings = root?.Element(Schema + "Settings");
         var triggers = root?.Element(Schema + "Triggers")?.Elements().ToArray() ?? [];
-        if (triggers.Length != 1) return "Triggers";
+        if (owner.Monitor ? triggers.Length > 1 : triggers.Length != 1) return "Triggers";
+        var trigger = triggers.FirstOrDefault();
         // Trigger.Enabled and AllowStartOnDemand default to true in the SDK schema.
-        if ((string?)triggers[0].Element(Schema + "Enabled") is not (null or "true")) return "Trigger.Enabled";
-        if (owner.Tray && (triggers[0].Name != Schema + "LogonTrigger" || NormalizeSid((string?)triggers[0].Element(Schema + "UserId")) != user))
+        if ((string?)trigger?.Element(Schema + "Enabled") is not (null or "true")) return "Trigger.Enabled";
+        if ((owner.Tray || owner.Monitor) && trigger is not null &&
+            (trigger.Name != Schema + "LogonTrigger" || NormalizeSid((string?)trigger.Element(Schema + "UserId")) != user))
             return "LogonTrigger.UserId";
-        if (!owner.Tray && triggers[0].Name != Schema + "TimeTrigger" && triggers[0].Name != Schema + "CalendarTrigger") return "TimeTrigger/CalendarTrigger";
-        if (triggers[0].Name == Schema + "CalendarTrigger" && owner.Product &&
-            (!DateTime.TryParse((string?)triggers[0].Element(Schema + "StartBoundary"), CultureInfo.InvariantCulture, DateTimeStyles.None, out var start) ||
-                owner.DailyAt != TimeOnly.FromDateTime(start) || (string?)triggers[0].Element(Schema + "ScheduleByDay")?.Element(Schema + "DaysInterval") != "1"))
+        if (owner.Monitor && trigger is not null && trigger.Elements().Any(element =>
+            element.Name != Schema + "Enabled" && element.Name != Schema + "UserId" && element.Name != Schema + "Delay"))
+            return "LogonTrigger";
+        if (!owner.Tray && !owner.Monitor && trigger?.Name != Schema + "TimeTrigger" && trigger?.Name != Schema + "CalendarTrigger")
+            return "TimeTrigger/CalendarTrigger";
+        if (trigger?.Name == Schema + "CalendarTrigger" && owner.Product &&
+            (!DateTime.TryParse((string?)trigger.Element(Schema + "StartBoundary"), CultureInfo.InvariantCulture, DateTimeStyles.None, out var start) ||
+                owner.DailyAt != TimeOnly.FromDateTime(start) || (string?)trigger.Element(Schema + "ScheduleByDay")?.Element(Schema + "DaysInterval") != "1"))
             return "CalendarTrigger.StartBoundary";
         if ((string?)settings?.Element(Schema + "MultipleInstancesPolicy") != "IgnoreNew") return "MultipleInstancesPolicy";
         // Battery restrictions default to true; only an explicit false preserves our uninterrupted policy.
@@ -234,9 +252,15 @@ internal sealed class WindowsSchedule : IDisposable
         // Both constraints default to false; the local backup must not wait for idle or a network.
         if ((string?)settings?.Element(Schema + "RunOnlyIfIdle") is not (null or "false")) return "RunOnlyIfIdle";
         if ((string?)settings?.Element(Schema + "RunOnlyIfNetworkAvailable") is not (null or "false")) return "RunOnlyIfNetworkAvailable";
-        if (!owner.Tray && (string?)settings?.Element(Schema + "StartWhenAvailable") != "true") return "StartWhenAvailable";
+        if (!owner.Tray && !owner.Monitor && (string?)settings?.Element(Schema + "StartWhenAvailable") != "true") return "StartWhenAvailable";
         if ((string?)settings?.Element(Schema + "ExecutionTimeLimit") != "PT0S") return "ExecutionTimeLimit";
-        if (!owner.Tray && settings?.Element(Schema + "RestartOnFailure") is not null) return "RestartOnFailure";
+        var restart = settings?.Element(Schema + "RestartOnFailure");
+        if (owner.Monitor)
+        {
+            if ((string?)restart?.Element(Schema + "Interval") != MonitorRestartInterval ||
+                (int?)restart?.Element(Schema + "Count") != MonitorRestartCount) return "RestartOnFailure";
+        }
+        else if (!owner.Tray && restart is not null) return "RestartOnFailure";
         if (!owner.Tray && (string?)root?.Element(Schema + "Actions")?.Element(Schema + "Exec")?.Element(Schema + "Arguments") != owner.Arguments)
             return "Actions.Exec.Arguments";
         // Windows can omit the default from exported XML. Verify the effective COM value.
@@ -263,6 +287,14 @@ internal sealed class WindowsSchedule : IDisposable
     private static Owner ProductOwner(ProductJobRegistry registry, ProductJob job) =>
         new($"FolderTwin-Job-{job.Id:N}", $"FolderTwin trabajo v1 {job.Id:N} {registry.RegistrationStamp(job.Id)}",
             $"--run-scheduled-product-job \"{registry.Location}\" {job.Id:N}", false, true, DailyAt: job.Options.DailyAt);
+
+    private Owner MonitorOwner(ProductJobRegistry registry)
+    {
+        using var scope = registry.OpenIndexScope();
+        string stamp = Convert.ToHexStringLower(WindowsProbeNative.DirectoryIdentity(scope.Root));
+        return new($"FolderTwin-Monitor-{user}-{stamp}", $"FolderTwin vigilancia v1 {stamp}",
+            $"--watch-scheduled-product-jobs \"{registry.Location}\"", false, true, Monitor: true);
+    }
 
     private static Owner LabOwner(LabWorkspace workspace, Guid id, bool tray = false)
     {

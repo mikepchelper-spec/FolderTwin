@@ -23,9 +23,9 @@ public partial class App : Application
         bool trayStartup = e.Args is ["--tray-workspace", _];
         bool scheduled = e.Args is ["--run-scheduled-version-job", _, _];
         bool productScheduled = e.Args is ["--run-scheduled-product-job", _, _];
-        bool productMonitor = e.Args is ["--watch-product-jobs", _];
+        bool productMonitor = e.Args is ["--watch-product-jobs" or "--watch-scheduled-product-jobs", _];
         bool automaticWorker = e.Args is ["--run-automatic-product-job", _, _];
-        bool monitorSmoke = e.Args is ["--product-monitor-smoke"];
+        bool monitorSmoke = e.Args is ["--product-monitor-smoke" or "--product-monitor-schedule-smoke"];
         bool productWorker = productScheduled || e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _] or ["--restore-product-job", _, _, _] or ["--review-product-mirror", _, _] or ["--review-product-pending", _, _] or ["--abandon-product-version", _, _, _];
         bool worker = productWorker || scheduled || e.Args is ["--run-version-job", _, _];
         if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !labPreview && !startupSmoke && !productSyntheticPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !heldMirrorChild && !heldAbandonChild && !productScheduleSmoke && !productMonitor && !automaticWorker && !monitorSmoke)
@@ -38,13 +38,14 @@ public partial class App : Application
         {
             if (monitorSmoke)
             {
-                await ProductMonitorProbe.RunAsync();
+                if (e.Args[0] == "--product-monitor-schedule-smoke") await ProductMonitorProbe.RunScheduledAsync();
+                else await ProductMonitorProbe.RunAsync();
                 Shutdown(0);
                 return;
             }
             if (productMonitor)
             {
-                Shutdown(await Task.Run(() => ProductMonitor.RunAsync(e.Args[1])));
+                Shutdown(await Task.Run(() => ProductMonitor.RunAsync(e.Args[1], e.Args[0] == "--watch-scheduled-product-jobs")));
                 return;
             }
             if (automaticWorker)

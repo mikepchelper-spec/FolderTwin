@@ -38,5 +38,22 @@ internal static class ProductAutomation
         scheduler.RemoveProduct(registry, id);
     }
 
+    internal static void StartMonitor(ProductJobRegistry registry, bool? atLogon = null)
+    {
+        using var scheduler = new WindowsSchedule();
+        var current = scheduler.ReadMonitor(registry);
+        bool startup = atLogon ?? current?.AtLogon ?? true;
+        if (current is not { Enabled: true, MeetsPolicy: true } || current.AtLogon != startup)
+            scheduler.RegisterMonitor(registry, LabInstallation.EnsureWorker(product: true), startup);
+        scheduler.RunMonitorNow(registry);
+    }
+
+    internal static bool CanMonitor(ProductJobRegistry registry)
+    {
+        using var scheduler = new WindowsSchedule();
+        return scheduler.ReadMonitor(registry) is { Enabled: true, MeetsPolicy: true } task &&
+            string.Equals(task.Executable, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase);
+    }
+
     internal static bool Expected(Exception error) => VersionJob.Expected(error) || error is COMException;
 }

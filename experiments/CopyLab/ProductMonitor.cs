@@ -10,23 +10,37 @@ internal static class ProductMonitor
     private static readonly TimeSpan ReconcileInterval = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan Poll = TimeSpan.FromSeconds(1);
 
-    internal static async Task<int> RunAsync(string location)
+    internal static async Task<int> RunAsync(string location, bool scheduled = false)
     {
         using var registry = new ProductJobRegistry(location);
+        if (scheduled && !ProductAutomation.CanMonitor(registry)) return 0;
         FileStream lease;
         try { lease = registry.AcquireMonitorLock(); }
-        catch (Exception error) when (VersionJob.SharingViolation(error)) { return 0; }
+        catch (Exception error) when (VersionJob.SharingViolation(error))
+        {
+            // A health reader can briefly probe the lease just as the task starts.
+            await Task.Delay(100).ConfigureAwait(false);
+            try { lease = registry.AcquireMonitorLock(); }
+            catch (Exception collision) when (VersionJob.SharingViolation(collision)) { return 0; }
+        }
         using (lease)
         {
             var jobs = new Dictionary<Guid, Watch>();
             Process? worker = null;
             Watch? active = null;
             long dispatch = 0;
+            long checkedOwnerAt = Stopwatch.GetTimestamp();
             try
             {
                 while (true)
                 {
+                    ProductJobRegistry.WriteMonitorHeartbeat(lease);
                     long now = Stopwatch.GetTimestamp();
+                    if (scheduled && Stopwatch.GetElapsedTime(checkedOwnerAt, now) >= TimeSpan.FromSeconds(5))
+                    {
+                        if (!ProductAutomation.CanMonitor(registry)) return 0;
+                        checkedOwnerAt = now;
+                    }
                     if (worker is not null && worker.HasExited)
                     {
                         active!.Complete(worker.ExitCode, now);
@@ -62,6 +76,7 @@ internal static class ProductMonitor
                         {
                             var watch = entry.Value;
                             if (!watch.TakeDue(now)) continue;
+                            if (scheduled && !ProductAutomation.CanMonitor(registry)) return 0;
                             watch.LastDispatch = ++dispatch;
                             try
                             {
