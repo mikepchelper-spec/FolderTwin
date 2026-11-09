@@ -17,12 +17,15 @@ internal static class DailyPerformanceProbe
             }
             string source = Folder("source"), settings = Folder("settings");
             if (Path.GetPathRoot(source) != @"C:\") throw new InvalidOperationException("The source fixture must be on C:.");
+            Console.WriteLine($"Seeding {files} synthetic files on C: for {mode}.");
+            var seed = Stopwatch.StartNew();
             for (int i = 0; i < files; i += 256)
             {
                 string group = Directory.CreateDirectory(Path.Combine(source, $"group-{i / 256:D4}")).FullName;
                 for (int j = i; j < Math.Min(i + 256, files); j++)
                     File.WriteAllText(Path.Combine(group, $"file-{j:D6}.txt"), $"synthetic {j % 32:D2}");
             }
+            Console.WriteLine(FormattableString.Invariant($"seed_s={seed.Elapsed.TotalSeconds:F3}"));
             using var registry = new ProductJobRegistry(settings);
             var job = registry.Create(new($"Synthetic performance {mode}", mode, null),
                 LocalJobRoots.ReviewDedicatedDestination(source, destination.Root));
@@ -32,6 +35,7 @@ internal static class DailyPerformanceProbe
             File.WriteAllText(Path.Combine(settings, "monitor-timing.json"), """{"QuietSeconds":2,"MaximumWaitSeconds":20,"ReconcileSeconds":3600}""");
             if (prepared && mode != ProductBackupMode.Versions)
             {
+                Console.WriteLine("Preparing and verifying the starting tree on D:.");
                 // Call the fixture builder from the same core, including earlier packages where it is private.
                 var prepare = typeof(AutomaticScaleProbe).GetMethod("PrepareCurrentTree",
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
@@ -91,12 +95,28 @@ internal static class DailyPerformanceProbe
                 await WaitForWatching();
                 DateTimeOffset changed = DateTimeOffset.UtcNow;
                 change();
-                var (observed, detection) = await WaitFor(last.Intent.Sequence);
+                bool noChange = mode == ProductBackupMode.Accumulative && phase == "delete";
+                ProductRunState expected = noChange ? ProductRunState.Unchanged : ProductRunState.Confirmed;
+                long after = last.Intent.Sequence;
+                ProductRunView observed;
+                DateTimeOffset? detection = null;
+                using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(files == 4096 ? 3 : 15));
+                while (true)
+                {
+                    var (attempt, pendingObservation) = await WaitFor(after, deadline.Token);
+                    detection ??= pendingObservation;
+                    if (attempt.Result!.State == expected && attempt.Intent.StartedUtc >= changed)
+                    {
+                        observed = attempt;
+                        break;
+                    }
+                    if (attempt.Result.State != ProductRunState.Unchanged)
+                        throw new InvalidDataException($"{phase}: {attempt.Result}");
+                    Console.WriteLine(FormattableString.Invariant($"{phase}: intervening unchanged attempt {attempt.Intent.Sequence}, dispatch_s={(attempt.Intent.StartedUtc - changed).TotalSeconds:F3}"));
+                    after = attempt.Intent.Sequence;
+                }
                 last = observed;
                 var result = observed.Result!;
-                bool noChange = mode == ProductBackupMode.Accumulative && phase == "delete";
-                if (result.State != (noChange ? ProductRunState.Unchanged : ProductRunState.Confirmed))
-                    throw new InvalidDataException($"{phase}: {result}");
                 current = observed.Generation ?? current;
                 if (phase != "delete" || noChange) restores.Add((phase, current, relative(name), bytes));
                 if (phase is "rename" or "delete" && mode != ProductBackupMode.Versions)
@@ -109,10 +129,11 @@ internal static class DailyPerformanceProbe
                 Console.WriteLine(FormattableString.Invariant($"{phase}: pending_s={pending}, dispatch_s={(observed.Intent.StartedUtc - changed).TotalSeconds:F3}, worker_s={(result.FinishedUtc - observed.Intent.StartedUtc).TotalSeconds:F3}, confirm_s={(result.FinishedUtc - changed).TotalSeconds:F3}, scoped={result.Scoped}"));
             }
 
-            async Task<(ProductRunView Run, DateTimeOffset? Pending)> WaitFor(long after)
+            async Task<(ProductRunView Run, DateTimeOffset? Pending)> WaitFor(long after, CancellationToken cancel = default)
             {
                 DateTimeOffset? pending = null;
-                using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(30));
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+                timeout.CancelAfter(TimeSpan.FromMinutes(30));
                 while (true)
                 {
                     if (monitor.HasExited) throw new InvalidOperationException("The monitor exited before the attempt completed.");
