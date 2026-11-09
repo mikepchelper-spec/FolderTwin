@@ -146,32 +146,37 @@ internal static class FolderBatch
         {
             try
             {
-                using var file = WindowsProbeNative.OpenPlainFile(parent, entry.RelativePath, FileAccess.Read, FileShare.Read);
-                WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath);
-                if (file.Length != entry.Length)
-                {
-                    const string message = "El origen cambió durante el análisis.";
-                    throw retrySourceChanges ? new SourceChangedDuringBackupException(message) : new InvalidDataException(message);
-                }
-                var metadata = FileMetadata.Read(file.SafeFileHandle);
-                byte[] hash;
-                if (entry.Length <= 4096)
-                {
-                    Span<byte> bytes = stackalloc byte[(int)entry.Length];
-                    file.ReadExactly(bytes);
-                    hash = SHA256.HashData(bytes);
-                }
-                else hash = SHA256.HashData(file);
-                if (!metadata.IsValid())
-                    throw new InvalidDataException($"Las fechas de «{entry.RelativePath}» están fuera del alcance.");
-                metadata.RequireMatch(file.SafeFileHandle);
-                return new(entry.RelativePath, entry.Length, hash, metadata);
+                return ReadFile(parent, entry.RelativePath, entry.Length, retrySourceChanges);
             }
             catch (Exception error) when (retrySourceChanges && VersionJob.Unavailable(error))
             {
                 throw new SourceChangedDuringBackupException($"«{entry.RelativePath}» cambió durante el análisis.", error);
             }
         }
+    }
+
+    internal static BatchFile ReadFile(SafeFileHandle parent, string relativePath, long? expectedLength = null, bool retrySourceChanges = false)
+    {
+        using var file = WindowsProbeNative.OpenPlainFile(parent, relativePath, FileAccess.Read, FileShare.Read);
+        WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, relativePath);
+        long length = file.Length;
+        if (expectedLength is not null && length != expectedLength)
+        {
+            const string message = "El origen cambió durante el análisis.";
+            throw retrySourceChanges ? new SourceChangedDuringBackupException(message) : new InvalidDataException(message);
+        }
+        var metadata = FileMetadata.Read(file.SafeFileHandle);
+        byte[] hash;
+        if (length <= 4096)
+        {
+            Span<byte> bytes = stackalloc byte[(int)length];
+            file.ReadExactly(bytes);
+            hash = SHA256.HashData(bytes);
+        }
+        else hash = SHA256.HashData(file);
+        if (!metadata.IsValid()) throw new InvalidDataException($"Las fechas de «{relativePath}» están fuera del alcance.");
+        metadata.RequireMatch(file.SafeFileHandle);
+        return new(relativePath, length, hash, metadata);
     }
 
     internal static BatchResult Run(BatchPlan plan, CancellationToken cancellationToken = default,

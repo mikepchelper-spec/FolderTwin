@@ -12,7 +12,7 @@ La revisión local **Ruta** muestra las carpetas del trabajo como un trayecto de
 
 ## Leer primero
 
-La candidata local incorpora la vigilancia continua. Su paquete de ensayo tiene evidencia propia y el cierre de rendimiento sigue abierto. [Matriz de automatización](AUTOMATIZACION.md) · [Evidencia del paquete local](ENTREGA-AUTOMATIZACION.md).
+La candidata local incorpora la vigilancia continua. El código en desarrollo comprueba ediciones puntuales en acumulativo y espejo y mantiene la comparación completa periódica. La medición de esa ruta a 329.000 archivos y su aceptación desde paquete siguen abiertas. [Matriz de automatización](AUTOMATIZACION.md) · [Evidencia del paquete local anterior](ENTREGA-AUTOMATIZACION.md).
 
 Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 

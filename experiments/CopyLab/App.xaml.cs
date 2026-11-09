@@ -24,7 +24,7 @@ public partial class App : Application
         bool scheduled = e.Args is ["--run-scheduled-version-job", _, _];
         bool productScheduled = e.Args is ["--run-scheduled-product-job", _, _];
         bool productMonitor = e.Args is ["--watch-product-jobs" or "--watch-scheduled-product-jobs" or "--supervise-product-monitor", _];
-        bool automaticWorker = e.Args is ["--run-automatic-product-job", _, _];
+        bool automaticWorker = e.Args is ["--run-automatic-product-job", _, _, ..] && e.Args.Length <= 3 + ProductWatchSignal.MaximumEditHints;
         bool monitorSmoke = e.Args is ["--product-monitor-smoke" or "--product-monitor-soak" or "--product-monitor-schedule-smoke" or "--product-monitor-schedule-soak" or
             "--product-monitor-reconciliation-smoke" or "--product-automation-ui-smoke"] or
             ["--product-monitor-update-smoke" or "--product-monitor-cross-volume-smoke", _];
@@ -60,7 +60,7 @@ public partial class App : Application
             if (automaticWorker)
             {
                 Shutdown(Guid.TryParseExact(e.Args[2], "N", out var id)
-                    ? await Task.Run(() => ProductRunner.RunAutomaticCommand(e.Args[1], id)) : 1);
+                    ? await Task.Run(() => ProductRunner.RunAutomaticCommand(e.Args[1], id, e.Args.Length > 3 ? e.Args[3..] : null)) : 1);
                 return;
             }
             if (startupSmoke)

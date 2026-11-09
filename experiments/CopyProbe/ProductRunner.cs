@@ -80,12 +80,13 @@ internal static partial class ProductRunner
     }
 
     internal static ProductRunResult Run(ProductJobRegistry registry, Guid id, Guid? approvalId = null,
-        Action<WorkProgress>? checkpoint = null, Func<DateTimeOffset>? clock = null, bool automatic = false)
+        Action<WorkProgress>? checkpoint = null, Func<DateTimeOffset>? clock = null, bool automatic = false, string[]? editHints = null)
     {
         using var run = registry.StartRun(id, clock, automatic: automatic);
         var control = new Controller(run, checkpoint);
         var job = run.Job;
         VersionStore? store = null;
+        bool scoped = false;
         try
         {
             if (approvalId is not null && (job.Options.Mode != ProductBackupMode.ProtectedMirror || automatic))
@@ -125,7 +126,7 @@ internal static partial class ProductRunner
                 if (pending.Length == 1)
                 {
                     run.SetGeneration(pending[0].Generation);
-                    store.ResumeMirror(pending[0].Generation);
+                    store.ResumeMirror(pending[0].Generation, scopedComparison: () => scoped = true);
                 }
                 else if (automatic)
                 {
@@ -143,10 +144,10 @@ internal static partial class ProductRunner
                         if (consent) run.AuthorizeAutomaticMirror(fresh);
                         else run.SetGeneration(fresh.Generation);
                         return true;
-                    });
+                    }, editHints: editHints, scopedComparison: () => scoped = true);
                     if (!updated)
                     {
-                        if (rejected is null) return run.Finish(ProductRunState.Unchanged, clock: clock);
+                        if (rejected is null) return run.Finish(ProductRunState.Unchanged, clock: clock, scoped: scoped);
                         return rejected.Conflicts.Length != 0
                             ? run.Finish(ProductRunState.Review, rejected.Conflicts[0], clock: clock,
                                 detail: "Hay ediciones externas en el destino. Consérvalas y resuelve el conflicto antes de reintentar.")
@@ -175,7 +176,7 @@ internal static partial class ProductRunner
                     store.BeginMirror(review, approval?.EmptyReviewed ?? false, approval?.MassReviewed ?? false);
                 }
             }
-            return run.Finish(ProductRunState.Confirmed, clock: clock);
+            return run.Finish(ProductRunState.Confirmed, clock: clock, scoped: scoped);
         }
         catch (OperationCanceledException) { return run.Finish(ProductRunState.Cancelled, control.Current.RelativePath, clock: clock); }
         catch (SourceChangedDuringBackupException error) when (automatic && (run.Generation is null || error.RetryAfterReservation))
@@ -225,12 +226,12 @@ internal static partial class ProductRunner
         }
     }
 
-    internal static int RunAutomaticCommand(string registryPath, Guid id)
+    internal static int RunAutomaticCommand(string registryPath, Guid id, string[]? editHints = null)
     {
         try
         {
             using var registry = new ProductJobRegistry(registryPath);
-            return Run(registry, id, automatic: true).State switch
+            return Run(registry, id, automatic: true, editHints: editHints).State switch
             {
                 ProductRunState.Confirmed or ProductRunState.Unchanged => 0,
                 ProductRunState.Busy or ProductRunState.WaitingForDestination => 2,

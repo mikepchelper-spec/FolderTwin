@@ -101,16 +101,20 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
                     attention.Add($"{job.Id:N}-interrupted");
             }
             var confirmed = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Backup &&
+                run.Result is { State: ProductRunState.Confirmed, Scoped: false });
+            var recoverable = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Backup &&
                 run.Result?.State == ProductRunState.Confirmed);
-            if (confirmed is null) continue;
+            if (recoverable is null) continue;
             try
             {
                 var store = VersionStore.OpenProduct(job);
-                if (store.RegisteredGenerations().Expired.Contains(confirmed.Generation!))
+                var generations = store.RegisteredGenerations();
+                if (generations.Expired.Contains(recoverable.Generation!))
                 { attention.Add($"{job.Id:N}-expired"); continue; }
-                if (store.ReadCatalogs(confirmed.Generation!, null).Current.Degraded)
+                if (store.ReadCatalogs(recoverable.Generation!, null).Current.Degraded)
                     attention.Add($"{job.Id:N}-replica");
-                dates.Add(confirmed.Result!.FinishedUtc);
+                if (confirmed is not null && !generations.Expired.Contains(confirmed.Generation!))
+                    dates.Add(confirmed.Result!.FinishedUtc);
             }
             catch (Exception error) when (VersionJob.SharingViolation(error)) { if (!running) busy++; }
             catch (Exception error) when (VersionJob.Expected(error)) { attention.Add($"{job.Id:N}-unavailable"); }

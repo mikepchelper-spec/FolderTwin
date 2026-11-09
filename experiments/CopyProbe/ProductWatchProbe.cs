@@ -19,6 +19,15 @@ internal static class ProductWatchProbe
         signal.RequireReconciliation(failedWatcher: true);
         Check(signal.TakeWatcherFailure() && !signal.TakeWatcherFailure() && signal.TakeDue(quiet, maximum),
             "Watcher failure did not require both recreation and reconciliation.");
+        signal.Changed("folder\\file.txt");
+        signal.Changed("folder\\FILE.txt");
+        clock.Tick = 14;
+        Check(signal.TakeDue(quiet, maximum, out var hints) && hints is ["folder\\file.txt"],
+            "Duplicate changes did not produce a bounded edit hint.");
+        for (int item = 0; item <= ProductWatchSignal.MaximumEditHints; item++) signal.Changed($"file-{item}.txt");
+        clock.Tick = 16;
+        Check(signal.TakeDue(quiet, maximum, out hints) && hints is null,
+            "A batch exceeding the hint limit did not request a complete comparison.");
 
         var workspace = LabWorkspace.Create();
         try

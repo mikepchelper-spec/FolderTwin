@@ -140,13 +140,13 @@ internal static class ProductMonitor
                         foreach (var entry in jobs.OrderBy(entry => entry.Value.LastDispatch))
                         {
                             var watch = entry.Value;
-                            if (!watch.TakeDue(now)) continue;
+                            if (!watch.TakeDue(now, out var editHints)) continue;
                             if (scheduler is not null && !scheduler.CanMonitor(registry, ref verifiedDefinition, verifyInstallation: true))
                                 return 0;
                             watch.LastDispatch = ++dispatch;
                             try
                             {
-                                worker = ProductWorker.StartAutomatic(registry.Location, entry.Key);
+                                worker = ProductWorker.StartAutomatic(registry.Location, entry.Key, editHints);
                                 active = watch;
                             }
                             catch (Exception error) when (VersionJob.Expected(error)) { watch.Complete(2, now); }
@@ -210,7 +210,11 @@ internal static class ProductMonitor
             }
         }
 
-        internal bool TakeDue(long now) => now >= retryAt && signal.TakeDue(quiet, maximumWait);
+        internal bool TakeDue(long now, out string[]? editHints)
+        {
+            editHints = null;
+            return now >= retryAt && signal.TakeDue(quiet, maximumWait, out editHints);
+        }
         internal ProductWatchActivity Activity(bool running) => running ? ProductWatchActivity.Running :
             watcher is null ? ProductWatchActivity.SourceUnavailable :
             signal.Pending ? ProductWatchActivity.Pending : ProductWatchActivity.Watching;

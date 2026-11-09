@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 internal static class AutomaticScaleProbe
 {
-    internal static int Run(int files, ProductBackupMode mode, bool prepared = false, string? destinationVolume = null)
+    internal static int Run(int files, ProductBackupMode mode, bool prepared = false, string? destinationVolume = null, bool scoped = false)
     {
         var workspace = LabWorkspace.Create();
         LabWorkspace? otherVolume = null;
@@ -48,12 +48,13 @@ internal static class AutomaticScaleProbe
             ProductRunResult? latest = null;
             if (prepared) Measure("verified_baseline_fixture", () => PrepareCurrentTree(job, source));
             else Attempt("initial", ProductRunState.Confirmed);
-            Attempt("unchanged", ProductRunState.Unchanged);
+            string relative = Path.GetRelativePath(source, last);
+            string[]? hints = scoped ? [relative] : null;
+            Attempt(scoped ? "unchanged_scoped" : "unchanged", ProductRunState.Unchanged, hints);
             DateTime previousTime = File.GetLastWriteTimeUtc(last);
             File.WriteAllText(last, "synthetic XX");
             File.SetLastWriteTimeUtc(last, previousTime);
-            Attempt("single_edit", ProductRunState.Confirmed);
-            string relative = Path.GetRelativePath(source, last);
+            Attempt(scoped ? "single_edit_scoped" : "single_edit", ProductRunState.Confirmed, hints);
             Directory.Move(source, Path.Combine(workspace.Root, "source-detached"));
             string restored = Folder("restore");
             Measure("restore_one", () => VersionStore.OpenProduct(job).Restore(latest!.Generation!, restored, relative));
@@ -62,11 +63,13 @@ internal static class AutomaticScaleProbe
             Console.WriteLine("PASS automatic scale, no-op suppression and same-size same-time edit recovery.");
             return 0;
 
-            void Attempt(string phase, ProductRunState expected) => Measure(phase, () =>
+            void Attempt(string phase, ProductRunState expected, string[]? editHints = null) => Measure(phase, () =>
             {
-                latest = ProductRunner.Run(registry, job.Id, automatic: true);
+                latest = ProductRunner.Run(registry, job.Id, automatic: true, editHints: editHints);
                 if (latest.State != expected)
                     throw new InvalidOperationException($"{phase}: expected {expected}, got {latest.State}. {latest.Detail}");
+                if (latest.Scoped != (editHints is not null))
+                    throw new InvalidOperationException($"{phase}: unexpected comparison scope.");
             });
         }
         finally

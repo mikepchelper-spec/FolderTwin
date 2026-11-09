@@ -242,7 +242,8 @@ internal sealed partial class VersionStore
 
     private void CopyAndConfirm(SafeFileHandle store, BatchPlan plan, string generation, Action<CatalogStep>? checkpoint,
         Action<CopyStep, string>? objectCheckpoint, BatchPlan? sourceInventory = null, bool prepareOnly = false,
-        Action? beforePublication = null, bool retrySourceChanges = false, bool objectsPrepared = false)
+        Action? beforePublication = null, bool retrySourceChanges = false, bool objectsPrepared = false,
+        BatchFile[]? scopedFiles = null)
     {
         retrySourceChanges |= beforePublication is not null;
         var inventory = sourceInventory ?? plan;
@@ -250,14 +251,14 @@ internal sealed partial class VersionStore
         try
         {
             if (!objectsPrepared) CopyObjects();
-            if (origin is not null && (!prepareOnly || retrySourceChanges))
+            if (origin is not null && scopedFiles is null && (!prepareOnly || retrySourceChanges))
                 FolderBatch.RequireSameInventory(inventory, retrySourceChanges);
             if (prepareOnly) return;
             beforePublication?.Invoke();
             observe?.Invoke(new(WorkPhase.Publishing, 0, 1));
             WithCatalogFiles(store, generation, files =>
             {
-                BatchCatalog.PublishLocked(plan, files, generation, () => VerifyObjects(store, plan.Files), checkpoint);
+                BatchCatalog.PublishLocked(plan, files, generation, () => VerifyObjects(store, scopedFiles ?? plan.Files), checkpoint);
                 return true;
             });
         }
@@ -267,7 +268,7 @@ internal sealed partial class VersionStore
         {
             using var objects = WindowsProbeNative.OpenPlainDirectory(store, ObjectDirectory);
             using var algorithm = WindowsProbeNative.OpenPlainDirectory(objects, Algorithm);
-            var unique = DistinctObjects(plan.Files).ToArray();
+            var unique = DistinctObjects(scopedFiles ?? plan.Files).ToArray();
             for (int index = 0; index < unique.Length; index++)
             {
                 var file = unique[index];
@@ -300,7 +301,7 @@ internal sealed partial class VersionStore
                             origin = new DirectoryFence(plan.Source);
                             if (!WindowsProbeNative.DirectoryIdentity(origin.Root).AsSpan().SequenceEqual(plan.SourceIdentity))
                                 throw new InvalidDataException("La carpeta de origen cambió desde el análisis.");
-                            if (!prepareOnly || retrySourceChanges) FolderBatch.RequireSameInventory(inventory, retrySourceChanges);
+                            if (scopedFiles is null && (!prepareOnly || retrySourceChanges)) FolderBatch.RequireSameInventory(inventory, retrySourceChanges);
                         }
                         string input = Path.Combine(plan.Source, file.RelativePath);
                         try

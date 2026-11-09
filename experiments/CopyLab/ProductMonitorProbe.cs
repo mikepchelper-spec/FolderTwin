@@ -248,6 +248,9 @@ internal static class ProductMonitorProbe
         string file = Path.Combine(source, "synthetic.txt");
         File.WriteAllText(file, "first");
         File.WriteAllText(Path.Combine(source, "retired.txt"), "keep this point recoverable");
+        if (mode != ProductBackupMode.Versions)
+            for (int index = 0; index < 10; index++)
+                File.WriteAllText(Path.Combine(source, $"baseline-{index:D2}.txt"), "stable synthetic baseline");
         using (var registry = new ProductJobRegistry(settings))
         {
             var job = registry.Create(new("Synthetic monitor", mode, null),
@@ -275,6 +278,8 @@ internal static class ProductMonitorProbe
                 var latency = Stopwatch.StartNew();
                 File.WriteAllText(file, "second");
                 var second = await WaitForRunAsync(first.Intent.Sequence, ProductRunState.Confirmed);
+                if (mode != ProductBackupMode.Versions && second.Result is not { Scoped: true })
+                    throw new InvalidOperationException("The native monitor did not forward the edit hint to the worker.");
                 Console.Error.WriteLine(FormattableString.Invariant(
                     $"{mode} edit: dispatch_seconds={(second.Intent.StartedUtc - changeAt).TotalSeconds:F3}; observed_confirmed_seconds={latency.Elapsed.TotalSeconds:F3}."));
                 byte[]? largeHash = null;

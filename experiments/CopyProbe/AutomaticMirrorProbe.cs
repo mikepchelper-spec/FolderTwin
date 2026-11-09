@@ -129,9 +129,78 @@ internal static class AutomaticMirrorProbe
                 lateStore.Restore(snapshot!, recovered);
                 Check(File.ReadAllText(Path.Combine(recovered, "edit.txt")) == "prepared snapshot",
                     "Archiving a superseded mirror operation lost its recoverable snapshot.");
+
+                string editing = Folder("scoped-source-" + mode);
+                for (int index = 0; index < 12; index++) File.WriteAllText(Path.Combine(editing, Name(index)), "before");
+                var scoped = registry.Create(new("Synthetic scoped " + mode, mode, null),
+                    LocalJobRoots.ReviewDedicatedDestination(editing, destinations));
+                registry.UpdateSettings(scoped.Id, scoped.Options.Name, null, true, false, ProductWatchMode.Watching,
+                    authorizeMirror: mode == ProductBackupMode.ProtectedMirror);
+                var initialScoped = ProductRunner.Run(registry, scoped.Id, automatic: true);
+                Check(initialScoped.State == ProductRunState.Confirmed && !initialScoped.Scoped, "The scoped fixture needs a complete baseline.");
+                string edited = Path.Combine(editing, Name(0));
+                var time = File.GetLastWriteTimeUtc(edited);
+                File.WriteAllText(edited, "edited");
+                File.SetLastWriteTimeUtc(edited, time);
+                var point = ProductRunner.Run(registry, scoped.Id, automatic: true, editHints: ["save.tmp", Name(0)]);
+                Check(point is { State: ProductRunState.Confirmed, Scoped: true }, point.Detail ?? "The hinted edit did not use the scoped path.");
+                var scopedStore = VersionStore.OpenProduct(scoped);
+                Check(File.ReadAllText(Path.Combine(scopedStore.MirrorCurrentPath, Name(0))) == "edited", "Scoped edit did not update the mirror.");
+                var comparison = ProductRunner.Run(registry, scoped.Id, automatic: true);
+                Check(comparison is { State: ProductRunState.Unchanged, Scoped: false }, "Reconciliation was not independent of the scoped path.");
+
+                File.WriteAllText(edited, "second");
+                string? interrupted = null;
+                try
+                {
+                    scopedStore.UpdateAutomaticMirror(scoped.Source.VolumePath, captureAffectedPaths: false, preview =>
+                    {
+                        Check(preview.Scoped, "The recovery fixture did not select a scoped journal.");
+                        interrupted = preview.Generation;
+                        return true;
+                    }, checkpoint: step =>
+                    {
+                        if (step == MirrorStep.Retired) throw new IOException("Synthetic interruption after retirement.");
+                    }, editHints: [Name(0)]);
+                    throw new InvalidOperationException("The scoped interruption was not reached.");
+                }
+                catch (IOException error) when (error.Message == "Synthetic interruption after retirement.") { }
+                string detachedEditing = Path.Combine(fixture.Root, "scoped-offline-" + mode);
+                Directory.Move(editing, detachedEditing);
+                var resumedScoped = ProductRunner.Run(registry, scoped.Id, automatic: true);
+                Check(resumedScoped is { State: ProductRunState.Confirmed, Scoped: true } && resumedScoped.Generation == interrupted,
+                    resumedScoped.Detail ?? "The scoped journal could not finish without the source.");
+                string scopedRestore = Folder("scoped-restore-" + mode);
+                scopedStore.Restore(resumedScoped.Generation!, scopedRestore, Name(0));
+                Check(File.ReadAllText(Path.Combine(scopedRestore, Name(0))) == "second", "The scoped journal did not restore the edited bytes.");
+                Directory.Move(detachedEditing, editing);
+
+                File.WriteAllText(Path.Combine(editing, "added.txt"), "new structural entry");
+                var added = ProductRunner.Run(registry, scoped.Id, automatic: true, editHints: [Name(0)]);
+                Check(added is { State: ProductRunState.Confirmed, Scoped: false } && File.Exists(Path.Combine(scopedStore.MirrorCurrentPath, "added.txt")),
+                    "A scoped hint bypassed an actual change in the tree layout.");
+
+                string unobserved = Path.Combine(scopedStore.MirrorCurrentPath, Name(1));
+                var previousWrite = File.GetLastWriteTimeUtc(unobserved);
+                File.WriteAllText(unobserved, "extern");
+                File.SetLastWriteTimeUtc(unobserved, previousWrite);
+                File.WriteAllText(edited, "nearby");
+                var nearby = ProductRunner.Run(registry, scoped.Id, automatic: true, editHints: [Name(0)]);
+                Check(nearby is { State: ProductRunState.Confirmed, Scoped: true } && File.ReadAllText(unobserved) == "extern",
+                    "A scoped replacement modified an unobserved path.");
+                Check(ProductRunner.Run(registry, scoped.Id, automatic: true).State == ProductRunState.Review,
+                    "Full reconciliation did not detect the unobserved destination conflict.");
+
+                string conflict = Path.Combine(scopedStore.MirrorCurrentPath, Name(0));
+                File.WriteAllText(conflict, "extern");
+                File.WriteAllText(edited, "source");
+                var denied = ProductRunner.Run(registry, scoped.Id, automatic: true, editHints: [Name(0)]);
+                Check(denied.State == ProductRunState.Review && File.ReadAllText(conflict) == "extern",
+                    "A scoped edit overwrote an independent destination edit.");
             }
             Console.WriteLine("PASS automatic mirror consent, recoverable retirement, small-folder edits, split mass changes, rollback of clock, empty source and external conflict.");
             Console.WriteLine("PASS late source drift preserves the prepared snapshot without mutating current, then converges in both mirror modes.");
+            Console.WriteLine("PASS scoped same-size same-time edits with a vanished temporary, interruption and offline restoration, full structural fallback and destination conflict in both mirror modes.");
             return 0;
 
             ProductRunResult RunAutomatic() => ProductRunner.Run(registry, job.Id, automatic: true);

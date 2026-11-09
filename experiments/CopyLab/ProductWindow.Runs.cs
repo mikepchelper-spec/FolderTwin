@@ -91,10 +91,14 @@ public partial class ProductWindow
         var history = job is not null && runSnapshots.TryGetValue(job.Id, out var saved) ? saved : new ProductRunHistory([], 0);
         var latest = history.Runs.FirstOrDefault();
         var active = history.Runs.FirstOrDefault(run => run.Running);
-        var correct = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Backup && run.Result?.State == ProductRunState.Confirmed);
+        var correct = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Backup &&
+            run.Result is { State: ProductRunState.Confirmed, Scoped: false });
+        var recoverable = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Backup &&
+            run.Result?.State == ProductRunState.Confirmed);
         var verified = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Verify &&
             run.Result?.State == ProductRunState.Confirmed && run.Generation is { } point && !VersionStore.IsPartialPoint(point));
-        var reconciled = history.Runs.FirstOrDefault(run => run.Intent.Automatic && run.Result?.State is ProductRunState.Confirmed or ProductRunState.Unchanged);
+        var reconciled = history.Runs.FirstOrDefault(run => run.Intent.Automatic &&
+            run.Result is { Scoped: false, State: ProductRunState.Confirmed or ProductRunState.Unchanged });
         LastReconciliationText.Text = job?.WatchMode == ProductWatchMode.Off || job is null ? "" :
             "Última comparación automática · " + RouteDate(reconciled?.Result?.FinishedUtc);
         var restored = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Restore &&
@@ -105,7 +109,11 @@ public partial class ProductWindow
             !job.Enabled || job.Retired ? "Trabajo deshabilitado. Puedes recuperar sus puntos y revisar la configuración para habilitar futuras copias." :
             correct is null ?
             (job.WatchMode == ProductWatchMode.Watching ? "Siguiente paso · Consulta el monitor mientras se prepara la primera copia." :
-                "Siguiente paso · Pulsa Respaldar ahora para crear la primera copia.") : verified is null || verified.Generation != correct.Generation ?
+                "Siguiente paso · Pulsa Respaldar ahora para crear la primera copia.") :
+            recoverable?.Result is { Scoped: true } && recoverable.Intent.Sequence > (reconciled?.Intent.Sequence ?? 0) &&
+                verified?.Generation != recoverable.Generation ?
+            "Se comprobaron las ediciones del último punto. El monitor hará una comparación completa periódica." :
+            verified is null || verified.Generation != recoverable?.Generation ?
             "Siguiente paso · Abre Recuperar archivos y verifica este respaldo. Después recupera una muestra en una carpeta nueva." :
             restored is null ? "Siguiente paso · Recupera una muestra en una carpeta nueva y abre los archivos para comprobarlos." :
             "Copia verificada. Puedes abrir la última carpeta recuperada de este trabajo.";
@@ -122,7 +130,7 @@ public partial class ProductWindow
         RouteVerifyDate.Text = RouteDate(verified?.Result?.FinishedUtc);
         RefreshRouteNextAttempt();
         RuntimeStatusText.Text = job is null ? "" : Brief(history) +
-            (correct?.Generation is { } generation ? $"\nPunto recuperable del {VersionStore.GenerationTime(generation).ToLocalTime():g}" : "") +
+            (recoverable?.Generation is { } generation ? $"\nPunto recuperable del {VersionStore.GenerationTime(generation).ToLocalTime():g}" : "") +
             (verified?.Generation is { } verifiedGeneration ? $"\nPunto verificado del {VersionStore.GenerationTime(verifiedGeneration).ToLocalTime():g}" : "") +
             (active?.Progress is { } progress ? $"\n{Phase(progress.Work.Phase)} · {progress.Work.Processed:N0}/{progress.Work.Total:N0}" +
                 (progress.Paused ? " · Pausado" : "") + (progress.Work.RelativePath is { } path ? "\n" + path : "") : "") +
@@ -179,6 +187,8 @@ public partial class ProductWindow
                 run.Intent.Operation == ProductRunOperation.Backup && run.Result?.State == ProductRunState.Confirmed)?.Generation
                 == history.Runs[0].Generation ? "✓ Verificado" : "✓ Punto verificado", ""),
             "Respaldo completo" => ("✓ Completo", ""),
+            "Ediciones comprobadas" => ("Ediciones comprobadas", ""),
+            "Archivos observados sin cambios" => ("Comparación acotada", ""),
             "Sin cambios desde el último punto" => ("Sin cambios", ""),
             "Recuperación completa" => ("✓ Recuperado", ""),
             "Esperando disco de destino" => ("Esperando disco", "Attention"),
@@ -205,6 +215,8 @@ public partial class ProductWindow
         last.Running ? last.Progress?.Paused == true ? "Pausado" : "En ejecución" :
         last.Result is { } result ? result.State switch
         {
+            ProductRunState.Confirmed when result.Scoped => "Ediciones comprobadas",
+            ProductRunState.Unchanged when result.Scoped => "Archivos observados sin cambios",
             ProductRunState.Confirmed => result.Degraded ? "Verificado; catálogo requiere atención" : last.Intent.Operation switch
             {
                 ProductRunOperation.ReviewMirror => last.Mirror?.ResumePending == true ? "Actualización pendiente de reanudar" : "Revisión del espejo lista",
@@ -231,6 +243,8 @@ public partial class ProductWindow
 
     private static string ResultText(ProductRunView run, ProductRunResult result) => (result.State switch
     {
+        ProductRunState.Confirmed when result.Scoped => "Se respaldaron y comprobaron los archivos observados. La comparación completa se registra por separado.",
+        ProductRunState.Unchanged when result.Scoped => "Los archivos observados coinciden con el punto anterior.",
         ProductRunState.Confirmed when run.Intent.Operation == ProductRunOperation.ReviewAbandon =>
             "Revisión terminada. Decide si conservar el plan incompleto y permitir uno nuevo; no se creó un respaldo.",
         ProductRunState.Confirmed when run.Intent.Operation == ProductRunOperation.AbandonVersion =>

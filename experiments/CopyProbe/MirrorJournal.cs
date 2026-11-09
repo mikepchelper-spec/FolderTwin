@@ -8,7 +8,8 @@ internal sealed record MirrorPlan(int Version, string Generation, byte[] Documen
     string Source, byte[] SourceIdentity, byte[] CurrentIdentity, Guid Marker, byte[] StoreIdentity,
     int MaximumChangePercent, bool EmptyReviewed, bool MassReviewed,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] byte[]? SourceHash = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] byte[]? BaselineHash = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] byte[]? BaselineHash = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Scoped = false);
 internal sealed record MirrorOperation(string Generation, string? Previous, bool Ready, bool Applied);
 
 internal static class MirrorJournal
@@ -99,6 +100,8 @@ internal static class MirrorJournal
         if (plan.Version == 3 ? plan.SourceHash is not { Length: 32 } || plan.BaselineHash is not { Length: 32 } :
             plan.SourceHash is not null || plan.BaselineHash is not null)
             throw new InvalidDataException("El plan no identifica correctamente su modo de publicación.");
+        if (plan.Scoped && (plan.Version < 2 || plan.Previous is null || plan.EmptyReviewed || plan.MassReviewed))
+            throw new InvalidDataException("El diario acotado no identifica un reemplazo ordinario.");
         DirectoryFence.CheckName(plan.Source);
         if (plan.Previous is { } previous)
             _ = VersionStore.GenerationTime(previous);

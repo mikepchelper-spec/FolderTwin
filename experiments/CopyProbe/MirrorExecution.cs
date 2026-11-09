@@ -32,7 +32,7 @@ internal sealed partial class VersionStore
     }
 
     internal bool UpdateAutomaticMirror(string source, bool captureAffectedPaths, Func<MirrorPreview, bool> authorize,
-        Action<MirrorStep>? checkpoint = null)
+        Action<MirrorStep>? checkpoint = null, string[]? editHints = null, Action? scopedComparison = null)
     {
         using var scope = workspace.OpenRegisteredRoot();
         workspace.CheckRoots(source, Destination);
@@ -40,8 +40,10 @@ internal sealed partial class VersionStore
         using var marker = binding.OpenVerifiedMarker(root.Root);
         using var operation = OpenLock(root.Root, FileAccess.ReadWrite);
         RequireNoAbandonInProgress(root.Root);
-        var fresh = BuildMirrorPreview(scope.Root, root.Root, source, maximumChangePercent: 25,
+        var fresh = (editHints is null ? null : TryPreviewScopedMirror(scope.Root, root.Root, source, editHints)) ??
+            BuildMirrorPreview(scope.Root, root.Root, source, maximumChangePercent: 25,
             captureAffectedPaths: captureAffectedPaths, automatic: true);
+        if (fresh.Scoped) scopedComparison?.Invoke();
         if (fresh.RequiresEmptyReview)
             throw new InvalidDataException("Revisa el origen vacío antes de actualizar el espejo.");
         if (fresh.Previous is not null && fresh is { Added: 0, Replaced: 0, Removed: 0, AddedDirectories: 0, RemovedDirectories: 0 } &&
@@ -52,8 +54,10 @@ internal sealed partial class VersionStore
         LabWorkspace.RequireSpace(fresh.EstimatedBytes, fresh.AvailableBytes);
         try
         {
+            var changed = fresh.Scoped ? fresh.AffectedPaths!.ToHashSet(StringComparer.Ordinal) : null;
             CopyAndConfirm(root.Root, fresh.SourcePlan, fresh.Generation, checkpoint: null, objectCheckpoint: null,
-                prepareOnly: true, retrySourceChanges: true);
+                prepareOnly: true, retrySourceChanges: true,
+                scopedFiles: changed is null ? null : fresh.SourcePlan.Files.Where(file => changed.Contains(file.RelativePath)).ToArray());
         }
         catch (SourceChangedDuringBackupException error)
         {
@@ -76,14 +80,17 @@ internal sealed partial class VersionStore
         var plan = new MirrorPlan(workspace.IsAccumulative ? 3 : 2, fresh.Generation, fresh.DocumentHash, fresh.Previous, fresh.PreviousHash,
             Path.GetFileName(fresh.SourcePlan.Source), fresh.SourcePlan.SourceIdentity, currentIdentity,
             binding.Marker, binding.Identity, fresh.MaximumChangePercent, emptyReviewed, massReviewed,
-            workspace.IsAccumulative ? BatchCatalog.WriteMetadata(Stream.Null, fresh.SourcePlan, fresh.Generation) : null,
-            workspace.IsAccumulative ? BatchCatalog.WriteMetadata(Stream.Null, fresh.Baseline!, fresh.Generation) : null);
+            workspace.IsAccumulative ? fresh.Scoped ? fresh.DocumentHash :
+                BatchCatalog.WriteMetadata(Stream.Null, fresh.SourcePlan, fresh.Generation) : null,
+            workspace.IsAccumulative ? fresh.Scoped ? fresh.PreviousHash :
+                BatchCatalog.WriteMetadata(Stream.Null, fresh.Baseline!, fresh.Generation) : null,
+            Scoped: fresh.Scoped);
         if (useFreshInventory)
         {
             using var preparations = WindowsProbeNative.OpenOrCreatePlainDirectory(mirror, "preparations");
             using (var draft = WindowsProbeNative.CreatePlainDirectory(preparations, plan.Generation))
             {
-                if (plan.Version == 3) _ = ReadAccumulativeContext(scope, root, draft, plan, fresh);
+                if (plan.Version == 3 && !plan.Scoped) _ = ReadAccumulativeContext(scope, root, draft, plan, fresh);
                 else workspace.SaveIntent(fresh.SourcePlan, scope, PreparedMirrorSource(draft, plan.Generation));
                 RetentionJournal.WriteFile(draft, "plan", MirrorJournal.Encode(plan));
                 MirrorJournal.SetState(draft, plan, "automatic");
@@ -103,7 +110,8 @@ internal sealed partial class VersionStore
         return plan.Generation;
     }
 
-    internal void ResumeMirror(string generation, Action<MirrorStep>? checkpoint = null, Action<RegistryStep>? registryCheckpoint = null)
+    internal void ResumeMirror(string generation, Action<MirrorStep>? checkpoint = null, Action<RegistryStep>? registryCheckpoint = null,
+        Action? scopedComparison = null)
     {
         _ = GenerationTime(generation);
         if (IsPartialPoint(generation)) throw new InvalidDataException("Un punto parcial no actualiza el espejo.");
@@ -117,6 +125,7 @@ internal sealed partial class VersionStore
         MirrorPlan plan;
         using (var directory = WindowsProbeNative.OpenPlainDirectory(operations, generation))
             plan = MirrorJournal.Read(directory, generation, binding, currentIdentity);
+        if (plan.Scoped) scopedComparison?.Invoke();
         if (ReadMirrorOperations(root.Root).Any(item => !item.Applied && item.Generation != generation))
             throw new InvalidDataException("Hay otra actualización de espejo pendiente.");
         ContinuePublishedMirror(scope.Root, root.Root, mirror, operations, plan, checkpoint, registryCheckpoint,
@@ -163,15 +172,17 @@ internal sealed partial class VersionStore
             throw new InvalidDataException("La raíz actual del espejo fue sustituida.");
         using var pending = WindowsProbeNative.OpenPlainDirectory(root, PendingDirectory);
         bool automatic = MirrorJournal.HasState(directory, plan, "automatic");
+        if (plan.Scoped && !automatic)
+            throw new InvalidDataException("Falta la autorización registrada para el reemplazo acotado.");
         BatchPlan? sourceInventory = null;
         CatalogSnapshot? baseline = null;
-        if (plan.Version == 3)
+        if (plan.Version == 3 && !plan.Scoped)
             (sourceInventory, baseline) = ReadAccumulativeContext(scope, root, directory, plan, freshPreview);
         BatchPlan intent;
         try { intent = ReadIntent(scope, root, pending, plan.Generation); }
         catch (FileNotFoundException)
         {
-            intent = plan.Version == 3 ? MergeAccumulative(sourceInventory!, new(workspace.Root, MirrorCurrentPath,
+            intent = plan.Version == 3 && !plan.Scoped ? MergeAccumulative(sourceInventory!, new(workspace.Root, MirrorCurrentPath,
                 Destination, plan.CurrentIdentity, binding, baseline!.Directories, baseline.Files)) :
                 freshPreview?.SourcePlan ?? (automatic
                     ? workspace.ReadIntent(scope, Destination, root, PreparedMirrorSource(directory, plan.Generation))
@@ -182,23 +193,33 @@ internal sealed partial class VersionStore
             !intent.Source.Equals(workspace.SourcePath(plan.Source), StringComparison.OrdinalIgnoreCase) ||
             !BatchCatalog.WriteMetadata(Stream.Null, intent, plan.Generation).AsSpan().SequenceEqual(plan.DocumentHash))
             throw new InvalidDataException("El plan de datos no corresponde a la actualización del espejo.");
+        var previous = MirrorPrevious(scope, root, plan.Previous, plan.SourceIdentity,
+            verifyObjects: freshPreview is null && !plan.Scoped);
+        if (!(previous?.DocumentHash ?? new byte[32]).AsSpan().SequenceEqual(plan.PreviousHash))
+            throw new InvalidDataException("El punto anterior del espejo no corresponde al diario.");
+        // For an exact-layout replacement, the new source is the desired point
+        // and the previous point is the baseline. Both are already authenticated.
+        if (plan.Scoped && plan.Version == 3 && (!plan.DocumentHash.AsSpan().SequenceEqual(plan.SourceHash) ||
+            !plan.PreviousHash.AsSpan().SequenceEqual(plan.BaselineHash)))
+            throw new InvalidDataException("El reemplazo acumulativo no coincide con los catálogos del diario.");
+        var before = baseline ?? previous;
+        var scoped = plan.Scoped ? ScopeMirror(previous, new(binding, intent.Directories, intent.Files, plan.DocumentHash)) : default;
+        if (plan.Scoped) VerifyObjects(root, scoped.Before.Files);
         bool publishedNow = !IsCommitted(root, plan.Generation);
         if (publishedNow)
         {
-            if (baseline is not null) ImportAccumulativeBaseline(root, plan, baseline);
+            if (baseline is not null && !plan.Scoped) ImportAccumulativeBaseline(root, plan, baseline);
             RecordExpected(root, intent, plan.Generation);
             CopyAndConfirm(root, intent, plan.Generation, checkpoint: null, objectCheckpoint: null, sourceInventory,
-                objectsPrepared: freshPreview is not null);
+                objectsPrepared: freshPreview is not null || plan.Scoped, scopedFiles: plan.Scoped ? scoped.After.Files : null);
         }
         var after = ReadPoint(root, plan.Generation);
         if (after.Degraded || !after.DocumentHash.AsSpan().SequenceEqual(plan.DocumentHash))
             throw new InvalidDataException("El nuevo punto del espejo no tiene ambos catálogos íntegros.");
-        if (freshPreview is null || !publishedNow) VerifyObjects(root, after.Files);
+        if (freshPreview is null || !publishedNow) VerifyObjects(root, plan.Scoped ? scoped.After.Files : after.Files);
         checkpoint?.Invoke(MirrorStep.PointConfirmed);
-        var previous = MirrorPrevious(scope, root, plan.Previous, plan.SourceIdentity, verifyObjects: freshPreview is null);
-        if (!(previous?.DocumentHash ?? new byte[32]).AsSpan().SequenceEqual(plan.PreviousHash))
-            throw new InvalidDataException("El punto anterior del espejo no corresponde al diario.");
-        var before = baseline ?? previous;
+        var beforeApply = plan.Scoped ? scoped.Before : before;
+        var afterApply = plan.Scoped ? scoped.After : after;
         bool checkedBefore = false;
         bool ready = MirrorJournal.HasState(directory, plan, "ready");
         if (!ready)
@@ -209,16 +230,17 @@ internal sealed partial class VersionStore
             // A new automatic run already compared both trees under this lock.
             // Staging touches only private storage; both trees are checked again
             // below before the first mutation of the current mirror.
-            if (freshPreview is null) RequireMirrorContents(before, plan.CurrentIdentity);
-            var preparing = freshPreview?.SourcePlan ?? ReadMirrorSource(plan, retrySourceChanges: automatic);
+            if (freshPreview is null) RequireCurrent(afterPublication: false);
+            var preparing = !plan.Scoped && freshPreview is null ? ReadMirrorSource(plan, retrySourceChanges: automatic) : intent;
             if (plan.Version != 3 && preparing.Files.Length == 0 && preparing.Directories.Length == 0 && !plan.EmptyReviewed)
                 throw new InvalidDataException("No se autorizó una actualización con origen vacío.");
-            StageMirrorObjects(root, directory, before, after, checkpoint);
-            _ = ReadMirrorSource(plan, retrySourceChanges: automatic);
-            RequireMirrorContents(before, plan.CurrentIdentity);
+            StageMirrorObjects(root, directory, beforeApply, afterApply, checkpoint);
+            if (plan.Scoped) RequireScopedContents(intent.Source, plan.SourceIdentity, after, afterApply, source: true);
+            else _ = ReadMirrorSource(plan, retrySourceChanges: automatic);
+            RequireCurrent(afterPublication: false);
             // Reuse this exact current-tree comparison only in the fresh run.
             // Resumption must inspect the mixed state again.
-            checkedBefore = freshPreview is not null;
+            checkedBefore = freshPreview is not null || plan.Scoped;
             MirrorJournal.SetState(directory, plan, "ready");
             checkpoint?.Invoke(MirrorStep.Ready);
         }
@@ -229,12 +251,12 @@ internal sealed partial class VersionStore
             var prefix = GenerationRegistry.ReadCommonPrefix(root, binding);
             if (prefix.PendingMirrorGeneration == plan.Generation || plan.Version == 1)
             {
-                RequireMirrorContents(after, plan.CurrentIdentity);
+                RequireCurrent(afterPublication: true);
                 GenerationRegistry.SetMirror(root, binding, plan.Generation, plan.DocumentHash, registryCheckpoint, legacy: plan.Version == 1);
             }
             else
             {
-                RequireMirrorContents(before, plan.CurrentIdentity);
+                RequireCurrent(afterPublication: false);
                 GenerationRegistry.SetMirrorPending(root, binding, plan.Generation, plan.DocumentHash, beginRegistryCheckpoint);
             }
             registry = GenerationRegistry.Read(root, binding);
@@ -243,22 +265,23 @@ internal sealed partial class VersionStore
             throw new InvalidDataException("Otra actualización cambió el punto actual del espejo.");
         if (registry.MirrorGeneration != plan.Generation)
         {
-            var presentDirectories = RequireRecoverableMirrorState(directory, plan, before, after, checkedBefore);
+            var presentDirectories = RequireRecoverableMirrorState(directory, plan, beforeApply, afterApply, checkedBefore,
+                plan.Scoped ? before : null);
             if (plan.Version >= 2)
                 GenerationRegistry.SetMirrorPending(root, binding, plan.Generation, plan.DocumentHash, beginRegistryCheckpoint);
-            ApplyMirrorFiles(directory, plan, before, after, presentDirectories, checkpoint);
-            RequireMirrorContents(after, plan.CurrentIdentity);
+            ApplyMirrorFiles(directory, plan, beforeApply, afterApply, presentDirectories, checkpoint);
+            RequireCurrent(afterPublication: true);
             checkpoint?.Invoke(MirrorStep.CurrentVerified);
             GenerationRegistry.SetMirror(root, binding, plan.Generation, plan.DocumentHash, registryCheckpoint, legacy: plan.Version == 1);
         }
-        RequireMirrorContents(after, plan.CurrentIdentity);
+        RequireCurrent(afterPublication: true);
         checkpoint?.Invoke(MirrorStep.Registered);
         // The previous verified catalog and CAS objects are the recovery area.
         // Release redundant retired files only once publication is durable.
         using (var objects = WindowsProbeNative.OpenPlainDirectory(root, ObjectDirectory))
         using (var algorithm = WindowsProbeNative.OpenPlainDirectory(objects, Algorithm))
         using (var retired = WindowsProbeNative.OpenPlainDirectory(directory, "retired"))
-            foreach (var file in RetiredMirrorFiles(before, after))
+            foreach (var file in RetiredMirrorFiles(beforeApply, afterApply))
             {
                 string token = MirrorToken(file.RelativePath);
                 if (!WindowsProbeNative.PlainFileExists(retired, token))
@@ -277,6 +300,14 @@ internal sealed partial class VersionStore
             }
         MirrorJournal.SetState(directory, plan, "applied");
         checkpoint?.Invoke(MirrorStep.Applied);
+
+        void RequireCurrent(bool afterPublication)
+        {
+            if (plan.Scoped)
+                RequireScopedContents(MirrorCurrentPath, plan.CurrentIdentity, afterPublication ? after : before!,
+                    afterPublication ? afterApply : beforeApply!);
+            else RequireMirrorContents(afterPublication ? after : before, plan.CurrentIdentity);
+        }
     }
 
     private BatchPlan ReadMirrorSource(MirrorPlan plan, bool retrySourceChanges = false)
@@ -316,10 +347,21 @@ internal sealed partial class VersionStore
     }
 
     private HashSet<string> RequireRecoverableMirrorState(SafeFileHandle directory, MirrorPlan plan, CatalogSnapshot? before,
-        CatalogSnapshot after, bool checkedBefore)
+        CatalogSnapshot after, bool checkedBefore, CatalogSnapshot? fullScopedBefore = null)
     {
-        var current = checkedBefore ? null : AnalyzeSource(MirrorCurrentPath, plan.CurrentIdentity, WorkPhase.Verifying);
+        var current = checkedBefore || plan.Scoped ? null : AnalyzeSource(MirrorCurrentPath, plan.CurrentIdentity, WorkPhase.Verifying);
         var currentFiles = current?.Files ?? before?.Files ?? [];
+        if (fullScopedBefore is not null && !checkedBefore)
+        {
+            var touched = before!.Files.Select(file => file.RelativePath).ToHashSet(StringComparer.Ordinal);
+            if (!SameScopedLayout(FolderInventory.Scan(MirrorCurrentPath, BatchCatalog.VersionMaximumEntries), fullScopedBefore, touched, touched))
+                throw new InvalidDataException("La estructura del espejo cambió durante la recuperación acotada.");
+            currentFiles = (before?.Files ?? []).Select(file =>
+            {
+                try { return ReadScopedFile(MirrorCurrentPath, file.RelativePath); }
+                catch (FileNotFoundException) { return null; }
+            }).OfType<BatchFile>().ToArray();
+        }
         var currentDirectories = current?.Directories ?? before?.Directories ?? [];
         var observed = currentFiles.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
         var previous = (before?.Files ?? []).ToDictionary(file => file.RelativePath, StringComparer.Ordinal);

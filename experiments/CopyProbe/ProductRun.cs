@@ -14,7 +14,8 @@ internal sealed record ProductRunIntent(int Version, Guid Job, Guid Id, long Seq
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Automatic = false);
 internal sealed record ProductRunResult(int Version, byte[] IntentHash, ProductRunState State, DateTimeOffset FinishedUtc,
     string? Generation, string? RelativePath, int? ErrorCode, string? Detail = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Degraded = false);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Degraded = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Scoped = false);
 internal sealed record ProductRunProgress(int Version, byte[] IntentHash, long Revision, WorkProgress Work, bool Paused);
 internal sealed record ProductRunCommand(int Version, byte[] IntentHash, long Number, ProductRunAction Action);
 internal sealed record ProductRunView(ProductRunIntent Intent, ProductRunResult? Result, string? Generation,
@@ -248,6 +249,7 @@ internal sealed partial class ProductJobRegistry
             !Enum.IsDefined(result.State) || result.Generation != generation || result.FinishedUtc.Offset != TimeSpan.Zero ||
             result.State == ProductRunState.Confirmed && generation is null ||
             result.State == ProductRunState.Unchanged && (generation is not null || intent.Operation != ProductRunOperation.Backup) ||
+            result.Scoped && (intent.Operation != ProductRunOperation.Backup || result.State is not (ProductRunState.Confirmed or ProductRunState.Unchanged)) ||
             !ValidRelative(result.RelativePath) || result.Detail?.Length > 2000)
             throw new InvalidDataException("El resultado no corresponde al intento.");
         return result;
@@ -361,13 +363,14 @@ internal sealed partial class ProductJobRegistry
             file.Flush();
         }
         internal ProductRunResult Finish(ProductRunState state, string? path = null, int? errorCode = null, Func<DateTimeOffset>? clock = null,
-            string? detail = null, bool degraded = false)
+            string? detail = null, bool degraded = false, bool scoped = false)
         {
             if (!ValidRelative(path) || !Enum.IsDefined(state) || state == ProductRunState.Confirmed && Generation is null ||
-                state == ProductRunState.Unchanged && (Generation is not null || Intent.Operation != ProductRunOperation.Backup))
+                state == ProductRunState.Unchanged && (Generation is not null || Intent.Operation != ProductRunOperation.Backup) ||
+                scoped && (Intent.Operation != ProductRunOperation.Backup || state is not (ProductRunState.Confirmed or ProductRunState.Unchanged)))
                 throw new InvalidDataException("El resultado necesita un estado, una generación y una ruta relativa válidos.");
             var result = new ProductRunResult(1, IntentHash(Intent), state, (clock?.Invoke() ?? DateTimeOffset.UtcNow).ToUniversalTime(),
-                Generation, path, errorCode, detail is { Length: > 2000 } ? detail[..2000] : detail, degraded);
+                Generation, path, errorCode, detail is { Length: > 2000 } ? detail[..2000] : detail, degraded, scoped);
             RetentionJournal.WriteFile(run, "result", Encode(result));
             return result;
         }
