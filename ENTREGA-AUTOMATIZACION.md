@@ -11,7 +11,7 @@ El código `3cb9c6a22146c8928f2ac1ed9449090e9a366e80` conserva el reemplazo acot
 
 Para repetir el ZIP, usa los archivos de la compilación portable en orden ordinal por ruta relativa con `/`, compresión `Optimal` y fecha fija de entrada `2000-01-01 00:00:00` con desplazamiento cero. El informe se conserva fuera del ZIP que describe. La extracción anterior `9fa0c63` aprobó el asistente, C: → D: y reconciliación. Su ensayo nativo agotó la espera desde la sesión de herramientas. Las pruebas nativas de `3cb9c6a` se ejecutaron mediante una tarea temporal en la sesión interactiva. El ensayo de arranque sin argumentos en un perfil vacío sigue reservado para un runner desechable.
 
-La copia local está en `C:\FolderTwin-Distribucion\FolderTwin-3cb9c6a`. El ZIP junto a esa carpeta mantiene el SHA-256 indicado y la extracción local volvió a pasar `Test-Portable.ps1`. El acceso de Escritorio **FolderTwin candidata** apunta a su `FolderTwin.exe` sin argumentos. **FolderTwin RC2** conserva su destino propio.
+La copia local está en `C:\FolderTwin-Distribucion\FolderTwin-3cb9c6a`. El ZIP junto a esa carpeta mantiene el SHA-256 indicado y la extracción local volvió a pasar `Test-Portable.ps1`. Esta revisión fue el destino del acceso **FolderTwin candidata** hasta verificar el traspaso a `598fbc7`.
 
 | Verificación de `3cb9c6a` | Resultado observado |
 |---|---|
@@ -44,18 +44,22 @@ La rama local conserva la candidata sin subir a GitHub. La validación pública 
 
 La auditoría XML `--schedule-policy-audit` incluida en `3cb9c6a` falla al construir su fixture sintético porque usaba la firma anterior de un constructor privado. La revisión `598fbc7` corrige esa llamada en el código de pruebas. Dos compilaciones independientes produjeron ZIP idénticos. La extracción aprobó los 500 hashes, la auditoría XML de siete alteraciones y el recorrido automático de Ruta en los tres modos. `CopyProbe.dll` conserva exactamente el hash de `3cb9c6a`. Los cambios de manifiesto se limitan a `CopyLab.dll`, la identidad del paquete, las fuentes archivadas y cinco guías cuyos enlaces llevan la revisión de origen. Las pruebas nativas de la tabla anterior corresponden a `3cb9c6a`.
 
-El ZIP de `598fbc7` se conserva en `C:\FolderTwin-Distribucion` con su manifiesto aparte. El acceso del Escritorio sigue en la candidata `3cb9c6a`, cuyo paquete completó los ensayos nativos locales.
+El ZIP de `598fbc7` se conserva en `C:\FolderTwin-Distribucion` con su manifiesto aparte. El acceso **FolderTwin candidata** apunta a `C:\FolderTwin-Distribucion\FolderTwin-598fbc7\FolderTwin.exe` sin argumentos. **FolderTwin RC2** conserva su destino propio.
 
 | Archivo | SHA-256 |
 |---|---|
 | `FolderTwin-win-x64-598fbc7.zip` | `05c58508b888f05b041875614821f42c68de0c5a0f967ab0d00b145fd696a084` |
 | `SHA256SUMS.txt` | `700bfb6c647d621849963f35534e8eb5abb6d339e0e9554cf842f981f2eefe6e` |
 
+`598fbc7` aprobó `--product-monitor-update-smoke` con código 0 desde una tarea temporal nativa, usando `3cb9c6a` como paquete anterior. El Programador sustituyó al monitor terminado, el respaldo recuperó la edición hecha durante la caída, el traspaso preservó el inicio con Windows y la retirada conservó la restauración con el origen apartado.
+
+El ejecutable público de `598fbc7` abrió Ruta sin argumentos y cerró con código 0. El ensayo comprobó antes que `LocalAppData` resolvía a una carpeta desechable al lanzar procesos con un entorno aislado. El registro de FolderTwin se creó allí y quedó vacío al cerrar. El arnés usa la cuenta interactiva actual y permite repetir la prueba sin tocar el registro habitual. [Arnés complementario](experiments/AutomationAcceptance/README.md).
+
 Los ensayos de alias y controles durante la espera se pueden repetir contra el mismo motor y ejecutable empaquetados. [Arneses complementarios](experiments/AutomationAcceptance/README.md).
 
 ### Alcance del cierre
 
-La aceptación local de `3cb9c6a` cubre creación desde Ruta, inicio automático al guardar, ventana cerrada, edición, retorno del destino, pérdida de avisos, caídas del monitor y de trabajadores, recuperación, retirada y reproducción del ZIP. Las pruebas WPF y las tareas del Programador tienen perfiles desechables separados. El arranque por el acceso directo está configurado y verificado por ruta y hash. Para comprobar el arranque sin argumentos con perfil vacío, el arnés `FolderTwin.exe --product-startup-smoke` requiere el runner hospedado desechable y verifica que se abre Ruta y que el cierre conserva el perfil vacío.
+La aceptación local de `3cb9c6a` cubre creación desde Ruta, inicio automático al guardar, ventana cerrada, edición, retorno del destino, pérdida de avisos, caídas del monitor y de trabajadores, recuperación, retirada y reproducción del ZIP. `598fbc7` conserva el motor, incorpora la corrección del arnés XML y aprobó Ruta, arranque sin argumentos en un perfil aislado y traspaso nativo. El arnés `FolderTwin.exe --product-startup-smoke` sigue reservado para un runner hospedado con una cuenta Windows desechable completa.
 
 Siguen pendientes las validaciones externas del piloto de 7–14 días, USB NTFS físico, bloqueo y ciclos reales de sesión, reinicio y suspensión, otra cuenta o equipo, nube real, lector de pantalla y DPI real. La observación automatizada de 278,52 s es evidencia sintética. [Validaciones externas](V1.md#validaciones-externas) · [Procedimiento de piloto](PILOTO.md).
 
@@ -63,7 +67,7 @@ Siguen pendientes las validaciones externas del piloto de 7–14 días, USB NTFS
 
 El fallo inyectado y los alias de sesión pasaron desde `3cb9c6a`. El ensayo con un volumen NTFS realmente lleno, cambio de letra de la partición y remontaje sigue pendiente para este paquete. La sesión local carece de `SeManageVolumePrivilege`, que Windows requiere para montar el VHDX. La revisión automática bloqueó la descarga conjunta del emulador y de una imagen invitada de evaluación. [Requisito de Windows para montar discos virtuales](https://learn.microsoft.com/en-us/windows/win32/api/virtdisk/nf-virtdisk-attachvirtualdisk).
 
-Punto de reanudación en un runner Windows hospedado y desechable. Verifica que `Test-Portable.ps1` aprueba la extracción de `3cb9c6a`, con el manifiesto de esta tabla, bajo `%RUNNER_TEMP%\FolderTwin-volume-package`. Ejecuta `experiments/CopyProbe/Run-VolumeLab.ps1` desde las fuentes de esa revisión. Conserva el código nativo de disco lleno, la confirmación o conservación de cada punto, el resultado tras reutilizar la letra y los hashes de restauración de los tres modos. La prueba crea un disco virtual propio de 128 MiB y comprueba su identidad antes de operar. [Definición del laboratorio](.github/workflows/volume-lab.yml).
+Punto de reanudación en un runner Windows hospedado y desechable. Verifica que `Test-Portable.ps1` aprueba la extracción de `598fbc7`, con el manifiesto de esa revisión, bajo `%RUNNER_TEMP%\FolderTwin-volume-package`. Ejecuta `experiments/CopyProbe/Run-VolumeLab.ps1` desde las fuentes de esa revisión. Conserva el código nativo de disco lleno, la confirmación o conservación de cada punto, el resultado tras reutilizar la letra y los hashes de restauración de los tres modos. La prueba crea un disco virtual propio de 128 MiB y comprueba su identidad antes de operar. [Definición del laboratorio](.github/workflows/volume-lab.yml).
 
 ## Paquete anterior `c8a413a`
 
