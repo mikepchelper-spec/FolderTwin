@@ -2,7 +2,7 @@
 
 ## Candidata `3cb9c6a` en aceptación
 
-El código `3cb9c6a22146c8928f2ac1ed9449090e9a366e80` conserva el reemplazo acotado acumulativo cuando quedan archivos exclusivos del destino. Dos compilaciones independientes, a partir de árboles extraídos del mismo archivo de fuentes, produjeron los mismos 500 hashes y ZIP idénticos. La extracción pasó `Test-Portable.ps1`. Sigue en curso la medición adicional de espejo a 329.000 archivos desde el mismo paquete.
+El código `3cb9c6a22146c8928f2ac1ed9449090e9a366e80` conserva el reemplazo acotado acumulativo cuando quedan archivos exclusivos del destino. Dos compilaciones independientes, a partir de árboles extraídos del mismo archivo de fuentes, produjeron los mismos 500 hashes y ZIP idénticos. La extracción pasó `Test-Portable.ps1` y los tres modos cumplieron el presupuesto de edición a 329.000 archivos.
 
 | Archivo | SHA-256 |
 |---|---|
@@ -25,6 +25,7 @@ La copia local está en `C:\FolderTwin-Distribucion\FolderTwin-3cb9c6a`. El ZIP 
 | Letras temporales en dos volúmenes NTFS | Se registraron los tres modos desde un alias de la carpeta desechable de D:. Se trasladó el alias legítimo a otra letra y se reutilizó la primera para un sustituto en C: con un marcador copiado. El motor del paquete informó la ausencia del destino registrado mientras su carpeta estaba apartada, dejó intacto el sustituto y restauró el cambio al volver el destino legítimo. Los alias se retiraron. El ensayo usa alias de sesión y deja pendiente la reasignación de una partición y el remontaje VHDX. |
 | Escala acumulativa desde el ZIP extraído | Confirmó en 20,076 s una edición de igual tamaño y fecha entre 329.000 archivos con un exclusivo en el destino. Restauró ambos archivos con el origen apartado. La comparación sin cambios mantuvo el catálogo anterior y la edición añadió una sola generación. [Contadores y escala](AUTOMATIZACION.md#medición-del-reemplazo-acotado). |
 | Escala de versionado desde el ZIP extraído | Confirmó la edición de igual tamaño y fecha en 0,871 s a 4.096 archivos y en 31,246 s a 329.000 archivos. Restauró los bytes correctos con el origen apartado. La comparación sin cambios mantuvo una generación y la edición añadió exactamente una. [Contadores y escala](AUTOMATIZACION.md#presupuesto-de-rendimiento). |
+| Escala de espejo desde el ZIP extraído | Confirmó la edición de igual tamaño y fecha de 329.000 archivos en 24,816 s y restauró los bytes correctos en 2,800 s con el origen apartado. La comparación sin cambios conservó una generación y la edición añadió exactamente una. [Contadores y escala](AUTOMATIZACION.md#medición-del-reemplazo-acotado). |
 | Actualización desde `c8a413a` | Una tarea temporal de la sesión interactiva ejecutó `--product-monitor-update-smoke` con código 0. El Programador inició el monitor, lo sustituyó tras una terminación real y procesó el cambio ocurrido durante la caída. La actualización traspasó el monitor al ejecutor nuevo, conservó el inicio al entrar en Windows y verificó la retirada y restauración sin origen. |
 | Reposo y recuperación nativa | `--product-monitor-schedule-soak` completó con código 0. En 120,01 s midió 0,25 % de un núcleo, 74.248.192 bytes residentes, 6.267 bytes leídos y 696 escritos. El monitor no despachó durante el reposo. El arnés lo terminó, observó otro proceso, recuperó la edición hecha durante la caída y retiró la tarea. |
 | Observación prolongada del paquete | `--product-monitor-soak` terminó en 278,52 s. Cada modo procesó 64 guardados por reemplazo con temporal y recuperó el contenido exacto del último. El primer despacho de cada ráfaga tomó entre 20,720 y 20,880 s. Los tres modos restauraron por SHA-256 un archivo de 32 MiB con el origen apartado. El ensayo también verificó reposo, reconexión, pausa, un segundo trabajo y el rechazo del destino sustituido. |
@@ -32,6 +33,12 @@ La copia local está en `C:\FolderTwin-Distribucion\FolderTwin-3cb9c6a`. El ZIP 
 La rama local conserva la candidata sin subir a GitHub. La validación pública de Windows `42212336681` terminó correctamente para RC2 (`d902f4c`). La evidencia de `3cb9c6a` procede de este paquete local. [Validación pública de RC2](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42212336681).
 
 Los ensayos de alias y controles durante la espera se pueden repetir contra el mismo motor y ejecutable empaquetados. [Arneses complementarios](experiments/AutomationAcceptance/README.md).
+
+### Alcance del cierre
+
+La aceptación local de `3cb9c6a` cubre creación desde Ruta, inicio automático al guardar, ventana cerrada, edición, retorno del destino, pérdida de avisos, caídas del monitor y de trabajadores, recuperación, retirada y reproducción del ZIP. Las pruebas WPF y las tareas del Programador tienen perfiles desechables separados. El arranque por el acceso directo está configurado y verificado por ruta y hash. Para comprobar el arranque sin argumentos con perfil vacío, el arnés `FolderTwin.exe --product-startup-smoke` requiere el runner hospedado desechable y verifica que se abre Ruta y que el cierre conserva el perfil vacío.
+
+Siguen pendientes las validaciones externas del piloto de 7–14 días, USB NTFS físico, bloqueo y ciclos reales de sesión, reinicio y suspensión, otra cuenta o equipo, nube real, lector de pantalla y DPI real. La observación automatizada de 278,52 s es evidencia sintética. [Validaciones externas](V1.md#validaciones-externas) · [Procedimiento de piloto](PILOTO.md).
 
 ### Comprobación de capacidad y letra pendiente en VHDX
 
