@@ -147,7 +147,7 @@ internal static class DailyPerformanceProbe
 
             async Task WaitForWatching()
             {
-                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                using var timeout = new CancellationTokenSource(files == 4096 ? TimeSpan.FromSeconds(30) : TimeSpan.FromMinutes(5));
                 while (true)
                 {
                     if (monitor.HasExited) throw new InvalidOperationException("The monitor exited before returning to idle.");

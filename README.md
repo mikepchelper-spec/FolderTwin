@@ -14,6 +14,8 @@ La revisión local **Ruta** muestra las carpetas del trabajo como un trayecto de
 
 La candidata local incorpora la vigilancia continua. El código admite altas, ediciones, renombrados y bajas acotados en acumulativo y espejo y conserva la comparación completa periódica. En la campaña anterior, `3cb9c6a` confirmó una edición de 329.000 archivos en 20,1 s en acumulativo con un exclusivo del destino, 31,2 s en versionado y 24,8 s en espejo. `598fbc7` pasó el traspaso y la recuperación nativos del monitor y tiene pendiente la prueba con un VHDX lleno. [Matriz de automatización](AUTOMATIZACION.md) · [Evidencia de paquetes locales](ENTREGA-AUTOMATIZACION.md) · [Rendimiento cotidiano](RENDIMIENTO.md).
 
+El paquete local reproducible `335a98a` validó cambios y recuperación entre la SSD C: y el HDD D: con 4.096 archivos en los tres modos y con 329.000 en espejo. La simulación de tres trabajos con 3.024 intentos cada uno comprobó Ruta, bandeja y reserva de nuevas ejecuciones. [Mediciones y pruebas desde la extracción](RENDIMIENTO.md).
+
 Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 
 Esta entrega es **experimental y solo para datos sintéticos y carpetas desechables**. Para participar: [soporte](SUPPORT.md), [contribuciones](CONTRIBUTING.md), [reporte privado de vulnerabilidades](SECURITY.md) y [mantenimiento y futuras entregas](MANTENIMIENTO.md). No adjuntes respaldos, credenciales, configuraciones, logs completos ni rutas personales a las incidencias.

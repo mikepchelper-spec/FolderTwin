@@ -71,6 +71,20 @@ Se repitió `598fbc7` en espejo con la atribución actualizada y sin el primer l
 
 El tamaño de muestra y la variación del HDD impiden atribuir toda diferencia al código. La evidencia directa del cambio es que la confirmación ordinaria de esas altas y renombrados usó el recorrido acotado. Los catálogos duplicados se siguen publicando completos y se conserva su coste de lectura y escritura.
 
+### Espejo protegido con 329.000 archivos entre C: y D:
+
+El volumen de archivos justificó un ensayo de escala con `335a98a`. Crear el origen tomó 212,614 s. Preparar y verificar el árbol del HDD tomó 482,294 s. La reconciliación inicial sin cambios tomó 43,516 s. Tras el alta, el arnés agotó su espera de 30 s antes de que terminara otra comparación. La reanudación usó las mismas carpetas y los tres puntos ya confirmados. La comparación de arranque al reanudar tomó 157,320 s. El arnés ahora espera hasta cinco minutos a que el monitor vuelva a vigilar en este tamaño.
+
+| Cambio | Pendiente | Despacho | Ejecutor | Confirmación | Recuperar |
+|---|---:|---:|---:|---:|---:|
+| Edición de igual tamaño y fecha | 0,115 s | 2,462 s | 43,691 s | 46,153 s | 3,316 s |
+| Guardado por temporal | 0,010 s | 2,441 s | 24,174 s | 26,614 s | 2,761 s |
+| Alta | 0,001 s | 2,451 s | 28,203 s | 30,654 s | 2,703 s |
+| Renombrado | 0,111 s | 2,430 s | 32,879 s | 35,310 s | 2,680 s |
+| Baja | 0,126 s | 2,413 s | 21,218 s | 23,631 s | 2,505 s |
+
+Los cinco cambios usaron el recorrido acotado. La restauración con el origen apartado comprobó los bytes de cada caso y recuperó el nombre anterior al renombrado en 2,631 s. La comparación entre paquetes se hizo a 4.096 archivos. La prueba de 329.000 cubrió espejo protegido. Los datos son pequeños y repetidos. La velocidad de confirmación en una carpeta real depende también de los bytes seleccionados y del estado del disco.
+
 ## Historial de varios trabajos
 
 | Intentos por trabajo | Actualizar Ruta | Consultar bandeja | Reservar intento |
