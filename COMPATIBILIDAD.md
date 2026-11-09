@@ -25,6 +25,8 @@ Los respaldos de producto `FTVERS03` se abren mediante su trabajo o una configur
 
 El registro de generaciones incorpora un evento nuevo al conservar un plan incompleto. Los lectores antiguos lo rechazan y no deben volver a escribir en ese almacén. Actualizar la aplicación no convierte ni reescribe los puntos confirmados. [Planes pendientes](experiments/CopyProbe/PENDIENTES.md).
 
+La actualización que incorpora la vigilancia continua lee los historiales anteriores. Los diarios y resultados de reemplazos acotados añaden un marcador de alcance. Conserva la compilación actual para reanudar o consultar esos registros. Los catálogos de los puntos confirmados conservan su formato y pueden recuperarse con la versión que creó el respaldo aunque el origen ya no esté disponible.
+
 ## Evidencia y límites
 
 `--smoke` prueba la reapertura WPF de `FTVERS01` y `FTVERS02`, verificación y restauración con el origen ausente y sin índice previo. También recupera una demostración inicial, cierra la ventana y comprueba que los archivos nuevos permanecen. Mantiene el recorrido de lotes iniciales, reintentos, catálogos dañados y restauración sin origen del espacio configurable. `--product-smoke` comprueba que el panel puede abrir la ventana de compatibilidad y mantiene importación y recuperación de producto.

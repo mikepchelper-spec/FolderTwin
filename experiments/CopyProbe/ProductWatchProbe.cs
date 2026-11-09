@@ -24,8 +24,12 @@ internal static class ProductWatchProbe
         clock.Tick = 14;
         Check(signal.TakeDue(quiet, maximum, out var hints) && hints is ["folder\\file.txt"],
             "Duplicate changes did not produce a bounded edit hint.");
-        for (int item = 0; item <= ProductWatchSignal.MaximumEditHints; item++) signal.Changed($"file-{item}.txt");
+        for (int item = 0; item < ProductWatchSignal.MaximumEditHints; item++) signal.Changed($"file-{item}.txt");
         clock.Tick = 16;
+        Check(signal.TakeDue(quiet, maximum, out hints) && hints?.Length == ProductWatchSignal.MaximumEditHints,
+            "A batch at the limit did not preserve all its distinct edit hints.");
+        for (int item = 0; item <= ProductWatchSignal.MaximumEditHints; item++) signal.Changed($"file-{item}.txt");
+        clock.Tick = 18;
         Check(signal.TakeDue(quiet, maximum, out hints) && hints is null,
             "A batch exceeding the hint limit did not request a complete comparison.");
 

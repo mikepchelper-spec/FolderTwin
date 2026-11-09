@@ -48,13 +48,19 @@ internal static class AutomaticScaleProbe
             ProductRunResult? latest = null;
             if (prepared) Measure("verified_baseline_fixture", () => PrepareCurrentTree(job, source));
             else Attempt("initial", ProductRunState.Confirmed);
+            var baseline = MeasureFootprint("baseline");
             string relative = Path.GetRelativePath(source, last);
             string[]? hints = scoped ? [relative] : null;
             Attempt(scoped ? "unchanged_scoped" : "unchanged", ProductRunState.Unchanged, hints);
+            var unchanged = MeasureFootprint("after_no_change");
+            if (unchanged.Generations != baseline.Generations || unchanged.CatalogBytes != baseline.CatalogBytes)
+                throw new InvalidOperationException("An unchanged comparison added a catalog or generation.");
             DateTime previousTime = File.GetLastWriteTimeUtc(last);
             File.WriteAllText(last, "synthetic XX");
             File.SetLastWriteTimeUtc(last, previousTime);
             Attempt(scoped ? "single_edit_scoped" : "single_edit", ProductRunState.Confirmed, hints);
+            if (MeasureFootprint("after_edit").Generations != baseline.Generations + 1)
+                throw new InvalidOperationException("The edit did not add exactly one recoverable generation.");
             Directory.Move(source, Path.Combine(workspace.Root, "source-detached"));
             string restored = Folder("restore");
             Measure("restore_one", () => VersionStore.OpenProduct(job).Restore(latest!.Generation!, restored, relative));
@@ -71,6 +77,20 @@ internal static class AutomaticScaleProbe
                 if (latest.Scoped != (editHints is not null))
                     throw new InvalidOperationException($"{phase}: unexpected comparison scope.");
             });
+
+            (int Generations, long CatalogBytes) MeasureFootprint(string phase)
+            {
+                var destination = job.Destination.LastVolumePath;
+                var primary = new DirectoryInfo(Path.Combine(destination, "manifests")).GetFiles("*.jsonl");
+                var replicas = new DirectoryInfo(Path.Combine(destination, "manifests_backup")).GetFiles("*.jsonl");
+                if (primary.Length != replicas.Length) throw new InvalidOperationException("The catalog count differs between replicas.");
+                long catalogBytes = primary.Sum(file => file.Length) + replicas.Sum(file => file.Length);
+                string runs = Path.Combine(settings, job.Id.ToString("N"), "runs");
+                long historyBytes = Directory.Exists(runs) ? new DirectoryInfo(runs).EnumerateFiles("*", SearchOption.AllDirectories)
+                    .Sum(file => file.Length) : 0;
+                Console.WriteLine($"{phase}: generations={primary.Length}, replicated_catalog_bytes={catalogBytes}, history_bytes={historyBytes}.");
+                return (primary.Length, catalogBytes);
+            }
         }
         finally
         {
