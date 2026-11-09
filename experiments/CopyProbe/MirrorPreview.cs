@@ -47,17 +47,31 @@ internal sealed partial class VersionStore
         using var origin = new DirectoryFence(source);
         workspace.RequireSourceIdentity(source, origin.Root);
         byte[] sourceIdentity = WindowsProbeNative.DirectoryIdentity(origin.Root);
-        var sourcePlan = AnalyzeSource(source, sourceIdentity, retrySourceChanges: automatic);
-        workspace.ValidatePlan(sourcePlan);
-        FolderBatch.RequireSameInventory(sourcePlan, retrySourceChanges: automatic);
         generation ??= NewGenerationId();
         var before = MirrorPrevious(scope, root, registry.MirrorGeneration, sourceIdentity);
         if (before is not null && !before.DocumentHash.AsSpan().SequenceEqual(registry.Generations[registry.MirrorGeneration!]))
             throw new InvalidDataException("El catálogo actual del espejo no coincide con su registro.");
-        var observed = AnalyzeSource(MirrorCurrentPath, currentIdentity, WorkPhase.Verifying);
+        // On distinct volumes, overlap the first content reads for large jobs.
+        // Both trees are still checked again in order immediately before apply.
+        Task<BatchPlan>? readingCurrent = automatic && before is { Files.Length: >= 8192 } &&
+            !string.Equals(Path.GetPathRoot(source), Path.GetPathRoot(MirrorCurrentPath), StringComparison.OrdinalIgnoreCase)
+            ? Task.Run(() => AnalyzeSource(MirrorCurrentPath, currentIdentity, WorkPhase.Verifying, reportProgress: false))
+            : null;
+        BatchPlan sourcePlan;
+        BatchPlan? observed = null;
+        try
+        {
+            sourcePlan = AnalyzeSource(source, sourceIdentity, retrySourceChanges: automatic);
+            workspace.ValidatePlan(sourcePlan);
+            FolderBatch.RequireSameInventory(sourcePlan, retrySourceChanges: automatic);
+        }
+        finally
+        {
+            if (readingCurrent is not null) observed = readingCurrent.GetAwaiter().GetResult();
+        }
+        observed ??= AnalyzeSource(MirrorCurrentPath, currentIdentity, WorkPhase.Verifying);
         string[] conflicts = workspace.IsAccumulative ? AccumulativeConflicts(sourcePlan, before, observed) : MirrorConflicts(before, observed);
         var desiredPlan = workspace.IsAccumulative ? MergeAccumulative(sourcePlan, observed) : sourcePlan;
-        byte[] hash = BatchCatalog.WriteMetadata(Stream.Null, desiredPlan, generation, out int catalogBytes);
         var desired = desiredPlan.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
         var baselineFiles = workspace.IsAccumulative ? observed.Files : before?.Files ?? [];
         var baselineDirectories = workspace.IsAccumulative ? observed.Directories : before?.Directories ?? [];
@@ -67,6 +81,10 @@ internal sealed partial class VersionStore
         int removed = previous.Keys.Count(path => !desired.ContainsKey(path));
         int addedDirectories = desiredPlan.Directories.Except(baselineDirectories, StringComparer.Ordinal).Count();
         int removedDirectories = baselineDirectories.Except(desiredPlan.Directories, StringComparer.Ordinal).Count();
+        int catalogBytes = 0;
+        byte[] hash = automatic && before is not null && conflicts.Length == 0 &&
+            added + replaced + removed + addedDirectories + removedDirectories == 0
+            ? before.DocumentHash : BatchCatalog.WriteMetadata(Stream.Null, desiredPlan, generation, out catalogBytes);
         long stageBytes = desired.Values.Where(file => !previous.TryGetValue(file.RelativePath, out var old) || !SameMirrorFile(old, file)).Sum(file => file.Length);
         long previousEntries = previous.Count + baselineDirectories.Length;
         bool mass = !workspace.IsAccumulative && previousEntries > 0 &&
@@ -84,7 +102,8 @@ internal sealed partial class VersionStore
             workspace.IsAccumulative ? observed : null, checked((int)previousEntries), affected);
     }
 
-    private CatalogSnapshot? MirrorPrevious(SafeFileHandle scope, SafeFileHandle root, string? generation, byte[]? sourceIdentity = null)
+    private CatalogSnapshot? MirrorPrevious(SafeFileHandle scope, SafeFileHandle root, string? generation, byte[]? sourceIdentity = null,
+        bool verifyObjects = true)
     {
         if (generation is null)
             return null;
@@ -92,10 +111,10 @@ internal sealed partial class VersionStore
         if (catalog.Degraded)
             throw new InvalidDataException("El punto anterior del espejo requiere sus dos catálogos íntegros.");
         using var pending = WindowsProbeNative.OpenPlainDirectory(root, PendingDirectory);
-        var intent = ReadIntent(scope, root, pending, generation);
-        if (sourceIdentity is not null && !intent.SourceIdentity.AsSpan().SequenceEqual(sourceIdentity))
+        var (_, registeredSource) = workspace.ReadRegisteredSource(Destination, scope, IntentFiles(pending, generation), catalog.DocumentHash);
+        if (sourceIdentity is not null && !registeredSource.AsSpan().SequenceEqual(sourceIdentity))
             throw new InvalidDataException("El espejo pertenece a otra identidad de origen.");
-        VerifyObjects(root, catalog.Files);
+        if (verifyObjects) VerifyObjects(root, catalog.Files);
         return catalog;
     }
 

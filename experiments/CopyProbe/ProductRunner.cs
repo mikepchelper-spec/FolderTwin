@@ -140,9 +140,6 @@ internal static partial class ProductRunner
                             rejected = fresh;
                             return false;
                         }
-                        if (fresh.Previous is not null && fresh is
-                            { Added: 0, Replaced: 0, Removed: 0, AddedDirectories: 0, RemovedDirectories: 0 })
-                            return false;
                         if (consent) run.AuthorizeAutomaticMirror(fresh);
                         else run.SetGeneration(fresh.Generation);
                         return true;

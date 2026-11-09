@@ -44,6 +44,8 @@ internal sealed partial class VersionStore
             captureAffectedPaths: captureAffectedPaths, automatic: true);
         if (fresh.RequiresEmptyReview)
             throw new InvalidDataException("Revisa el origen vacío antes de actualizar el espejo.");
+        if (fresh.Previous is not null && fresh is { Added: 0, Replaced: 0, Removed: 0, AddedDirectories: 0, RemovedDirectories: 0 } &&
+            fresh.Conflicts.Length == 0) return false;
         // Both admission and publication use this exact inventory under the same
         // store lock. ContinueMirror rechecks both trees before mutating current.
         if (!authorize(fresh)) return false;
@@ -180,18 +182,20 @@ internal sealed partial class VersionStore
             !intent.Source.Equals(workspace.SourcePath(plan.Source), StringComparison.OrdinalIgnoreCase) ||
             !BatchCatalog.WriteMetadata(Stream.Null, intent, plan.Generation).AsSpan().SequenceEqual(plan.DocumentHash))
             throw new InvalidDataException("El plan de datos no corresponde a la actualización del espejo.");
-        if (!IsCommitted(root, plan.Generation))
+        bool publishedNow = !IsCommitted(root, plan.Generation);
+        if (publishedNow)
         {
             if (baseline is not null) ImportAccumulativeBaseline(root, plan, baseline);
             RecordExpected(root, intent, plan.Generation);
-            CopyAndConfirm(root, intent, plan.Generation, checkpoint: null, objectCheckpoint: null, sourceInventory);
+            CopyAndConfirm(root, intent, plan.Generation, checkpoint: null, objectCheckpoint: null, sourceInventory,
+                objectsPrepared: freshPreview is not null);
         }
         var after = ReadPoint(root, plan.Generation);
         if (after.Degraded || !after.DocumentHash.AsSpan().SequenceEqual(plan.DocumentHash))
             throw new InvalidDataException("El nuevo punto del espejo no tiene ambos catálogos íntegros.");
-        VerifyObjects(root, after.Files);
+        if (freshPreview is null || !publishedNow) VerifyObjects(root, after.Files);
         checkpoint?.Invoke(MirrorStep.PointConfirmed);
-        var previous = MirrorPrevious(scope, root, plan.Previous, plan.SourceIdentity);
+        var previous = MirrorPrevious(scope, root, plan.Previous, plan.SourceIdentity, verifyObjects: freshPreview is null);
         if (!(previous?.DocumentHash ?? new byte[32]).AsSpan().SequenceEqual(plan.PreviousHash))
             throw new InvalidDataException("El punto anterior del espejo no corresponde al diario.");
         var before = baseline ?? previous;

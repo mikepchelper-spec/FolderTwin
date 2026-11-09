@@ -242,14 +242,14 @@ internal sealed partial class VersionStore
 
     private void CopyAndConfirm(SafeFileHandle store, BatchPlan plan, string generation, Action<CatalogStep>? checkpoint,
         Action<CopyStep, string>? objectCheckpoint, BatchPlan? sourceInventory = null, bool prepareOnly = false,
-        Action? beforePublication = null, bool retrySourceChanges = false)
+        Action? beforePublication = null, bool retrySourceChanges = false, bool objectsPrepared = false)
     {
         retrySourceChanges |= beforePublication is not null;
         var inventory = sourceInventory ?? plan;
         DirectoryFence? origin = null;
         try
         {
-            CopyObjects();
+            if (!objectsPrepared) CopyObjects();
             if (origin is not null && (!prepareOnly || retrySourceChanges))
                 FolderBatch.RequireSameInventory(inventory, retrySourceChanges);
             if (prepareOnly) return;
@@ -275,9 +275,12 @@ internal sealed partial class VersionStore
                 string digest = Digest(file);
                 string final = ObjectPath(digest);
                 using var bucket = WindowsProbeNative.OpenOrCreatePlainDirectory(algorithm, digest[..2]);
-                if (!WindowsProbeNative.PlainFileExists(bucket, digest))
-                    _ = RescueQuarantinedObject(store, digest, file);
-                if (!WindowsProbeNative.PlainFileExists(bucket, digest))
+                bool exists = WindowsProbeNative.PlainFileExists(bucket, digest);
+                // During mirror preparation existing objects will still be
+                // checked by the publisher before and after both replicas.
+                if (exists && prepareOnly && retrySourceChanges) continue;
+                if (!exists) exists = RescueQuarantinedObject(store, digest, file);
+                if (!exists)
                 {
                     string temporary = Path.Combine(Path.GetDirectoryName(final)!, FolderBatch.ControlPrefix + digest + ".tmp");
                     var recovered = CopyRecovery.Recover(workspace.Root, temporary, final, expectedHash: file.Hash);
@@ -497,9 +500,11 @@ internal sealed partial class VersionStore
         }
     }
 
-    private BatchPlan AnalyzeSource(string source, byte[] identity, WorkPhase phase = WorkPhase.Analyzing, bool retrySourceChanges = false) =>
+    private BatchPlan AnalyzeSource(string source, byte[] identity, WorkPhase phase = WorkPhase.Analyzing,
+        bool retrySourceChanges = false, bool reportProgress = true) =>
         FolderBatch.AnalyzeSource(workspace.Root, source, Destination, binding, identity, BatchCatalog.VersionMaximumEntries,
-            observe is null ? null : progress => observe(progress with { Phase = phase }), parallel: parallelAnalysis, retrySourceChanges: retrySourceChanges);
+            !reportProgress || observe is null ? null : progress => observe(progress with { Phase = phase }),
+            parallel: parallelAnalysis, retrySourceChanges: retrySourceChanges);
 
     private static void VerifyObject(SafeFileHandle directory, string digest, BatchFile file)
     {

@@ -154,7 +154,14 @@ internal static class FolderBatch
                     throw retrySourceChanges ? new SourceChangedDuringBackupException(message) : new InvalidDataException(message);
                 }
                 var metadata = FileMetadata.Read(file.SafeFileHandle);
-                byte[] hash = SHA256.HashData(file);
+                byte[] hash;
+                if (entry.Length <= 4096)
+                {
+                    Span<byte> bytes = stackalloc byte[(int)entry.Length];
+                    file.ReadExactly(bytes);
+                    hash = SHA256.HashData(bytes);
+                }
+                else hash = SHA256.HashData(file);
                 if (!metadata.IsValid())
                     throw new InvalidDataException($"Las fechas de «{entry.RelativePath}» están fuera del alcance.");
                 metadata.RequireMatch(file.SafeFileHandle);

@@ -31,7 +31,7 @@ foreach ($required in @('README.md', 'NOTAS.md', 'GUIA.md', 'SUPPORT.md', 'INSTA
     'LICENSE', 'LICENSE-dotnet.txt', 'LICENSE-dotnet-desktop.txt', 'THIRD-PARTY-NOTICES-dotnet.txt', 'FolderTwin.exe')) {
     if (-not $expected.Contains($required)) { throw "Falta un componente obligatorio: $required" }
 }
-foreach ($report in @('ENTREGA.md', 'V1.md', 'PLAN.md', 'ALFA.md', 'ACEPTACION.md', 'INVESTIGACION.md')) {
+foreach ($report in @('ENTREGA.md', 'ENTREGA-AUTOMATIZACION.md', 'V1.md', 'PLAN.md', 'ALFA.md', 'ACEPTACION.md', 'INVESTIGACION.md')) {
     if (Test-Path -LiteralPath (Join-Path $root $report)) { throw "Informe de desarrollo mezclado con las guías: $report" }
 }
 $readme = Get-Content -LiteralPath (Join-Path $root 'README.md') -Raw

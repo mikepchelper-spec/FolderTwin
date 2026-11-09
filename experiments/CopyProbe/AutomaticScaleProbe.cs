@@ -2,16 +2,31 @@ using System.Diagnostics;
 
 internal static class AutomaticScaleProbe
 {
-    internal static int Run(int files, ProductBackupMode mode, bool prepared = false)
+    internal static int Run(int files, ProductBackupMode mode, bool prepared = false, string? destinationVolume = null)
     {
         var workspace = LabWorkspace.Create();
+        LabWorkspace? otherVolume = null;
         using var process = Process.GetCurrentProcess();
         try
         {
+            long minimumSpace = 256L * 1024 * 1024 + 20L * 1024 * files;
             using (var root = workspace.OpenRegisteredRoot())
-                LabWorkspace.RequireSpace(256L * 1024 * 1024 + 20L * 1024 * files, LabWorkspace.AvailableSpace(root.Root));
-            string source = Folder("source"), destinations = Folder("destinations"), settings = Folder("settings");
+                LabWorkspace.RequireSpace(minimumSpace, LabWorkspace.AvailableSpace(root.Root));
+            if (destinationVolume is not null)
+            {
+                otherVolume = LabWorkspace.CreateOnFixedVolume(destinationVolume);
+                using var root = otherVolume.OpenRegisteredRoot();
+                LabWorkspace.RequireSpace(minimumSpace, LabWorkspace.AvailableSpace(root.Root));
+            }
+            string source = Folder("source"), settings = Folder("settings");
+            string destinations = otherVolume?.Root ?? Folder("destinations");
+            if (otherVolume is not null)
+            {
+                using var roots = new LocalJobRoots(source, destinations);
+                if (roots.Review.SameVolume) throw new InvalidDataException("The scale fixture did not use two distinct volumes.");
+            }
             Console.WriteLine($"Automatic {mode}: {files:N0} files; Windows {Environment.OSVersion.Version}; .NET {Environment.Version}.");
+            if (otherVolume is not null) Console.WriteLine($"Cross-volume fixture: {Path.GetPathRoot(source)} to {Path.GetPathRoot(destinations)}.");
             string last = "";
             Measure("seed", () =>
             {
@@ -56,6 +71,11 @@ internal static class AutomaticScaleProbe
         }
         finally
         {
+            if (otherVolume is not null)
+            {
+                using (otherVolume.OpenRegisteredRoot()) { }
+                Directory.Delete(otherVolume.Root, recursive: true);
+            }
             using (workspace.OpenRegisteredRoot()) { }
             Directory.Delete(workspace.Root, recursive: true);
         }

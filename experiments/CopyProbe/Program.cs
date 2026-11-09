@@ -50,10 +50,12 @@ if (args is ["--product-auto-mirror"])
     return AutomaticMirrorProbe.Run();
 if (args is ["--product-auto-partial"])
     return AutomaticPartialProbe.Run();
-if (args is ["--product-auto-scale", _, _] or ["--product-auto-scale", _, _, "prepared"] &&
+if (args is ["--product-auto-scale", _, _] or ["--product-auto-scale", _, _, "prepared"] or
+    ["--product-auto-scale", _, _, "prepared", _] &&
     int.TryParse(args[1], out int scaleFiles) && scaleFiles is >= 2 and <= 329_000 &&
     Enum.TryParse<ProductBackupMode>(args[2], out var scaleBackup) && Enum.IsDefined(scaleBackup))
-    return AutomaticScaleProbe.Run(scaleFiles, scaleBackup, prepared: args.Length == 4);
+    return AutomaticScaleProbe.Run(scaleFiles, scaleBackup, prepared: args.Length >= 4,
+        destinationVolume: args.Length == 5 ? args[4] : null);
 if (args is ["--product-restore"])
     return ProductRestoreProbe.Run();
 if (args is ["--product-mirror-review"])
