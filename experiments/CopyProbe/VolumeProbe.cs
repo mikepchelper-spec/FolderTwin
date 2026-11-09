@@ -301,7 +301,8 @@ internal static class VolumeProbe
             }
             finally { if (created) File.Delete(padding); }
             var resumed = ProductRunner.Run(registry, job.Id, automatic: true);
-            Check(resumed.State == ProductRunState.Confirmed && resumed.Generation == failed.Generation &&
+            bool resumedPlan = job.Options.Mode == ProductBackupMode.Versions ? failed.Generation is null : resumed.Generation == failed.Generation;
+            Check(resumed.State == ProductRunState.Confirmed && resumedPlan &&
                 ProductRunner.Verify(registry, job.Id, resumed.Generation!).State == ProductRunState.Confirmed,
                 resumed.Detail ?? "The product runner did not resume its exact generation after capacity returned.");
             var review = LocalJobRoots.ReviewDedicatedDestination(job.Destination.LastVolumePath, Path.Combine(state, "product-recovery"));
@@ -313,7 +314,7 @@ internal static class VolumeProbe
                 saved.IntentHash.AsSpan().SequenceEqual(failed.IntentHash) && saved.ErrorCode == failed.ErrorCode),
                 "Successful retry erased the product disk-full incident.");
         }
-        Console.WriteLine("PASS all three packaged product modes preserve prior data during real capacity exhaustion, resume the same pending generation, verify, restore and retain the incident.");
+        Console.WriteLine("PASS all three packaged product modes preserve prior data during real capacity exhaustion, retry safely, verify, restore and retain the incident.");
     }
 
     private static void VerifyProductReturn(string state)

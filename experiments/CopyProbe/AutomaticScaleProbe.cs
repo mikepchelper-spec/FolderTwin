@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 internal static class AutomaticScaleProbe
 {
-    internal static int Run(int files, ProductBackupMode mode)
+    internal static int Run(int files, ProductBackupMode mode, bool prepared = false)
     {
         var workspace = LabWorkspace.Create();
         using var process = Process.GetCurrentProcess();
@@ -31,7 +31,8 @@ internal static class AutomaticScaleProbe
             registry.UpdateSettings(job.Id, job.Options.Name, null, true, false, ProductWatchMode.Watching,
                 authorizeMirror: mode == ProductBackupMode.ProtectedMirror);
             ProductRunResult? latest = null;
-            Attempt("initial", ProductRunState.Confirmed);
+            if (prepared) Measure("verified_baseline_fixture", () => PrepareCurrentTree(job, source));
+            else Attempt("initial", ProductRunState.Confirmed);
             Attempt("unchanged", ProductRunState.Unchanged);
             DateTime previousTime = File.GetLastWriteTimeUtc(last);
             File.WriteAllText(last, "synthetic XX");
@@ -71,5 +72,38 @@ internal static class AutomaticScaleProbe
             Console.WriteLine(FormattableString.Invariant(
                 $"{phase}: wall_s={timer.Elapsed.TotalSeconds:F3}, cpu_s={(process.TotalProcessorTime - cpu).TotalSeconds:F3}, read_bytes={after.ReadBytes - before.ReadBytes}, write_bytes={after.WriteBytes - before.WriteBytes}, peak_working_set_bytes={process.PeakWorkingSet64}"));
         }
+    }
+
+    private static void PrepareCurrentTree(ProductJob job, string source)
+    {
+        if (job.Options.Mode == ProductBackupMode.Versions)
+            throw new ArgumentException("The prepared tree is only for modes that publish a current folder.");
+        // Prepare a verified fixture for measuring edits on a settled tree.
+        // The normal benchmark still measures first-copy publication separately.
+        var seedJob = job with { Options = job.Options with { Mode = ProductBackupMode.Versions } };
+        var seedStore = VersionStore.OpenProduct(seedJob, initialize: true, parallelAnalysis: true);
+        string generation = VersionStore.NewGenerationId();
+        seedStore.CreatePoint(job.Source.VolumePath, generation);
+        var store = VersionStore.OpenProduct(job, parallelAnalysis: true);
+        store.InitializeMirror();
+        var groups = Directory.EnumerateDirectories(source).ToArray();
+        Parallel.ForEach(groups, new ParallelOptions { MaxDegreeOfParallelism = 4 }, directory =>
+        {
+            string target = Directory.CreateDirectory(Path.Combine(store.MirrorCurrentPath, Path.GetFileName(directory))).FullName;
+            foreach (string path in Directory.EnumerateFiles(directory))
+            {
+                string copy = Path.Combine(target, Path.GetFileName(path));
+                File.Copy(path, copy);
+                File.SetCreationTimeUtc(copy, File.GetCreationTimeUtc(path));
+            }
+        });
+        byte[] hash = store.RegisteredGenerations().Generations[generation];
+        using (var root = new DirectoryFence(job.Destination.LastVolumePath))
+        using (job.Destination.OpenVerifiedMarker(root.Root))
+        {
+            GenerationRegistry.SetMirrorPending(root.Root, job.Destination, generation, hash);
+            GenerationRegistry.SetMirror(root.Root, job.Destination, generation, hash);
+        }
+        if (store.VerifyCurrent(generation)) throw new InvalidOperationException("The prepared mirror fixture is degraded.");
     }
 }

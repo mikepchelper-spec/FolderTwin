@@ -110,9 +110,9 @@ internal sealed partial class VersionStore
         byte[] identity = WindowsProbeNative.DirectoryIdentity(origin.Root);
         if (identity.AsSpan().SequenceEqual(binding.Identity))
             throw new InvalidDataException("El origen y el almacén son la misma carpeta.");
-        var plan = AnalyzeSource(source, identity);
+        var plan = AnalyzeSource(source, identity, retrySourceChanges: beforeAutomaticPublication is not null);
         workspace.ValidatePlan(plan);
-        FolderBatch.RequireSameInventory(plan);
+        FolderBatch.RequireSameInventory(plan, retrySourceChanges: beforeAutomaticPublication is not null);
         if (beforeAutomaticPublication is not null)
         {
             var ledger = GenerationRegistry.Read(store.Root, binding);
@@ -128,7 +128,6 @@ internal sealed partial class VersionStore
                         SameMirrorFile(pair.First, pair.Second)))
                     return false;
             }
-            beforeAutomaticPublication();
         }
         using var pending = WindowsProbeNative.OpenOrCreatePlainDirectory(store.Root, PendingDirectory);
         var files = IntentFiles(pending, generation);
@@ -140,10 +139,16 @@ internal sealed partial class VersionStore
                 throw new InvalidDataException("El plan se conservó como abandonado. Inicia una generación nueva.");
         }
         LabWorkspace.RequireSpace(0, LabWorkspace.AvailableSpace(store.Root));
-        workspace.SaveIntent(plan, scope.Root, files, pendingCheckpoint);
-        RecordExpected(store.Root, plan, generation, registryCheckpoint);
-        CopyAndConfirm(store.Root, plan, generation, checkpoint, objectCheckpoint);
+        if (beforeAutomaticPublication is null) SaveIntent();
+        CopyAndConfirm(store.Root, plan, generation, checkpoint, objectCheckpoint,
+            beforePublication: beforeAutomaticPublication is null ? null : () => { beforeAutomaticPublication(); SaveIntent(); });
         return true;
+
+        void SaveIntent()
+        {
+            workspace.SaveIntent(plan, scope.Root, files, pendingCheckpoint);
+            RecordExpected(store.Root, plan, generation, registryCheckpoint);
+        }
     }
 
     internal bool HasCommittedPoint(string generation)
@@ -236,7 +241,8 @@ internal sealed partial class VersionStore
     }
 
     private void CopyAndConfirm(SafeFileHandle store, BatchPlan plan, string generation, Action<CatalogStep>? checkpoint,
-        Action<CopyStep, string>? objectCheckpoint, BatchPlan? sourceInventory = null, bool prepareOnly = false)
+        Action<CopyStep, string>? objectCheckpoint, BatchPlan? sourceInventory = null, bool prepareOnly = false,
+        Action? beforePublication = null)
     {
         var inventory = sourceInventory ?? plan;
         DirectoryFence? origin = null;
@@ -245,7 +251,8 @@ internal sealed partial class VersionStore
             CopyObjects();
             if (prepareOnly) return;
             if (origin is not null)
-                FolderBatch.RequireSameInventory(inventory);
+                FolderBatch.RequireSameInventory(inventory, retrySourceChanges: beforePublication is not null);
+            beforePublication?.Invoke();
             observe?.Invoke(new(WorkPhase.Publishing, 0, 1));
             WithCatalogFiles(store, generation, files =>
             {
@@ -289,15 +296,25 @@ internal sealed partial class VersionStore
                             origin = new DirectoryFence(plan.Source);
                             if (!WindowsProbeNative.DirectoryIdentity(origin.Root).AsSpan().SequenceEqual(plan.SourceIdentity))
                                 throw new InvalidDataException("La carpeta de origen cambió desde el análisis.");
-                            if (!prepareOnly) FolderBatch.RequireSameInventory(inventory);
+                            if (!prepareOnly) FolderBatch.RequireSameInventory(inventory, retrySourceChanges: beforePublication is not null);
                         }
                         string input = Path.Combine(plan.Source, file.RelativePath);
-                        using var parent = new DirectoryFence(plan.Source, input);
-                        using var observed = WindowsProbeNative.OpenPlainFile(parent.Parent(input), input, FileAccess.Read, FileShare.Read);
-                        WindowsProbeNative.RequireSupportedData(observed.SafeFileHandle, file.RelativePath);
-                        if (observed.Length != file.Length || !SHA256.HashData(observed).AsSpan().SequenceEqual(file.Hash))
-                            throw new InvalidDataException($"El contenido de «{file.RelativePath}» cambió desde el análisis.");
-                        workspace.Copy(plan.Source, Destination, input, final, temporary, binding, file.Hash, objectCheckpoint);
+                        try
+                        {
+                            using var parent = new DirectoryFence(plan.Source, input);
+                            using var observed = WindowsProbeNative.OpenPlainFile(parent.Parent(input), input, FileAccess.Read, FileShare.Read);
+                            WindowsProbeNative.RequireSupportedData(observed.SafeFileHandle, file.RelativePath);
+                            if (observed.Length != file.Length || !SHA256.HashData(observed).AsSpan().SequenceEqual(file.Hash))
+                            {
+                                string message = $"El contenido de «{file.RelativePath}» cambió desde el análisis.";
+                                throw beforePublication is not null ? new SourceChangedDuringBackupException(message) : new InvalidDataException(message);
+                            }
+                            workspace.Copy(plan.Source, Destination, input, final, temporary, binding, file.Hash, objectCheckpoint);
+                        }
+                        catch (Exception error) when (beforePublication is not null && VersionJob.Unavailable(error))
+                        {
+                            throw new SourceChangedDuringBackupException($"«{file.RelativePath}» cambió durante la copia.", error);
+                        }
                     }
                     else if (recovered is not (RecoveryResult.Published or RecoveryResult.AlreadyPublished))
                         throw new InvalidDataException($"El objeto {digest} requiere revisión. Estado {recovered}.");
@@ -479,9 +496,9 @@ internal sealed partial class VersionStore
         }
     }
 
-    private BatchPlan AnalyzeSource(string source, byte[] identity, WorkPhase phase = WorkPhase.Analyzing) =>
+    private BatchPlan AnalyzeSource(string source, byte[] identity, WorkPhase phase = WorkPhase.Analyzing, bool retrySourceChanges = false) =>
         FolderBatch.AnalyzeSource(workspace.Root, source, Destination, binding, identity, BatchCatalog.VersionMaximumEntries,
-            observe is null ? null : progress => observe(progress with { Phase = phase }), parallel: parallelAnalysis);
+            observe is null ? null : progress => observe(progress with { Phase = phase }), parallel: parallelAnalysis, retrySourceChanges: retrySourceChanges);
 
     private static void VerifyObject(SafeFileHandle directory, string digest, BatchFile file)
     {

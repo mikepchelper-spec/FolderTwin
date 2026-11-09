@@ -122,7 +122,7 @@ internal static class ProductMonitorProbe
             if (predicate()) return;
             await Task.Delay(250);
         }
-        while (timer.Elapsed < (timeout ?? TimeSpan.FromSeconds(20)));
+        while (timer.Elapsed < (timeout ?? TimeSpan.FromSeconds(35)));
         throw new InvalidOperationException(failure);
     }
 

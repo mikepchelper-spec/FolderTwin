@@ -4,6 +4,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
+internal sealed class SourceChangedDuringBackupException(string message, Exception? inner = null) : IOException(message, inner);
+
 internal sealed record BatchFile(string RelativePath, long Length, byte[] Hash, FileMetadata? Metadata = null)
 {
     internal int CatalogVersion => Metadata is null ? 1 : Metadata.CreationUtc is null ? 2 : 3;
@@ -56,7 +58,7 @@ internal static class FolderBatch
 
     internal static BatchPlan AnalyzeSource(string fixtureRoot, string source, string destination,
         DestinationBinding binding, byte[] sourceIdentity, int maximumEntries = FolderInventory.DefaultMaximumEntries,
-        Action<WorkProgress>? observe = null, List<string>? occupied = null, bool parallel = false)
+        Action<WorkProgress>? observe = null, List<string>? occupied = null, bool parallel = false, bool retrySourceChanges = false)
     {
         observe?.Invoke(new(WorkPhase.Analyzing, 0, 0));
         using var origin = new DirectoryFence(source);
@@ -135,18 +137,28 @@ internal static class FolderBatch
             ExceptionDispatchInfo.Throw(failure);
         }
 
-        static BatchFile Read(SafeFileHandle parent, InventoryEntry entry)
+        BatchFile Read(SafeFileHandle parent, InventoryEntry entry)
         {
-            using var file = WindowsProbeNative.OpenPlainFile(parent, entry.RelativePath, FileAccess.Read, FileShare.Read);
-            WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath);
-            if (file.Length != entry.Length)
-                throw new InvalidDataException("El origen cambió durante el análisis.");
-            var metadata = FileMetadata.Read(file.SafeFileHandle);
-            byte[] hash = SHA256.HashData(file);
-            if (!metadata.IsValid())
-                throw new InvalidDataException($"Las fechas de «{entry.RelativePath}» están fuera del alcance.");
-            metadata.RequireMatch(file.SafeFileHandle);
-            return new(entry.RelativePath, entry.Length, hash, metadata);
+            try
+            {
+                using var file = WindowsProbeNative.OpenPlainFile(parent, entry.RelativePath, FileAccess.Read, FileShare.Read);
+                WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath);
+                if (file.Length != entry.Length)
+                {
+                    const string message = "El origen cambió durante el análisis.";
+                    throw retrySourceChanges ? new SourceChangedDuringBackupException(message) : new InvalidDataException(message);
+                }
+                var metadata = FileMetadata.Read(file.SafeFileHandle);
+                byte[] hash = SHA256.HashData(file);
+                if (!metadata.IsValid())
+                    throw new InvalidDataException($"Las fechas de «{entry.RelativePath}» están fuera del alcance.");
+                metadata.RequireMatch(file.SafeFileHandle);
+                return new(entry.RelativePath, entry.Length, hash, metadata);
+            }
+            catch (Exception error) when (retrySourceChanges && VersionJob.Unavailable(error))
+            {
+                throw new SourceChangedDuringBackupException($"«{entry.RelativePath}» cambió durante el análisis.", error);
+            }
         }
     }
 
@@ -371,12 +383,14 @@ internal static class FolderBatch
         }
     }
 
-    internal static void RequireSameInventory(BatchPlan plan)
+    internal static void RequireSameInventory(BatchPlan plan, bool retrySourceChanges = false)
     {
         // A stored file can retain its data, temporary, lock, receipt, and draft.
         int limit = plan.SourceBinding is null ? Math.Max(1, plan.Files.Length + plan.Directories.Length) :
             plan.Files.Length * 5 + plan.Directories.Length + 16;
         var current = FolderInventory.Scan(plan.Source, maximumEntries: limit);
+        if (!current.Complete && retrySourceChanges && current.Issues.All(issue => issue.Kind == InventoryIssueKind.EntryLimit))
+            throw new SourceChangedDuringBackupException("Aparecieron archivos durante el análisis. Se volverá a comparar el origen.");
         if (!current.Complete)
             throw new InvalidDataException(DescribeIncompleteSource(current.Issues));
         var entries = current.Entries.Where(entry => plan.SourceBinding is null || !IsControl(entry.RelativePath)).ToArray();
@@ -385,7 +399,10 @@ internal static class FolderBatch
                 .SequenceEqual(plan.Directories.Order(StringComparer.Ordinal)) ||
             !entries.Where(entry => !entry.IsDirectory).Select(entry => (entry.RelativePath, entry.Length)).OrderBy(entry => entry.RelativePath, StringComparer.Ordinal)
                 .SequenceEqual(plan.Files.Select(file => (file.RelativePath, file.Length)).OrderBy(entry => entry.RelativePath, StringComparer.Ordinal)))
-            throw new InvalidDataException("El inventario del origen cambió. Repite el análisis.");
+        {
+            const string message = "El inventario del origen cambió. Repite el análisis.";
+            throw retrySourceChanges ? new SourceChangedDuringBackupException(message) : new InvalidDataException(message);
+        }
         CheckDirectoryData(plan.Source, plan.Directories);
     }
 

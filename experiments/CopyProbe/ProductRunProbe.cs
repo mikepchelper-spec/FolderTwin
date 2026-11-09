@@ -197,10 +197,11 @@ internal static class ProductRunProbe
     {
         var fixture = LabWorkspace.Open(root);
         using var registry = new ProductJobRegistry(Path.Combine(fixture.Root, "settings"));
+        var boundary = automatic && registry.Get(id).Options.Mode == ProductBackupMode.Versions ? WorkPhase.Publishing : WorkPhase.Copying;
         bool held = false;
         var result = ProductRunner.Run(registry, id, checkpoint: work =>
         {
-            if (held || work.Phase != WorkPhase.Copying) return;
+            if (held || work.Phase != boundary) return;
             held = true;
             Console.WriteLine("READY");
             Console.Out.Flush();

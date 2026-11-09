@@ -87,9 +87,10 @@ internal static class AutomaticPartialProbe
 
             File.WriteAllText(stable, "new bytes after capacity returns");
             const int diskFull = unchecked((int)0x80070070);
+            var pendingBoundary = mode == ProductBackupMode.Versions ? WorkPhase.Publishing : WorkPhase.Copying;
             var exhausted = ProductRunner.Run(registry, job.Id, checkpoint: work =>
             {
-                if (work.Phase == WorkPhase.Copying) throw new IOException("Synthetic disk-full error.", diskFull);
+                if (work.Phase == pendingBoundary) throw new IOException("Synthetic disk-full error.", diskFull);
             }, automatic: true);
             Check(exhausted is { State: ProductRunState.Review, ErrorCode: diskFull, Generation: not null } &&
                 !store.ListPoints().Any(point => point.Id == exhausted.Generation) && !store.Verify(complete.Generation!),
@@ -102,6 +103,27 @@ internal static class AutomaticPartialProbe
             store.Restore(afterCapacity.Generation!, output);
             Check(File.ReadAllText(Path.Combine(output, "stable.txt")) == "new bytes after capacity returns",
                 "The recovered generation did not restore the changed bytes.");
+            Directory.Move(detached, source);
+            if (mode == ProductBackupMode.Versions)
+            {
+                File.WriteAllText(stable, "first concurrent save");
+                bool edited = false;
+                var stale = ProductRunner.Run(registry, job.Id, checkpoint: work =>
+                {
+                    if (edited || work is not { Phase: WorkPhase.Copying, RelativePath: "stable.txt" }) return;
+                    File.WriteAllText(stable, "final concurrent save");
+                    edited = true;
+                }, automatic: true);
+                Check(edited && stale is { State: ProductRunState.Busy, Generation: null } && store.ListPending().Length == 0,
+                    "A source edit between analysis and copy pinned an obsolete generation.");
+                var fresh = ProductRunner.Run(registry, job.Id, automatic: true);
+                Check(fresh.State == ProductRunState.Confirmed, fresh.Detail ?? "The stable save did not back up after source drift.");
+                Directory.Move(source, detached);
+                output = Folder("source-drift-restore");
+                store.Restore(fresh.Generation!, output);
+                Check(File.ReadAllText(Path.Combine(output, "stable.txt")) == "final concurrent save",
+                    "Recovery did not contain the last stable save after source drift.");
+            }
         }
         finally
         {

@@ -9,6 +9,7 @@ internal static class ProductMonitor
     private static readonly TimeSpan Poll = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan ConfigurationPoll = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan OwnershipPoll = TimeSpan.FromSeconds(20);
 
     internal static async Task<int> SuperviseAsync(string location)
     {
@@ -83,7 +84,7 @@ internal static class ProductMonitor
                 {
                     wake.Reader.TryRead(out _);
                     long now = Stopwatch.GetTimestamp();
-                    if (scheduler is not null && Stopwatch.GetElapsedTime(checkedOwnerAt, now) >= HeartbeatInterval)
+                    if (scheduler is not null && Stopwatch.GetElapsedTime(checkedOwnerAt, now) >= OwnershipPoll)
                     {
                         if (!scheduler.CanMonitor(registry, ref verifiedDefinition)) return 0;
                         checkedOwnerAt = now;
