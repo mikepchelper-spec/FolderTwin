@@ -180,6 +180,18 @@ internal static class AutomaticMirrorProbe
                 Check(added is { State: ProductRunState.Confirmed, Scoped: false } && File.Exists(Path.Combine(scopedStore.MirrorCurrentPath, "added.txt")),
                     "A scoped hint bypassed an actual change in the tree layout.");
 
+                if (mode == ProductBackupMode.Accumulative)
+                {
+                    File.Delete(Path.Combine(editing, "added.txt"));
+                    Check(ProductRunner.Run(registry, scoped.Id, automatic: true, editHints: ["added.txt"]).State == ProductRunState.Unchanged,
+                        "An accumulative deletion altered the destination point.");
+                    File.WriteAllText(edited, "third!");
+                    var withExclusive = ProductRunner.Run(registry, scoped.Id, automatic: true, editHints: [Name(0)]);
+                    Check(withExclusive is { State: ProductRunState.Confirmed, Scoped: true } &&
+                        File.ReadAllText(Path.Combine(scopedStore.MirrorCurrentPath, "added.txt")) == "new structural entry",
+                        "A destination-only file defeated or was lost during a scoped accumulative edit.");
+                }
+
                 string unobserved = Path.Combine(scopedStore.MirrorCurrentPath, Name(1));
                 var previousWrite = File.GetLastWriteTimeUtc(unobserved);
                 File.WriteAllText(unobserved, "extern");

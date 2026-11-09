@@ -338,11 +338,20 @@ internal static class ProductMonitorProbe
                 }
                 string detached = Path.Combine(Path.GetDirectoryName(job.Destination.LastVolumePath)!, "detached");
                 Directory.Move(job.Destination.LastVolumePath, detached);
-                File.WriteAllText(file, "after reconnection");
+                string expected = "after reconnection";
+                File.WriteAllText(file, expected);
                 File.Delete(Path.Combine(source, "retired.txt"));
                 var absent = await WaitForRunAsync(second.Intent.Sequence, ProductRunState.WaitingForDestination);
                 Directory.Move(detached, job.Destination.LastVolumePath);
                 var returned = await WaitForRunAsync(absent.Intent.Sequence, ProductRunState.Confirmed);
+                if (mode == ProductBackupMode.Accumulative)
+                {
+                    expected = "edited with a destination-only file";
+                    File.WriteAllText(file, expected);
+                    returned = await WaitForRunAsync(returned.Intent.Sequence, ProductRunState.Confirmed);
+                    if (returned.Result is not { Scoped: true })
+                        throw new InvalidOperationException("The native monitor stopped using scoped edits after retaining a destination-only file.");
+                }
                 if (mode == ProductBackupMode.Versions)
                 {
                     string otherSource = Directory.CreateDirectory(Path.Combine(workspace.Root, "second-source")).FullName;
@@ -388,7 +397,7 @@ internal static class ProductMonitorProbe
                 string output = Directory.CreateDirectory(Path.Combine(workspace.Root, "restore")).FullName;
                 var store = VersionStore.OpenProduct(job);
                 store.Restore(returned.Generation!, output);
-                if (File.ReadAllText(Path.Combine(output, "synthetic.txt")) != "after reconnection")
+                if (File.ReadAllText(Path.Combine(output, "synthetic.txt")) != expected)
                     throw new InvalidOperationException("The automatic point did not restore the expected bytes without its source.");
                 if (File.Exists(Path.Combine(output, "retired.txt")) != (mode == ProductBackupMode.Accumulative))
                     throw new InvalidOperationException("The automatic point handled retirement differently from its selected mode.");

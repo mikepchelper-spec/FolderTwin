@@ -45,9 +45,12 @@ internal static class AutomaticScaleProbe
                 LocalJobRoots.ReviewDedicatedDestination(source, destinations));
             registry.UpdateSettings(job.Id, job.Options.Name, null, true, false, ProductWatchMode.Watching,
                 authorizeMirror: mode == ProductBackupMode.ProtectedMirror);
+            string? exclusive = scoped && mode == ProductBackupMode.Accumulative ? Path.Combine("group-0000", "exclusive.txt") : null;
+            if (exclusive is not null) File.WriteAllText(Path.Combine(source, exclusive), "destination-only sample");
             ProductRunResult? latest = null;
             if (prepared) Measure("verified_baseline_fixture", () => PrepareCurrentTree(job, source));
             else Attempt("initial", ProductRunState.Confirmed);
+            if (exclusive is not null) File.Delete(Path.Combine(source, exclusive));
             var baseline = MeasureFootprint("baseline");
             string relative = Path.GetRelativePath(source, last);
             string[]? hints = scoped ? [relative] : null;
@@ -66,6 +69,13 @@ internal static class AutomaticScaleProbe
             Measure("restore_one", () => VersionStore.OpenProduct(job).Restore(latest!.Generation!, restored, relative));
             if (File.ReadAllText(Path.Combine(restored, relative)) != "synthetic XX")
                 throw new InvalidOperationException("The automatic large-tree point did not recover the changed bytes.");
+            if (exclusive is not null)
+            {
+                string recoveredExclusive = Folder("restore-exclusive");
+                Measure("restore_destination_only", () => VersionStore.OpenProduct(job).Restore(latest!.Generation!, recoveredExclusive, exclusive));
+                if (File.ReadAllText(Path.Combine(recoveredExclusive, exclusive)) != "destination-only sample")
+                    throw new InvalidOperationException("The accumulative generation lost its destination-only sample.");
+            }
             Console.WriteLine("PASS automatic scale, no-op suppression and same-size same-time edit recovery.");
             return 0;
 

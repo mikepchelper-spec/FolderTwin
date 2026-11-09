@@ -17,10 +17,13 @@ internal sealed partial class VersionStore
             throw new InvalidDataException("El catálogo actual del espejo no coincide con su registro.");
 
         var requested = hints.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var touched = before.Files.Where(file => requested.Contains(file.RelativePath)).ToArray();
         var sourceInventory = FolderInventory.Scan(source, BatchCatalog.VersionMaximumEntries);
-        if (touched.Length == 0 || sourceInventory.Entries.Any(entry => entry.IsDirectory && requested.Contains(entry.RelativePath)) ||
-            !SameScopedLayout(sourceInventory, before, requested)) return null;
+        if (sourceInventory.Entries.Any(entry => entry.IsDirectory && requested.Contains(entry.RelativePath)) ||
+            !SameScopedLayout(sourceInventory, before, requested, allowSubset: workspace.IsAccumulative)) return null;
+        var presentHints = sourceInventory.Entries.Where(entry => !entry.IsDirectory && requested.Contains(entry.RelativePath))
+            .Select(entry => entry.RelativePath).ToHashSet(StringComparer.Ordinal);
+        var touched = before.Files.Where(file => presentHints.Contains(file.RelativePath)).ToArray();
+        if (touched.Length == 0) return null;
         using var current = new DirectoryFence(MirrorCurrentPath);
         if (!WindowsProbeNative.DirectoryIdentity(current.Root).AsSpan().SequenceEqual(currentIdentity))
             throw new InvalidDataException("La raíz actual del espejo fue sustituida.");
@@ -50,12 +53,12 @@ internal sealed partial class VersionStore
     }
 
     private static bool SameScopedLayout(InventoryResult inventory, CatalogSnapshot baseline, HashSet<string>? mayResize = null,
-        HashSet<string>? mayBeMissing = null)
+        HashSet<string>? mayBeMissing = null, bool allowSubset = false)
     {
         if (!inventory.Complete) return false;
         int missingAllowed = mayBeMissing is null ? 0 : mayBeMissing.Count - inventory.Entries.Count(entry =>
             !entry.IsDirectory && mayBeMissing.Contains(entry.RelativePath));
-        if (inventory.Entries.Length + missingAllowed != baseline.Files.Length + baseline.Directories.Length) return false;
+        if (!allowSubset && inventory.Entries.Length + missingAllowed != baseline.Files.Length + baseline.Directories.Length) return false;
         var files = baseline.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
         var directories = baseline.Directories.ToHashSet(StringComparer.Ordinal);
         return inventory.Entries.All(entry => entry.IsDirectory ? directories.Contains(entry.RelativePath) :
@@ -76,7 +79,8 @@ internal sealed partial class VersionStore
             throw new InvalidDataException("Cambió la identidad de una raíz durante el reemplazo acotado.");
         try
         {
-            if (SameScopedLayout(FolderInventory.Scan(root, BatchCatalog.VersionMaximumEntries), layout) &&
+            if (SameScopedLayout(FolderInventory.Scan(root, BatchCatalog.VersionMaximumEntries), layout,
+                    allowSubset: source && workspace.IsAccumulative) &&
                 touched.Files.All(file => SameMirrorFile(file, ReadScopedFile(root, file.RelativePath)))) return;
         }
         catch (Exception error) when (source && VersionJob.Unavailable(error))

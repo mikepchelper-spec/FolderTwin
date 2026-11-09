@@ -197,8 +197,8 @@ internal sealed partial class VersionStore
             verifyObjects: freshPreview is null && !plan.Scoped);
         if (!(previous?.DocumentHash ?? new byte[32]).AsSpan().SequenceEqual(plan.PreviousHash))
             throw new InvalidDataException("El punto anterior del espejo no corresponde al diario.");
-        // For an exact-layout replacement, the new source is the desired point
-        // and the previous point is the baseline. Both are already authenticated.
+        // A scoped replacement carries the merged point and the prior baseline.
+        // Destination-only files keep their prior entries in the merged point.
         if (plan.Scoped && plan.Version == 3 && (!plan.DocumentHash.AsSpan().SequenceEqual(plan.SourceHash) ||
             !plan.PreviousHash.AsSpan().SequenceEqual(plan.BaselineHash)))
             throw new InvalidDataException("El reemplazo acumulativo no coincide con los catálogos del diario.");
