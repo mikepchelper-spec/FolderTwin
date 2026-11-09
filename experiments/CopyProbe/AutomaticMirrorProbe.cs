@@ -73,6 +73,21 @@ internal static class AutomaticMirrorProbe
                 var result = ProductRunner.Run(registry, small.Id, automatic: true);
                 Check(result.State == ProductRunState.Confirmed, result.Detail ?? "The same path consumed the rolling budget more than once.");
             }
+            var smallStore = VersionStore.OpenProduct(small);
+            string currentItem = Path.Combine(smallStore.MirrorCurrentPath, "one.txt");
+            File.WriteAllText(item, "proposed");
+            try
+            {
+                _ = smallStore.UpdateAutomaticMirror(small.Source.VolumePath, captureAffectedPaths: true, fresh =>
+                {
+                    Check(fresh.AffectedPaths is ["one.txt"], "The locked review did not include the replacement.");
+                    File.WriteAllText(item, "changed again");
+                    return true;
+                });
+                throw new InvalidOperationException("A stale automatic inventory was applied.");
+            }
+            catch (InvalidDataException) { }
+            Check(File.ReadAllText(currentItem) == "edit 9", "A change after automatic review mutated the previous mirror.");
             Console.WriteLine("PASS automatic mirror consent, recoverable retirement, small-folder edits, split mass changes, rollback of clock, empty source and external conflict.");
             return 0;
 

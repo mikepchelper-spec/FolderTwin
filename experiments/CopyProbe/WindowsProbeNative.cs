@@ -185,7 +185,7 @@ internal static class WindowsProbeNative
         return identity;
     }
 
-    internal static void RequireSupportedData(SafeFileHandle handle, string label)
+    internal static unsafe void RequireSupportedData(SafeFileHandle handle, string label)
     {
         RequirePlain(handle);
         const int fileEaInformation = 7; // NT FILE_INFORMATION_CLASS.
@@ -200,22 +200,49 @@ internal static class WindowsProbeNative
 
         const int fileStreamInfo = 7;
         const int headerSize = 24;
+        var defaultStream = MemoryMarshal.AsBytes("::$DATA".AsSpan());
         // Only the unnamed data stream is supported. A larger response is not needed to authorize a copy.
-        byte[] buffer = new byte[4096];
-        if (!GetIdentity(handle, fileStreamInfo, buffer, buffer.Length))
+        Span<byte> buffer = stackalloc byte[4096];
+        buffer[..(headerSize + defaultStream.Length)].Clear();
+        fixed (byte* data = buffer)
         {
-            int error = Marshal.GetLastPInvokeError();
-            if (error == 38) // ERROR_HANDLE_EOF: no streams, as on a plain directory.
-                return;
-            throw new IOException($"No se pudieron comprobar los flujos NTFS de «{label}».", new Win32Exception(error));
+            if (!GetFileInformation(handle, fileStreamInfo, data, buffer.Length))
+            {
+                int error = Marshal.GetLastPInvokeError();
+                if (error == 38) // ERROR_HANDLE_EOF: no streams, as on a plain directory.
+                    return;
+                throw new IOException($"No se pudieron comprobar los flujos NTFS de «{label}».", new Win32Exception(error));
+            }
         }
 
-        uint nameBytes = BitConverter.ToUInt32(buffer, 4);
-        if (BitConverter.ToUInt32(buffer, 0) != 0 ||
-            nameBytes != "::$DATA".Length * sizeof(char) ||
-            !buffer.AsSpan(headerSize, (int)nameBytes).SequenceEqual(MemoryMarshal.AsBytes("::$DATA".AsSpan())))
+        uint nameBytes = BitConverter.ToUInt32(buffer[4..]);
+        if (BitConverter.ToUInt32(buffer) != 0 ||
+            nameBytes != defaultStream.Length ||
+            !buffer.Slice(headerSize, (int)nameBytes).SequenceEqual(defaultStream))
             throw new InvalidDataException($"«{label}» tiene flujos de datos alternativos. Requiere revisión.");
     }
+
+    internal static unsafe FileMetadata ReadFileMetadata(SafeFileHandle handle)
+    {
+        const int fileBasicInfo = 0;
+        BasicInfo info = default;
+        if (!GetFileInformation(handle, fileBasicInfo, &info, sizeof(BasicInfo)))
+            throw new IOException("No se pudieron comprobar las fechas y atributos del archivo.",
+                new Win32Exception(Marshal.GetLastPInvokeError()));
+        return new(DateTime.FromFileTimeUtc(info.LastWrite), DateTime.FromFileTimeUtc(info.Creation),
+            (info.Attributes & FileAttributes.Hidden) != 0);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BasicInfo
+    {
+        internal long Creation, LastAccess, LastWrite, Change;
+        internal FileAttributes Attributes;
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "GetFileInformationByHandleEx", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern unsafe bool GetFileInformation(SafeFileHandle file, int infoClass, void* data, int size);
 
     internal static unsafe void RequireNtfsVolume(SafeFileHandle directory, bool writable)
     {

@@ -120,6 +120,36 @@ internal static partial class ProductRunner
                     run.SetGeneration(pending[0].Generation);
                     store.ResumeMirror(pending[0].Generation);
                 }
+                else if (automatic)
+                {
+                    bool protectedMirror = job.Options.Mode == ProductBackupMode.ProtectedMirror;
+                    bool consent = protectedMirror && job.AutomaticMirrorPolicy == AutomaticMirrorRules.Version;
+                    MirrorPreview? rejected = null;
+                    bool updated = store.UpdateAutomaticMirror(job.Source.VolumePath, consent, fresh =>
+                    {
+                        if (fresh.Conflicts.Length != 0 || protectedMirror && !consent &&
+                            (fresh.Removed > 0 || fresh.RemovedDirectories > 0 || fresh.RequiresMassReview))
+                        {
+                            rejected = fresh;
+                            return false;
+                        }
+                        if (fresh.Previous is not null && fresh is
+                            { Added: 0, Replaced: 0, Removed: 0, AddedDirectories: 0, RemovedDirectories: 0 })
+                            return false;
+                        if (consent) run.AuthorizeAutomaticMirror(fresh);
+                        else run.SetGeneration(fresh.Generation);
+                        return true;
+                    });
+                    if (!updated)
+                    {
+                        if (rejected is null) return run.Finish(ProductRunState.Unchanged, clock: clock);
+                        return rejected.Conflicts.Length != 0
+                            ? run.Finish(ProductRunState.Review, rejected.Conflicts[0], clock: clock,
+                                detail: "Hay ediciones externas en el destino. Consérvalas y resuelve el conflicto antes de reintentar.")
+                            : run.Finish(ProductRunState.Review, clock: clock,
+                                detail: "Revisa las retiradas o el alcance de los cambios antes de actualizar el espejo.");
+                    }
+                }
                 else
                 {
                     ProductMirrorApproval? approval = approvalId is { } approved ? registry.ReadApproval(id, approved) : null;
@@ -133,18 +163,12 @@ internal static partial class ProductRunner
                     if (review.Conflicts.Length > 0)
                         return run.Finish(ProductRunState.Review, review.Conflicts[0], clock: clock,
                             detail: "Hay ediciones externas en el destino. Consérvalas y resuelve el conflicto antes de reintentar.");
-                    if (automatic && review.Previous is not null && !review.RequiresEmptyReview &&
-                        review is { Added: 0, Replaced: 0, Removed: 0, AddedDirectories: 0, RemovedDirectories: 0 })
-                        return run.Finish(ProductRunState.Unchanged, clock: clock);
-                    bool useAutomaticPolicy = automatic && job.Options.Mode == ProductBackupMode.ProtectedMirror &&
-                        job.AutomaticMirrorPolicy == AutomaticMirrorRules.Version;
-                    if (job.Options.Mode == ProductBackupMode.ProtectedMirror && approval is null && !useAutomaticPolicy &&
+                    if (job.Options.Mode == ProductBackupMode.ProtectedMirror && approval is null &&
                         (review.Removed > 0 || review.RemovedDirectories > 0 || review.RequiresEmptyReview || review.RequiresMassReview))
                         return run.Finish(ProductRunState.Review, clock: clock,
                             detail: "Revisa las retiradas, el origen vacío o el alcance de los cambios antes de actualizar el espejo.");
-                    if (!useAutomaticPolicy) run.SetGeneration(review.Generation);
-                    store.BeginMirror(review, approval?.EmptyReviewed ?? false, approval?.MassReviewed ?? false,
-                        authorizeAutomatic: useAutomaticPolicy ? run.AuthorizeAutomaticMirror : null);
+                    run.SetGeneration(review.Generation);
+                    store.BeginMirror(review, approval?.EmptyReviewed ?? false, approval?.MassReviewed ?? false);
                 }
             }
             return run.Finish(ProductRunState.Confirmed, clock: clock);

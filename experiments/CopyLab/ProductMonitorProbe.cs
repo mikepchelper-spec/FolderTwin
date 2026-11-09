@@ -112,8 +112,25 @@ internal static class ProductMonitorProbe
                     if (duplicate.ExitCode != 0 || registry.RunHistory(job.Id).Runs.Length != 1)
                         throw new InvalidOperationException("A second monitor was admitted.");
                 }
+                if (mode == ProductBackupMode.Versions)
+                {
+                    var before = VersionScaleProbe.ReadCounters(monitor);
+                    TimeSpan cpu = monitor.TotalProcessorTime;
+                    var idle = Stopwatch.StartNew();
+                    await Task.Delay(TimeSpan.FromSeconds(15));
+                    monitor.Refresh();
+                    var after = VersionScaleProbe.ReadCounters(monitor);
+                    Console.Error.WriteLine(FormattableString.Invariant(
+                        $"Monitor idle: seconds={idle.Elapsed.TotalSeconds:F2}; one_core_pct={(monitor.TotalProcessorTime - cpu).TotalSeconds * 100 / idle.Elapsed.TotalSeconds:F2}; working_set_bytes={monitor.WorkingSet64}; read_bytes={after.ReadBytes - before.ReadBytes}; write_bytes={after.WriteBytes - before.WriteBytes}."));
+                    if (registry.RunHistory(job.Id).Runs.Length != 1)
+                        throw new InvalidOperationException("The idle monitor dispatched a backup without a change.");
+                }
+                var changeAt = DateTimeOffset.UtcNow;
+                var latency = Stopwatch.StartNew();
                 File.WriteAllText(file, "second");
                 var second = await WaitForRunAsync(first.Intent.Sequence, ProductRunState.Confirmed);
+                Console.Error.WriteLine(FormattableString.Invariant(
+                    $"{mode} edit: dispatch_seconds={(second.Intent.StartedUtc - changeAt).TotalSeconds:F3}; observed_confirmed_seconds={latency.Elapsed.TotalSeconds:F3}."));
                 string detached = Path.Combine(Path.GetDirectoryName(job.Destination.LastVolumePath)!, "detached");
                 Directory.Move(job.Destination.LastVolumePath, detached);
                 File.WriteAllText(file, "after reconnection");
@@ -121,6 +138,25 @@ internal static class ProductMonitorProbe
                 var absent = await WaitForRunAsync(second.Intent.Sequence, ProductRunState.WaitingForDestination);
                 Directory.Move(detached, job.Destination.LastVolumePath);
                 var returned = await WaitForRunAsync(absent.Intent.Sequence, ProductRunState.Confirmed);
+                if (mode == ProductBackupMode.Versions)
+                {
+                    string otherSource = Directory.CreateDirectory(Path.Combine(workspace.Root, "second-source")).FullName;
+                    File.WriteAllText(Path.Combine(otherSource, "other.txt"), "another independent job");
+                    var other = registry.Create(new("Second synthetic monitor job", ProductBackupMode.Versions, null),
+                        LocalJobRoots.ReviewDedicatedDestination(otherSource, parent));
+                    using (var held = new FileStream(file, FileMode.Open, FileAccess.Write, FileShare.Read))
+                    {
+                        held.WriteByte((byte)'X');
+                        held.Flush();
+                        File.WriteAllText(Path.Combine(source, "stable.txt"), "change while a different file is held open");
+                        await WaitForRunAsync(returned.Intent.Sequence, ProductRunState.Busy);
+                        registry.UpdateSettings(other.Id, other.Options.Name, null, true, false, ProductWatchMode.Watching);
+                        var otherPoint = await WaitForRunAsync(0, ProductRunState.Confirmed, other.Id);
+                        if (VersionStore.OpenProduct(other).Verify(otherPoint.Generation!))
+                            throw new InvalidOperationException("An occupied job prevented a verified point for another job.");
+                        registry.UpdateSettings(other.Id, other.Options.Name, null, true, false, ProductWatchMode.Paused);
+                    }
+                }
                 registry.UpdateSettings(job.Id, job.Options.Name, null, true, false, ProductWatchMode.Paused);
                 using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
                     await monitor.WaitForExitAsync(timeout.Token);
@@ -148,17 +184,21 @@ internal static class ProductMonitorProbe
                 }
             }
 
-            async Task<ProductRunView> WaitForRunAsync(long after, ProductRunState state)
+            async Task<ProductRunView> WaitForRunAsync(long after, ProductRunState state, Guid? jobId = null)
             {
-                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                while (true)
+                var timer = Stopwatch.StartNew();
+                ProductRunHistory? observed = null;
+                while (timer.Elapsed < TimeSpan.FromSeconds(30))
                 {
                     if (monitor.HasExited) throw new InvalidOperationException($"The monitor stopped with exit code {monitor.ExitCode}.");
-                    var completed = registry.RunHistory(job.Id).Runs.FirstOrDefault(run =>
+                    observed = registry.RunHistory(jobId ?? job.Id);
+                    var completed = observed.Runs.FirstOrDefault(run =>
                         run.Intent.Sequence > after && !run.Running && run.Result?.State == state);
                     if (completed is not null) return completed;
-                    await Task.Delay(100, timeout.Token);
+                    await Task.Delay(100);
                 }
+                throw new InvalidOperationException($"Waiting for {state} after sequence {after}. Observed: " +
+                    string.Join(", ", observed?.Runs.Take(4).Select(run => $"{run.Intent.Sequence}:{run.Result?.State}/{run.Running}") ?? []));
             }
         }
         using (workspace.OpenRegisteredRoot()) { }

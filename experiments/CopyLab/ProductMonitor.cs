@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Channels;
 
 namespace CopyLab;
 
@@ -9,6 +10,8 @@ internal static class ProductMonitor
     private static readonly TimeSpan MaximumWait = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan ReconcileInterval = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan Poll = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan ConfigurationPoll = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(5);
 
     internal static async Task<int> SuperviseAsync(string location)
     {
@@ -41,15 +44,43 @@ internal static class ProductMonitor
         }
         using (lease)
         {
+            var wake = Channel.CreateBounded<bool>(new BoundedChannelOptions(1)
+            {
+                SingleReader = true,
+                FullMode = BoundedChannelFullMode.DropWrite
+            });
+            void Wake() => wake.Writer.TryWrite(true);
+            int configurationChanged = 1;
+            void ConfigurationChanged()
+            {
+                Interlocked.Exchange(ref configurationChanged, 1);
+                Wake();
+            }
+            using var configurationWatch = new FileSystemWatcher(registry.Location, "*.json")
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite
+            };
+            configurationWatch.Created += (_, _) => ConfigurationChanged();
+            configurationWatch.Changed += (_, _) => ConfigurationChanged();
+            configurationWatch.Deleted += (_, _) => ConfigurationChanged();
+            configurationWatch.Renamed += (_, _) => ConfigurationChanged();
+            configurationWatch.Error += (_, _) => ConfigurationChanged();
+            configurationWatch.EnableRaisingEvents = true;
             var jobs = new Dictionary<Guid, Watch>();
             Process? worker = null;
             Watch? active = null;
             long dispatch = 0;
             long checkedOwnerAt = Stopwatch.GetTimestamp();
+            long? loadedAt = null;
+            long? lastHeartbeat = null;
+            (Guid Job, ProductWatchActivity Activity)[] priorActivity = [];
+            ProductJobList? listing = null;
             try
             {
                 while (true)
                 {
+                    wake.Reader.TryRead(out _);
                     long now = Stopwatch.GetTimestamp();
                     if (scheduled && Stopwatch.GetElapsedTime(checkedOwnerAt, now) >= TimeSpan.FromSeconds(5))
                     {
@@ -64,14 +95,22 @@ internal static class ProductMonitor
                         active = null;
                     }
 
-                    ProductJobList listing;
-                    try { listing = registry.List(); }
-                    catch (Exception error) when (VersionJob.SharingViolation(error))
+                    if (Interlocked.Exchange(ref configurationChanged, 0) != 0 || loadedAt is null ||
+                        Stopwatch.GetElapsedTime(loadedAt.Value, now) >= ConfigurationPoll)
                     {
-                        await Task.Delay(Poll).ConfigureAwait(false);
-                        continue;
+                        try
+                        {
+                            listing = registry.List();
+                            loadedAt = now;
+                        }
+                        catch (Exception error) when (VersionJob.SharingViolation(error))
+                        {
+                            Interlocked.Exchange(ref configurationChanged, 1);
+                            await Task.Delay(Poll).ConfigureAwait(false);
+                            continue;
+                        }
                     }
-                    var configured = listing.Jobs.Where(job => job.Enabled && !job.Retired &&
+                    var configured = listing!.Jobs.Where(job => job.Enabled && !job.Retired &&
                         job.WatchMode == ProductWatchMode.Watching).ToDictionary(job => job.Id);
                     foreach (var id in jobs.Keys.Where(id => !configured.ContainsKey(id)).ToArray())
                     {
@@ -82,7 +121,7 @@ internal static class ProductMonitor
                     foreach (var job in configured.Values)
                     {
                         if (!jobs.TryGetValue(job.Id, out var watch))
-                            jobs.Add(job.Id, watch = new Watch(now));
+                            jobs.Add(job.Id, watch = new Watch(now, Wake));
                         watch.Observe(job.Source, now);
                     }
                     if (worker is null)
@@ -102,9 +141,22 @@ internal static class ProductMonitor
                             break;
                         }
                     }
-                    ProductJobRegistry.WriteMonitorHeartbeat(lease,
-                        jobs.Select(entry => (entry.Key, entry.Value.Activity(active == entry.Value))));
-                    await Task.Delay(Poll).ConfigureAwait(false);
+                    var activity = jobs.Select(entry => (entry.Key, entry.Value.Activity(active == entry.Value))).ToArray();
+                    if (lastHeartbeat is null || Stopwatch.GetElapsedTime(lastHeartbeat.Value, now) >= HeartbeatInterval ||
+                        !activity.AsSpan().SequenceEqual(priorActivity))
+                    {
+                        ProductJobRegistry.WriteMonitorHeartbeat(lease, activity);
+                        lastHeartbeat = now;
+                        priorActivity = activity;
+                    }
+                    if (worker is not null || jobs.Values.Any(watch => watch.NeedsPolling))
+                        await Task.Delay(Poll).ConfigureAwait(false);
+                    else
+                    {
+                        using var timeout = new CancellationTokenSource(HeartbeatInterval);
+                        try { await wake.Reader.WaitToReadAsync(timeout.Token).ConfigureAwait(false); }
+                        catch (OperationCanceledException) when (timeout.IsCancellationRequested) { }
+                    }
                 }
             }
             finally
@@ -115,15 +167,16 @@ internal static class ProductMonitor
         }
     }
 
-    private sealed class Watch(long now) : IDisposable
+    private sealed class Watch(long now, Action wake) : IDisposable
     {
-        private readonly ProductWatchSignal signal = new(TimeProvider.System);
+        private readonly ProductWatchSignal signal = new(TimeProvider.System, wake);
         private FileSystemWatcher? watcher;
         private long reconcileAt = now;
         private long observeAt = now;
         private long retryAt = now;
         private int failures;
         internal long LastDispatch { get; set; }
+        internal bool NeedsPolling => watcher is null || signal.Pending;
 
         internal void Observe(LocalJobRoot source, long now)
         {

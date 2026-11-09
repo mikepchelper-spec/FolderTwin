@@ -3,8 +3,7 @@ using Microsoft.Win32.SafeHandles;
 internal sealed record FileMetadata(DateTime LastWriteUtc, DateTime? CreationUtc = null, bool? Hidden = null)
 {
     internal static FileMetadata Read(SafeFileHandle file) =>
-        new(File.GetLastWriteTimeUtc(file), File.GetCreationTimeUtc(file),
-            File.GetAttributes(file).HasFlag(FileAttributes.Hidden));
+        WindowsProbeNative.ReadFileMetadata(file);
 
     internal bool IsValid() => IsSupportedTime(LastWriteUtc) &&
         (CreationUtc is { } creation ? IsSupportedTime(creation) && Hidden.HasValue : !Hidden.HasValue);
@@ -29,11 +28,12 @@ internal sealed record FileMetadata(DateTime LastWriteUtc, DateTime? CreationUtc
 
     internal void RequireMatch(SafeFileHandle file)
     {
-        if (File.GetLastWriteTimeUtc(file) != LastWriteUtc)
+        var observed = Read(file);
+        if (observed.LastWriteUtc != LastWriteUtc)
             throw new InvalidDataException("La fecha de modificación del archivo no coincide con la registrada.");
-        if (CreationUtc is { } creation && File.GetCreationTimeUtc(file) != creation)
+        if (CreationUtc is { } creation && observed.CreationUtc != creation)
             throw new InvalidDataException("La fecha de creación del archivo no coincide con la registrada.");
-        if (Hidden is { } hidden && File.GetAttributes(file).HasFlag(FileAttributes.Hidden) != hidden)
+        if (Hidden is { } hidden && observed.Hidden != hidden)
             throw new InvalidDataException("El atributo Oculto del archivo no coincide con el registrado.");
     }
 

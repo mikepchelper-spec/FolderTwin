@@ -1,4 +1,4 @@
-internal sealed class ProductWatchSignal(TimeProvider clock)
+internal sealed class ProductWatchSignal(TimeProvider clock, Action? wake = null)
 {
     private readonly object gate = new();
     private long? first;
@@ -18,6 +18,7 @@ internal sealed class ProductWatchSignal(TimeProvider clock)
             last = clock.GetTimestamp();
             first ??= last;
         }
+        wake?.Invoke();
     }
 
     internal void RequireReconciliation(bool failedWatcher = false)
@@ -27,6 +28,7 @@ internal sealed class ProductWatchSignal(TimeProvider clock)
             reconcile = true;
             watcherFailed |= failedWatcher;
         }
+        wake?.Invoke();
     }
 
     internal bool TakeWatcherFailure()

@@ -44,14 +44,14 @@ internal sealed partial class VersionStore
     }
 
     private (BatchPlan Source, CatalogSnapshot Baseline) ReadAccumulativeContext(SafeFileHandle scope, SafeFileHandle root,
-        SafeFileHandle directory, MirrorPlan plan)
+        SafeFileHandle directory, MirrorPlan plan, MirrorPreview? freshPreview = null)
     {
         var sourceFiles = new PendingFiles(directory, "source.jsonl", "source.location.json", plan.Generation);
         BatchPlan source;
         try { source = workspace.ReadIntent(scope, Destination, root, sourceFiles); }
         catch (FileNotFoundException)
         {
-            source = ReadMirrorSource(plan);
+            source = freshPreview?.SourcePlan ?? ReadMirrorSource(plan);
             workspace.SaveIntent(source, scope, sourceFiles);
         }
         if (!source.SourceIdentity.AsSpan().SequenceEqual(plan.SourceIdentity) ||
@@ -61,7 +61,7 @@ internal sealed partial class VersionStore
         const string baselineName = "baseline.jsonl";
         if (!WindowsProbeNative.PlainFileExists(directory, baselineName))
         {
-            var observed = AnalyzeSource(MirrorCurrentPath, plan.CurrentIdentity, WorkPhase.Verifying);
+            var observed = freshPreview?.Baseline ?? AnalyzeSource(MirrorCurrentPath, plan.CurrentIdentity, WorkPhase.Verifying);
             if (!BatchCatalog.WriteMetadata(Stream.Null, observed, plan.Generation).AsSpan().SequenceEqual(plan.BaselineHash))
                 throw new InvalidDataException("El destino cambió antes de guardar la revisión acumulativa. Se conserva para revisión.");
             string draft = baselineName + ".tmp";
