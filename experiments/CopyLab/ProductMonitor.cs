@@ -9,7 +9,7 @@ internal static class ProductMonitor
     private static readonly TimeSpan Poll = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan ConfigurationPoll = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan OwnershipPoll = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan OwnershipPoll = TimeSpan.FromMinutes(1);
 
     internal static async Task<int> SuperviseAsync(string location)
     {
@@ -53,9 +53,13 @@ internal static class ProductMonitor
             });
             void Wake() => wake.Writer.TryWrite(true);
             int configurationChanged = 1;
-            void ConfigurationChanged()
+            int registrationChanged = 0;
+            void ConfigurationChanged(string? name)
             {
-                Interlocked.Exchange(ref configurationChanged, 1);
+                if (name == ProductJobRegistry.MonitorRegistrationSignal)
+                    Interlocked.Exchange(ref registrationChanged, 1);
+                else
+                    Interlocked.Exchange(ref configurationChanged, 1);
                 Wake();
             }
             using var configurationWatch = new FileSystemWatcher(registry.Location, "*.json")
@@ -63,11 +67,15 @@ internal static class ProductMonitor
                 IncludeSubdirectories = true,
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite
             };
-            configurationWatch.Created += (_, _) => ConfigurationChanged();
-            configurationWatch.Changed += (_, _) => ConfigurationChanged();
-            configurationWatch.Deleted += (_, _) => ConfigurationChanged();
-            configurationWatch.Renamed += (_, _) => ConfigurationChanged();
-            configurationWatch.Error += (_, _) => ConfigurationChanged();
+            configurationWatch.Created += (_, change) => ConfigurationChanged(change.Name);
+            configurationWatch.Changed += (_, change) => ConfigurationChanged(change.Name);
+            configurationWatch.Deleted += (_, change) => ConfigurationChanged(change.Name);
+            configurationWatch.Renamed += (_, change) => ConfigurationChanged(change.Name);
+            configurationWatch.Error += (_, _) =>
+            {
+                Interlocked.Exchange(ref registrationChanged, 1);
+                ConfigurationChanged(null);
+            };
             configurationWatch.EnableRaisingEvents = true;
             var jobs = new Dictionary<Guid, Watch>();
             Process? worker = null;
@@ -84,7 +92,8 @@ internal static class ProductMonitor
                 {
                     wake.Reader.TryRead(out _);
                     long now = Stopwatch.GetTimestamp();
-                    if (scheduler is not null && Stopwatch.GetElapsedTime(checkedOwnerAt, now) >= OwnershipPoll)
+                    if (scheduler is not null && (Interlocked.Exchange(ref registrationChanged, 0) != 0 ||
+                        Stopwatch.GetElapsedTime(checkedOwnerAt, now) >= OwnershipPoll))
                     {
                         if (!scheduler.CanMonitor(registry, ref verifiedDefinition)) return 0;
                         checkedOwnerAt = now;

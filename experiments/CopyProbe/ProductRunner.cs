@@ -181,7 +181,7 @@ internal static partial class ProductRunner
             return run.Finish(ProductRunState.Confirmed, clock: clock);
         }
         catch (OperationCanceledException) { return run.Finish(ProductRunState.Cancelled, control.Current.RelativePath, clock: clock); }
-        catch (SourceChangedDuringBackupException error) when (automatic && run.Generation is null)
+        catch (SourceChangedDuringBackupException error) when (automatic && (run.Generation is null || error.RetryAfterReservation))
         {
             var state = Availability(job);
             return run.Finish(state == ProductRunState.Review ? ProductRunState.Busy : state,

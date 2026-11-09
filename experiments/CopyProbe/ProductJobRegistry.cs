@@ -34,6 +34,7 @@ internal sealed record ProductJobList(ProductJob[] Jobs, Guid[] Pending, int Unr
 
 internal sealed partial class ProductJobRegistry : IDisposable
 {
+    internal const string MonitorRegistrationSignal = "monitor-registration.json";
     private const string IntentName = "intent.json";
     private const string TargetName = "target.json";
     private const string CommitName = "confirmed";
@@ -113,6 +114,21 @@ internal sealed partial class ProductJobRegistry : IDisposable
     internal FileStream AcquireMonitorLock() =>
         WindowsProbeNative.OpenPlainFile(directory.Root, ".foldertwin-monitor.lock",
             FileAccess.ReadWrite, FileShare.Read, FileMode.OpenOrCreate);
+
+    internal void SignalMonitorRegistrationChange()
+    {
+        try
+        {
+            using var signal = WindowsProbeNative.OpenPlainFile(directory.Root, MonitorRegistrationSignal,
+                FileAccess.Write, FileShare.Read, FileMode.OpenOrCreate);
+            signal.Write(JsonSerializer.SerializeToUtf8Bytes(Guid.NewGuid()));
+        }
+        catch (Exception error) when (VersionJob.Expected(error))
+        {
+            // The task itself is authoritative. A failed wake is recovered by
+            // polling its registration and checking again before each worker.
+        }
+    }
 
     internal ProductWatchTiming ReadWatchTiming()
     {

@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using Microsoft.Win32.SafeHandles;
 
-internal enum InventoryIssueKind { Unavailable, ReparsePoint, Encrypted, UnsupportedName, ReadFailure, EntryLimit, DepthLimit, Cancelled }
+internal enum InventoryIssueKind { Unavailable, ReparsePoint, Encrypted, UnsupportedName, ReadFailure, EntryLimit, DepthLimit, Cancelled, ChangedDuringRead }
 internal sealed record InventoryEntry(string RelativePath, bool IsDirectory, long Length);
 internal sealed record InventoryIssue(string RelativePath, InventoryIssueKind Kind);
 internal sealed record InventoryResult(InventoryEntry[] Entries, InventoryIssue[] Issues)
@@ -100,7 +100,7 @@ internal static class FolderInventory
                     }
                     catch (Exception error) when (IsReadFailure(error))
                     {
-                        issues.Add(new(relative, InventoryIssueKind.ReadFailure));
+                        issues.Add(new(relative, VersionJob.Unavailable(error) ? InventoryIssueKind.ChangedDuringRead : InventoryIssueKind.ReadFailure));
                     }
                 }
             }

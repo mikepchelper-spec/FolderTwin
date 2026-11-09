@@ -37,7 +37,7 @@ internal sealed partial class VersionStore
     }
 
     private MirrorPreview BuildMirrorPreview(SafeFileHandle scope, SafeFileHandle root, string source, int maximumChangePercent,
-        string? generation = null, bool captureAffectedPaths = false)
+        string? generation = null, bool captureAffectedPaths = false, bool automatic = false)
     {
         using var mirror = MirrorJournal.Open(root, binding, out var currentIdentity);
         RequireNoPendingMirror(root);
@@ -47,9 +47,9 @@ internal sealed partial class VersionStore
         using var origin = new DirectoryFence(source);
         workspace.RequireSourceIdentity(source, origin.Root);
         byte[] sourceIdentity = WindowsProbeNative.DirectoryIdentity(origin.Root);
-        var sourcePlan = AnalyzeSource(source, sourceIdentity);
+        var sourcePlan = AnalyzeSource(source, sourceIdentity, retrySourceChanges: automatic);
         workspace.ValidatePlan(sourcePlan);
-        FolderBatch.RequireSameInventory(sourcePlan);
+        FolderBatch.RequireSameInventory(sourcePlan, retrySourceChanges: automatic);
         generation ??= NewGenerationId();
         var before = MirrorPrevious(scope, root, registry.MirrorGeneration, sourceIdentity);
         if (before is not null && !before.DocumentHash.AsSpan().SequenceEqual(registry.Generations[registry.MirrorGeneration!]))

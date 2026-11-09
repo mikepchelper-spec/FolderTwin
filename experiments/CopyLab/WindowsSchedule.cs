@@ -103,8 +103,11 @@ internal sealed class WindowsSchedule : IDisposable
         Register(ProductOwner(registry, job), executable, firstRun, daily);
     }
 
-    internal void RegisterMonitor(ProductJobRegistry registry, string executable, bool atLogon) =>
+    internal void RegisterMonitor(ProductJobRegistry registry, string executable, bool atLogon)
+    {
         Register(MonitorOwner(registry), executable, default, daily: false, atLogon);
+        registry.SignalMonitorRegistrationChange();
+    }
 
     private void Register(Owner owner, string executable, DateTime firstRun, bool daily, bool atLogon = false)
     {
@@ -141,7 +144,11 @@ internal sealed class WindowsSchedule : IDisposable
     internal void Remove(LabWorkspace workspace, Guid id) => Remove(LabOwner(workspace, id));
     internal void RemoveProduct(ProductJobRegistry registry, Guid id) => Remove(ProductOwner(registry, id));
     internal void RemoveProductReviewed(ProductJobRegistry registry, ProductJob job) => Remove(ProductOwner(registry, job));
-    internal void RemoveMonitor(ProductJobRegistry registry) => Remove(MonitorOwner(registry));
+    internal void RemoveMonitor(ProductJobRegistry registry)
+    {
+        Remove(MonitorOwner(registry));
+        registry.SignalMonitorRegistrationChange();
+    }
     private void Remove(Owner owner)
     {
         if (ReadTask(owner) is not null) folder.DeleteTask(owner.Name, 0);

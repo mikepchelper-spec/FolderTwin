@@ -31,7 +31,8 @@ internal sealed partial class VersionStore
         return PublishMirror(scope.Root, root.Root, fresh, emptyReviewed, massReviewed, checkpoint, registryCheckpoint, beginRegistryCheckpoint);
     }
 
-    internal bool UpdateAutomaticMirror(string source, bool captureAffectedPaths, Func<MirrorPreview, bool> authorize)
+    internal bool UpdateAutomaticMirror(string source, bool captureAffectedPaths, Func<MirrorPreview, bool> authorize,
+        Action<MirrorStep>? checkpoint = null)
     {
         using var scope = workspace.OpenRegisteredRoot();
         workspace.CheckRoots(source, Destination);
@@ -40,15 +41,25 @@ internal sealed partial class VersionStore
         using var operation = OpenLock(root.Root, FileAccess.ReadWrite);
         RequireNoAbandonInProgress(root.Root);
         var fresh = BuildMirrorPreview(scope.Root, root.Root, source, maximumChangePercent: 25,
-            captureAffectedPaths: captureAffectedPaths);
+            captureAffectedPaths: captureAffectedPaths, automatic: true);
         if (fresh.RequiresEmptyReview)
             throw new InvalidDataException("Revisa el origen vacío antes de actualizar el espejo.");
         // Both admission and publication use this exact inventory under the same
         // store lock. ContinueMirror rechecks both trees before mutating current.
         if (!authorize(fresh)) return false;
         LabWorkspace.RequireSpace(fresh.EstimatedBytes, fresh.AvailableBytes);
+        try
+        {
+            CopyAndConfirm(root.Root, fresh.SourcePlan, fresh.Generation, checkpoint: null, objectCheckpoint: null,
+                prepareOnly: true, retrySourceChanges: true);
+        }
+        catch (SourceChangedDuringBackupException error)
+        {
+            // There is a run reservation, but no mirror plan or mutation yet.
+            throw new SourceChangedDuringBackupException(error.Message, error, retryAfterReservation: true);
+        }
         PublishMirror(scope.Root, root.Root, fresh, emptyReviewed: false, massReviewed: fresh.RequiresMassReview,
-            useFreshInventory: true);
+            checkpoint, useFreshInventory: true);
         return true;
     }
 
@@ -60,17 +71,33 @@ internal sealed partial class VersionStore
         if (!currentIdentity.AsSpan().SequenceEqual(fresh.CurrentIdentity))
             throw new InvalidDataException("La carpeta actual del espejo cambió antes de publicar el plan.");
         using var operations = WindowsProbeNative.OpenPlainDirectory(mirror, MirrorJournal.OperationsName);
-        using var directory = WindowsProbeNative.OpenOrCreatePlainDirectory(operations, fresh.Generation);
-        LabWorkspace.RequireEmpty(directory);
         var plan = new MirrorPlan(workspace.IsAccumulative ? 3 : 2, fresh.Generation, fresh.DocumentHash, fresh.Previous, fresh.PreviousHash,
             Path.GetFileName(fresh.SourcePlan.Source), fresh.SourcePlan.SourceIdentity, currentIdentity,
             binding.Marker, binding.Identity, fresh.MaximumChangePercent, emptyReviewed, massReviewed,
             workspace.IsAccumulative ? BatchCatalog.WriteMetadata(Stream.Null, fresh.SourcePlan, fresh.Generation) : null,
             workspace.IsAccumulative ? BatchCatalog.WriteMetadata(Stream.Null, fresh.Baseline!, fresh.Generation) : null);
-        RetentionJournal.WriteFile(directory, "plan", MirrorJournal.Encode(plan));
+        if (useFreshInventory)
+        {
+            using var preparations = WindowsProbeNative.OpenOrCreatePlainDirectory(mirror, "preparations");
+            using (var draft = WindowsProbeNative.CreatePlainDirectory(preparations, plan.Generation))
+            {
+                if (plan.Version == 3) _ = ReadAccumulativeContext(scope, root, draft, plan, fresh);
+                else workspace.SaveIntent(fresh.SourcePlan, scope, PreparedMirrorSource(draft, plan.Generation));
+                RetentionJournal.WriteFile(draft, "plan", MirrorJournal.Encode(plan));
+                MirrorJournal.SetState(draft, plan, "automatic");
+            }
+            using var prepared = WindowsProbeNative.OpenDirectoryForDeletion(preparations, plan.Generation);
+            WindowsProbeNative.RenameDirectoryNew(prepared, operations, plan.Generation);
+        }
+        else
+        {
+            using var directory = WindowsProbeNative.OpenOrCreatePlainDirectory(operations, plan.Generation);
+            LabWorkspace.RequireEmpty(directory);
+            RetentionJournal.WriteFile(directory, "plan", MirrorJournal.Encode(plan));
+        }
         checkpoint?.Invoke(MirrorStep.Planned);
-        ContinueMirror(scope, root, directory, plan, checkpoint, registryCheckpoint, beginRegistryCheckpoint,
-            useFreshInventory ? fresh : null);
+        ContinuePublishedMirror(scope, root, mirror, operations, plan, checkpoint, registryCheckpoint,
+            beginRegistryCheckpoint, useFreshInventory ? fresh : null);
         return plan.Generation;
     }
 
@@ -85,11 +112,39 @@ internal sealed partial class VersionStore
         RequireNoAbandonInProgress(root.Root);
         using var mirror = MirrorJournal.Open(root.Root, binding, out var currentIdentity);
         using var operations = WindowsProbeNative.OpenPlainDirectory(mirror, MirrorJournal.OperationsName);
-        using var directory = WindowsProbeNative.OpenPlainDirectory(operations, generation);
-        var plan = MirrorJournal.Read(directory, generation, binding, currentIdentity);
+        MirrorPlan plan;
+        using (var directory = WindowsProbeNative.OpenPlainDirectory(operations, generation))
+            plan = MirrorJournal.Read(directory, generation, binding, currentIdentity);
         if (ReadMirrorOperations(root.Root).Any(item => !item.Applied && item.Generation != generation))
             throw new InvalidDataException("Hay otra actualización de espejo pendiente.");
-        ContinueMirror(scope.Root, root.Root, directory, plan, checkpoint, registryCheckpoint, beginRegistryCheckpoint: null);
+        ContinuePublishedMirror(scope.Root, root.Root, mirror, operations, plan, checkpoint, registryCheckpoint,
+            beginRegistryCheckpoint: null);
+    }
+
+    private static PendingFiles PreparedMirrorSource(SafeFileHandle directory, string generation) =>
+        new(directory, "source.jsonl", "source.location.json", generation);
+
+    private void ContinuePublishedMirror(SafeFileHandle scope, SafeFileHandle root, SafeFileHandle mirror, SafeFileHandle operations,
+        MirrorPlan plan, Action<MirrorStep>? checkpoint, Action<RegistryStep>? registryCheckpoint,
+        Action<RegistryStep>? beginRegistryCheckpoint, MirrorPreview? freshPreview = null)
+    {
+        try
+        {
+            using var directory = WindowsProbeNative.OpenPlainDirectory(operations, plan.Generation);
+            ContinueMirror(scope, root, directory, plan, checkpoint, registryCheckpoint, beginRegistryCheckpoint, freshPreview);
+        }
+        catch (SourceChangedDuringBackupException error)
+        {
+            using var directory = WindowsProbeNative.OpenDirectoryForDeletion(operations, plan.Generation);
+            var registered = GenerationRegistry.Read(root, binding);
+            if (!MirrorJournal.HasState(directory, plan, "automatic") || MirrorJournal.HasState(directory, plan, "ready") ||
+                registered.PendingMirrorGeneration is not null || registered.MirrorGeneration != plan.Previous ||
+                !IsCommitted(root, plan.Generation)) throw;
+            using var superseded = WindowsProbeNative.OpenOrCreatePlainDirectory(mirror, "superseded");
+            WindowsProbeNative.RenameDirectoryNew(directory, superseded, plan.Generation);
+            throw new SourceChangedDuringBackupException("El origen volvió a cambiar. El punto preparado se conserva y se repetirá la comparación.",
+                error, retryAfterReservation: true);
+        }
     }
 
     private void ContinueMirror(SafeFileHandle scope, SafeFileHandle root, SafeFileHandle directory, MirrorPlan plan,
@@ -105,6 +160,7 @@ internal sealed partial class VersionStore
         if (!WindowsProbeNative.DirectoryIdentity(currentRoot.Root).AsSpan().SequenceEqual(plan.CurrentIdentity))
             throw new InvalidDataException("La raíz actual del espejo fue sustituida.");
         using var pending = WindowsProbeNative.OpenPlainDirectory(root, PendingDirectory);
+        bool automatic = MirrorJournal.HasState(directory, plan, "automatic");
         BatchPlan? sourceInventory = null;
         CatalogSnapshot? baseline = null;
         if (plan.Version == 3)
@@ -115,7 +171,9 @@ internal sealed partial class VersionStore
         {
             intent = plan.Version == 3 ? MergeAccumulative(sourceInventory!, new(workspace.Root, MirrorCurrentPath,
                 Destination, plan.CurrentIdentity, binding, baseline!.Directories, baseline.Files)) :
-                freshPreview?.SourcePlan ?? ReadMirrorSource(plan);
+                freshPreview?.SourcePlan ?? (automatic
+                    ? workspace.ReadIntent(scope, Destination, root, PreparedMirrorSource(directory, plan.Generation))
+                    : ReadMirrorSource(plan));
             workspace.SaveIntent(intent, scope, IntentFiles(pending, plan.Generation));
         }
         if (!intent.SourceIdentity.AsSpan().SequenceEqual(plan.SourceIdentity) ||
@@ -148,11 +206,11 @@ internal sealed partial class VersionStore
             // Staging touches only private storage; both trees are checked again
             // below before the first mutation of the current mirror.
             if (freshPreview is null) RequireMirrorContents(before, plan.CurrentIdentity);
-            var preparing = freshPreview?.SourcePlan ?? ReadMirrorSource(plan);
+            var preparing = freshPreview?.SourcePlan ?? ReadMirrorSource(plan, retrySourceChanges: automatic);
             if (plan.Version != 3 && preparing.Files.Length == 0 && preparing.Directories.Length == 0 && !plan.EmptyReviewed)
                 throw new InvalidDataException("No se autorizó una actualización con origen vacío.");
             StageMirrorObjects(directory, plan, before, after, checkpoint);
-            _ = ReadMirrorSource(plan);
+            _ = ReadMirrorSource(plan, retrySourceChanges: automatic);
             RequireMirrorContents(before, plan.CurrentIdentity);
             // Reuse this exact current-tree comparison only in the fresh run.
             // Resumption must inspect the mixed state again.
@@ -217,18 +275,21 @@ internal sealed partial class VersionStore
         checkpoint?.Invoke(MirrorStep.Applied);
     }
 
-    private BatchPlan ReadMirrorSource(MirrorPlan plan)
+    private BatchPlan ReadMirrorSource(MirrorPlan plan, bool retrySourceChanges = false)
     {
         string source = workspace.SourcePath(plan.Source);
         workspace.CheckRoots(source, Destination);
         using var origin = new DirectoryFence(source);
         if (!WindowsProbeNative.DirectoryIdentity(origin.Root).AsSpan().SequenceEqual(plan.SourceIdentity))
             throw new InvalidDataException("La identidad del origen cambió desde la revisión del espejo.");
-        var observed = AnalyzeSource(source, plan.SourceIdentity);
-        FolderBatch.RequireSameInventory(observed);
+        var observed = AnalyzeSource(source, plan.SourceIdentity, retrySourceChanges: retrySourceChanges);
+        FolderBatch.RequireSameInventory(observed, retrySourceChanges);
         if (!BatchCatalog.WriteMetadata(Stream.Null, observed, plan.Generation).AsSpan()
             .SequenceEqual(plan.Version == 3 ? plan.SourceHash : plan.DocumentHash))
-            throw new InvalidDataException("El origen cambió desde la revisión del espejo. Se conserva la operación pendiente.");
+        {
+            const string message = "El origen cambió desde la revisión del espejo. Se conserva el punto preparado.";
+            throw retrySourceChanges ? new SourceChangedDuringBackupException(message) : new InvalidDataException(message);
+        }
         return observed;
     }
 

@@ -71,7 +71,7 @@ internal static class ProductDeployment
         var timer = Stopwatch.StartNew();
         while (registry.MonitorOwnsRegistry() || taskStillRunning?.Invoke() == true)
         {
-            if (timer.Elapsed >= TimeSpan.FromSeconds(35))
+            if (timer.Elapsed >= TimeSpan.FromSeconds(70))
                 throw new IOException("El monitor sigue activo. Espera a que libere la configuración y vuelve a revisar.");
             Thread.Sleep(100);
         }

@@ -87,10 +87,9 @@ internal static class AutomaticPartialProbe
 
             File.WriteAllText(stable, "new bytes after capacity returns");
             const int diskFull = unchecked((int)0x80070070);
-            var pendingBoundary = mode == ProductBackupMode.Versions ? WorkPhase.Publishing : WorkPhase.Copying;
             var exhausted = ProductRunner.Run(registry, job.Id, checkpoint: work =>
             {
-                if (work.Phase == pendingBoundary) throw new IOException("Synthetic disk-full error.", diskFull);
+                if (work.Phase == WorkPhase.Publishing) throw new IOException("Synthetic disk-full error.", diskFull);
             }, automatic: true);
             Check(exhausted is { State: ProductRunState.Review, ErrorCode: diskFull, Generation: not null } &&
                 !store.ListPoints().Any(point => point.Id == exhausted.Generation) && !store.Verify(complete.Generation!),

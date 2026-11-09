@@ -86,9 +86,52 @@ internal static class AutomaticMirrorProbe
                 });
                 throw new InvalidOperationException("A stale automatic inventory was applied.");
             }
-            catch (InvalidDataException) { }
-            Check(File.ReadAllText(currentItem) == "edit 9", "A change after automatic review mutated the previous mirror.");
+            catch (SourceChangedDuringBackupException error) when (error.RetryAfterReservation) { }
+            Check(File.ReadAllText(currentItem) == "edit 9" && smallStore.ListMirrorOperations().All(operation => operation.Applied),
+                "A change after automatic review mutated the previous mirror or left an obsolete plan.");
+
+            foreach (var mode in new[] { ProductBackupMode.Accumulative, ProductBackupMode.ProtectedMirror })
+            {
+                string live = Folder("late-source-" + mode);
+                string data = Path.Combine(live, "edit.txt");
+                File.WriteAllText(data, "first");
+                var late = registry.Create(new("Synthetic late " + mode, mode, null),
+                    LocalJobRoots.ReviewDedicatedDestination(live, destinations));
+                registry.UpdateSettings(late.Id, late.Options.Name, null, true, false, ProductWatchMode.Watching,
+                    authorizeMirror: mode == ProductBackupMode.ProtectedMirror);
+                var initial = ProductRunner.Run(registry, late.Id, automatic: true);
+                Check(initial.State == ProductRunState.Confirmed, initial.Detail ?? "The late-drift fixture did not initialize.");
+                var lateStore = VersionStore.OpenProduct(late);
+                string current = Path.Combine(lateStore.MirrorCurrentPath, "edit.txt");
+                File.WriteAllText(data, "prepared snapshot");
+                string? snapshot = null;
+                try
+                {
+                    lateStore.UpdateAutomaticMirror(late.Source.VolumePath, captureAffectedPaths: false, review =>
+                    {
+                        snapshot = review.Generation;
+                        return true;
+                    }, checkpoint: step =>
+                    {
+                        if (step == MirrorStep.Staged) File.WriteAllText(data, "final stable edit");
+                    });
+                    throw new InvalidOperationException("The superseded automatic snapshot mutated current.");
+                }
+                catch (SourceChangedDuringBackupException error) when (error.RetryAfterReservation) { }
+                Check(snapshot is not null && lateStore.ListMirrorOperations().All(operation => operation.Applied) &&
+                    lateStore.RegisteredGenerations().MirrorGeneration == initial.Generation && File.ReadAllText(current) == "first",
+                    "Late source drift changed the published copy or blocked the next attempt.");
+                var converged = ProductRunner.Run(registry, late.Id, automatic: true);
+                Check(converged.State == ProductRunState.Confirmed && File.ReadAllText(current) == "final stable edit",
+                    converged.Detail ?? "The automatic mirror could not reconcile after source drift.");
+                Directory.Move(live, Path.Combine(fixture.Root, "offline-" + mode));
+                string recovered = Folder("late-restore-" + mode);
+                lateStore.Restore(snapshot!, recovered);
+                Check(File.ReadAllText(Path.Combine(recovered, "edit.txt")) == "prepared snapshot",
+                    "Archiving a superseded mirror operation lost its recoverable snapshot.");
+            }
             Console.WriteLine("PASS automatic mirror consent, recoverable retirement, small-folder edits, split mass changes, rollback of clock, empty source and external conflict.");
+            Console.WriteLine("PASS late source drift preserves the prepared snapshot without mutating current, then converges in both mirror modes.");
             return 0;
 
             ProductRunResult RunAutomatic() => ProductRunner.Run(registry, job.Id, automatic: true);

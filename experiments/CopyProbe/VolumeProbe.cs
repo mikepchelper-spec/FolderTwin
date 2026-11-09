@@ -301,8 +301,7 @@ internal static class VolumeProbe
             }
             finally { if (created) File.Delete(padding); }
             var resumed = ProductRunner.Run(registry, job.Id, automatic: true);
-            bool resumedPlan = job.Options.Mode == ProductBackupMode.Versions ? failed.Generation is null : resumed.Generation == failed.Generation;
-            Check(resumed.State == ProductRunState.Confirmed && resumedPlan &&
+            Check(resumed.State == ProductRunState.Confirmed && resumed.Generation != failed.Generation &&
                 ProductRunner.Verify(registry, job.Id, resumed.Generation!).State == ProductRunState.Confirmed,
                 resumed.Detail ?? "The product runner did not resume its exact generation after capacity returned.");
             var review = LocalJobRoots.ReviewDedicatedDestination(job.Destination.LastVolumePath, Path.Combine(state, "product-recovery"));

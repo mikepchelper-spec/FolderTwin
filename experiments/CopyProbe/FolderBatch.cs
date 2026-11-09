@@ -4,7 +4,10 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
-internal sealed class SourceChangedDuringBackupException(string message, Exception? inner = null) : IOException(message, inner);
+internal sealed class SourceChangedDuringBackupException(string message, Exception? inner = null, bool retryAfterReservation = false) : IOException(message, inner)
+{
+    internal bool RetryAfterReservation { get; } = retryAfterReservation;
+}
 
 internal sealed record BatchFile(string RelativePath, long Length, byte[] Hash, FileMetadata? Metadata = null)
 {
@@ -65,13 +68,15 @@ internal static class FolderBatch
         if (!WindowsProbeNative.DirectoryIdentity(origin.Root).AsSpan().SequenceEqual(sourceIdentity))
             throw new InvalidDataException("La carpeta de origen cambió antes del análisis.");
         var inventory = FolderInventory.Scan(source, maximumEntries: maximumEntries);
+        if (!inventory.Complete && retrySourceChanges && inventory.Issues.All(issue => issue.Kind == InventoryIssueKind.ChangedDuringRead))
+            throw new SourceChangedDuringBackupException("Una subcarpeta cambió durante el inventario. Se volverá a comparar el origen.");
         if (!inventory.Complete)
             throw new InvalidDataException(DescribeIncompleteSource(inventory.Issues));
         if (inventory.Entries.FirstOrDefault(entry => IsControl(entry.RelativePath)) is { } reserved)
             throw new InvalidDataException($"El origen contiene un nombre reservado. Revisa «{reserved.RelativePath}».");
         string[] directories = inventory.Entries.Where(entry => entry.IsDirectory).Select(entry => entry.RelativePath)
             .OrderBy(path => path, StringComparer.Ordinal).ToArray();
-        CheckDirectoryData(source, directories);
+        CheckDirectoryData(source, directories, retrySourceChanges);
         var files = new List<BatchFile>();
         int totalFiles = inventory.Entries.Count(entry => !entry.IsDirectory);
         int workers = parallel && totalFiles >= 8192 ? Math.Min(4, Environment.ProcessorCount) : 1;
@@ -389,8 +394,8 @@ internal static class FolderBatch
         int limit = plan.SourceBinding is null ? Math.Max(1, plan.Files.Length + plan.Directories.Length) :
             plan.Files.Length * 5 + plan.Directories.Length + 16;
         var current = FolderInventory.Scan(plan.Source, maximumEntries: limit);
-        if (!current.Complete && retrySourceChanges && current.Issues.All(issue => issue.Kind == InventoryIssueKind.EntryLimit))
-            throw new SourceChangedDuringBackupException("Aparecieron archivos durante el análisis. Se volverá a comparar el origen.");
+        if (!current.Complete && retrySourceChanges && current.Issues.All(issue => issue.Kind is InventoryIssueKind.EntryLimit or InventoryIssueKind.ChangedDuringRead))
+            throw new SourceChangedDuringBackupException("La lista de archivos cambió durante el análisis. Se volverá a comparar el origen.");
         if (!current.Complete)
             throw new InvalidDataException(DescribeIncompleteSource(current.Issues));
         var entries = current.Entries.Where(entry => plan.SourceBinding is null || !IsControl(entry.RelativePath)).ToArray();
@@ -403,7 +408,7 @@ internal static class FolderBatch
             const string message = "El inventario del origen cambió. Repite el análisis.";
             throw retrySourceChanges ? new SourceChangedDuringBackupException(message) : new InvalidDataException(message);
         }
-        CheckDirectoryData(plan.Source, plan.Directories);
+        CheckDirectoryData(plan.Source, plan.Directories, retrySourceChanges);
     }
 
     private static string DescribeIncompleteSource(InventoryIssue[] issues)
@@ -421,6 +426,7 @@ internal static class FolderBatch
                 InventoryIssueKind.EntryLimit => "límite de entradas alcanzado",
                 InventoryIssueKind.DepthLimit => "límite de profundidad alcanzado",
                 InventoryIssueKind.Cancelled => "análisis cancelado",
+                InventoryIssueKind.ChangedDuringRead => "la carpeta cambió durante la lectura",
                 _ => "no se pudo leer"
             };
             return $"{path} · {reason}";
@@ -429,14 +435,21 @@ internal static class FolderBatch
             (issues.Length > maximumShown ? $"\nQuedan {issues.Length - maximumShown:N0} incidencias por mostrar." : "");
     }
 
-    private static void CheckDirectoryData(string root, string[] directories)
+    private static void CheckDirectoryData(string root, string[] directories, bool retrySourceChanges)
     {
         using var rootFence = new DirectoryFence(root);
         WindowsProbeNative.RequireSupportedData(rootFence.Root, Path.GetFileName(root));
         foreach (string relative in directories)
         {
-            using var directory = new DirectoryFence(Path.Combine(root, relative));
-            WindowsProbeNative.RequireSupportedData(directory.Root, relative);
+            try
+            {
+                using var directory = new DirectoryFence(Path.Combine(root, relative));
+                WindowsProbeNative.RequireSupportedData(directory.Root, relative);
+            }
+            catch (Exception error) when (retrySourceChanges && VersionJob.Unavailable(error))
+            {
+                throw new SourceChangedDuringBackupException($"La carpeta «{relative}» cambió durante el análisis.", error);
+            }
         }
     }
 

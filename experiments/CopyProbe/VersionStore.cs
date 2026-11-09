@@ -242,16 +242,17 @@ internal sealed partial class VersionStore
 
     private void CopyAndConfirm(SafeFileHandle store, BatchPlan plan, string generation, Action<CatalogStep>? checkpoint,
         Action<CopyStep, string>? objectCheckpoint, BatchPlan? sourceInventory = null, bool prepareOnly = false,
-        Action? beforePublication = null)
+        Action? beforePublication = null, bool retrySourceChanges = false)
     {
+        retrySourceChanges |= beforePublication is not null;
         var inventory = sourceInventory ?? plan;
         DirectoryFence? origin = null;
         try
         {
             CopyObjects();
+            if (origin is not null && (!prepareOnly || retrySourceChanges))
+                FolderBatch.RequireSameInventory(inventory, retrySourceChanges);
             if (prepareOnly) return;
-            if (origin is not null)
-                FolderBatch.RequireSameInventory(inventory, retrySourceChanges: beforePublication is not null);
             beforePublication?.Invoke();
             observe?.Invoke(new(WorkPhase.Publishing, 0, 1));
             WithCatalogFiles(store, generation, files =>
@@ -296,7 +297,7 @@ internal sealed partial class VersionStore
                             origin = new DirectoryFence(plan.Source);
                             if (!WindowsProbeNative.DirectoryIdentity(origin.Root).AsSpan().SequenceEqual(plan.SourceIdentity))
                                 throw new InvalidDataException("La carpeta de origen cambió desde el análisis.");
-                            if (!prepareOnly) FolderBatch.RequireSameInventory(inventory, retrySourceChanges: beforePublication is not null);
+                            if (!prepareOnly || retrySourceChanges) FolderBatch.RequireSameInventory(inventory, retrySourceChanges);
                         }
                         string input = Path.Combine(plan.Source, file.RelativePath);
                         try
@@ -307,11 +308,11 @@ internal sealed partial class VersionStore
                             if (observed.Length != file.Length || !SHA256.HashData(observed).AsSpan().SequenceEqual(file.Hash))
                             {
                                 string message = $"El contenido de «{file.RelativePath}» cambió desde el análisis.";
-                                throw beforePublication is not null ? new SourceChangedDuringBackupException(message) : new InvalidDataException(message);
+                                throw retrySourceChanges ? new SourceChangedDuringBackupException(message) : new InvalidDataException(message);
                             }
                             workspace.Copy(plan.Source, Destination, input, final, temporary, binding, file.Hash, objectCheckpoint);
                         }
-                        catch (Exception error) when (beforePublication is not null && VersionJob.Unavailable(error))
+                        catch (Exception error) when (retrySourceChanges && VersionJob.Unavailable(error))
                         {
                             throw new SourceChangedDuringBackupException($"«{file.RelativePath}» cambió durante la copia.", error);
                         }
