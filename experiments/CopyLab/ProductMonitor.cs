@@ -30,7 +30,9 @@ internal static class ProductMonitor
         Func<ProductWatchSignal, LocalJobRoot, FileSystemWatcher>? observe = null)
     {
         using var registry = new ProductJobRegistry(location);
-        if (scheduled && !ProductAutomation.CanMonitor(registry)) return 0;
+        using var scheduler = scheduled ? new WindowsSchedule() : null;
+        string? verifiedDefinition = null;
+        if (scheduler is not null && !scheduler.CanMonitor(registry, ref verifiedDefinition)) return 0;
         FileStream lease;
         try { lease = registry.AcquireMonitorLock(); }
         catch (Exception error) when (VersionJob.SharingViolation(error))
@@ -81,9 +83,9 @@ internal static class ProductMonitor
                 {
                     wake.Reader.TryRead(out _);
                     long now = Stopwatch.GetTimestamp();
-                    if (scheduled && Stopwatch.GetElapsedTime(checkedOwnerAt, now) >= TimeSpan.FromSeconds(5))
+                    if (scheduler is not null && Stopwatch.GetElapsedTime(checkedOwnerAt, now) >= HeartbeatInterval)
                     {
-                        if (!ProductAutomation.CanMonitor(registry)) return 0;
+                        if (!scheduler.CanMonitor(registry, ref verifiedDefinition)) return 0;
                         checkedOwnerAt = now;
                     }
                     if (worker is not null && worker.HasExited)
@@ -129,7 +131,8 @@ internal static class ProductMonitor
                         {
                             var watch = entry.Value;
                             if (!watch.TakeDue(now)) continue;
-                            if (scheduled && !ProductAutomation.CanMonitor(registry)) return 0;
+                            if (scheduler is not null && !scheduler.CanMonitor(registry, ref verifiedDefinition, verifyInstallation: true))
+                                return 0;
                             watch.LastDispatch = ++dispatch;
                             try
                             {

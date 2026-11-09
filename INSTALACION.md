@@ -20,7 +20,7 @@ Para detener solo la vigilancia, abre **Aplicación → Detener vigilancia**. Lo
 
 En la misma sección pulsa **Revisar versiones instaladas**, elige la versión y comprueba su ubicación. Acepta **Eliminar únicamente la versión instalada seleccionada** y pulsa **Eliminar versión revisada**. Si una retirada quedó interrumpida, la lista la identifica y la acción continúa desde su diario. Una tarea que siga apuntando directamente a esa versión impide retirarla. La consulta incluye tareas ocultas y subcarpetas consultables del Programador, siguiendo [GetTasks](https://learn.microsoft.com/en-us/windows/win32/api/taskschd/nf-taskschd-itaskfolder-gettasks) y [GetFolders](https://learn.microsoft.com/en-us/windows/desktop/api/taskschd/nf-taskschd-itaskfolder-getfolders). Las definiciones ajenas solo se consultan; no se retiran ni modifican. Un error de consulta detiene el borrado.
 
-La versión abierta no se puede elegir para borrar. Abre otra copia portable para retirarla. Al terminar, cierra FolderTwin y retira la carpeta portable si ya no la necesitas. La configuración y los respaldos permanecen disponibles al extraer de nuevo el paquete. También puedes deshabilitar o retirar un trabajo individual desde **Editar trabajo y horario**.
+Para retirar la versión abierta, abre otra copia portable. Al terminar, cierra FolderTwin y retira la carpeta portable si ya no la necesitas. La configuración y los respaldos permanecen disponibles al extraer de nuevo el paquete. También puedes deshabilitar o retirar un trabajo individual desde **Editar trabajo y automatización**.
 
 ## Resultados por paquete
 

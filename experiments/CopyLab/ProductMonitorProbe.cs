@@ -287,12 +287,19 @@ internal static class ProductMonitorProbe
                     do
                     {
                         File.WriteAllText(temporary, $"save {++edits}");
-                        lastEditAt = DateTimeOffset.UtcNow;
                         for (int retries = 0; ; retries++)
                         {
-                            try { File.Move(temporary, burstFile, overwrite: true); break; }
-                            catch (IOException error) when ((error.HResult & 0xffff) == 32 && retries < 20)
-                            { await Task.Delay(20); }
+                            try
+                            {
+                                lastEditAt = DateTimeOffset.UtcNow;
+                                File.Move(temporary, burstFile, overwrite: true);
+                                break;
+                            }
+                            // A worker may hold either synthetic path against
+                            // delete. Windows can report access denied on replacement.
+                            catch (Exception error) when (retries < 40 && error is (IOException or UnauthorizedAccessException) &&
+                                (error.HResult & 0xffff) is 5 or 32 or 33)
+                            { await Task.Delay(25); }
                         }
                         await Task.Delay(350);
                     }

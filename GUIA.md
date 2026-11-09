@@ -41,7 +41,7 @@ La ventana de ayuda incluye esta guía, soporte y el commit exacto del paquete. 
 | Versionado | Guarda puntos por fecha y permite recuperar archivos que después se modificaron o desaparecieron del origen. Los contenidos sin cambios se comparten internamente. Usa la recuperación de la aplicación para extraerlos. |
 | Espejo protegido | Mantiene una carpeta actual y conserva el contenido anterior. Si autorizas las retiradas ordinarias automáticas, los archivos retirados se pueden recuperar desde el punto anterior. El origen vacío, los conflictos y los cambios masivos requieren revisión. |
 
-El horario funciona con tu sesión iniciada. Si su preparación falla después de guardar, el trabajo permanece registrado: revisa el aviso y usa **Editar trabajo y horario → Reparar horario**. No se anuncia un horario correcto solo por haber guardado la hora.
+El horario funciona con tu sesión iniciada. Si falla su preparación, revisa el aviso y usa **Editar trabajo y automatización → Reparar horario**. El trabajo queda guardado y Ruta muestra si el horario está pendiente.
 
 ## Revisar el estado y ejecutar
 
@@ -83,9 +83,9 @@ El historial puede mantener la incidencia anterior después de un intento correc
 
 ## Editar, exportar y retirar trabajos
 
-En **Editar trabajo y horario**, cambia nombre, hora o **Trabajo habilitado** y pulsa **Guardar cambios**. **Retirar trabajo; conservar datos y recuperación** lo desactiva y mantiene sus respaldos accesibles. Para reactivarlo, desmarca la retirada y vuelve a habilitarlo. Cambiar carpetas o modo exige crear otro trabajo.
+En **Editar trabajo y automatización**, cambia nombre, hora o **Trabajo habilitado** y pulsa **Guardar cambios**. **Retirar trabajo; conservar datos y recuperación** lo desactiva y mantiene sus respaldos accesibles. Para reactivarlo, desmarca la retirada y vuelve a habilitarlo. Cambiar carpetas o modo exige crear otro trabajo.
 
-Dentro de **Editar trabajo y horario**, **Exportar configuración** guarda opciones, rutas e identidades, sin credenciales ni historial. Las rutas pueden revelar información personal y se deben revisar antes de compartir el archivo. **Importar configuración** exige elegir el respaldo existente y comprobar sus identidades. Puedes elegir el origen para futuras copias o **Recuperar sin origen**. Acepta la revisión y **Guardar trabajo deshabilitado**. Para activarlo después, revisa el origen importado y habilítalo expresamente. La importación no reasigna un respaldo ajeno por tener el mismo nombre.
+Dentro de **Editar trabajo y automatización**, **Exportar configuración** guarda opciones, rutas e identidades, sin credenciales ni historial. Revisa las rutas antes de compartir el archivo. **Importar configuración** exige elegir el respaldo existente y comprobar sus identidades. Puedes elegir el origen para futuras copias o **Recuperar sin origen**. Acepta la revisión y **Guardar trabajo deshabilitado**. Para activarlo después, revisa el origen importado y habilítalo expresamente.
 
 ## Retención manual
 

@@ -36,6 +36,27 @@ internal sealed class WindowsSchedule : IDisposable
     internal ScheduleInfo? ReadProductReviewed(ProductJobRegistry registry, ProductJob job) => ReadTask(ProductOwner(registry, job));
     internal ScheduleInfo? ReadMonitor(ProductJobRegistry registry) => ReadTask(MonitorOwner(registry));
 
+    internal bool CanMonitor(ProductJobRegistry registry, ref string? verifiedDefinition, bool verifyInstallation = false)
+    {
+        var owner = MonitorOwner(registry);
+        dynamic? task = Find(owner.Name);
+        if (task is null) return false;
+        try
+        {
+            if (!(bool)task.Enabled) return false;
+            string xml = (string)task.Xml;
+            // Idle checks still see a removed, disabled or edited task. The
+            // worker dispatch always verifies the package and policy again.
+            if (!verifyInstallation && xml == verifiedDefinition) return true;
+            if (!string.Equals(VerifyOwnership(xml, owner), Environment.ProcessPath, StringComparison.OrdinalIgnoreCase) ||
+                PolicyProblem(xml, owner, ReadRunLevel(task)) is not null)
+                return false;
+            verifiedDefinition = xml;
+            return true;
+        }
+        finally { Marshal.FinalReleaseComObject(task); }
+    }
+
     internal bool MonitorHasRunningInstance(ProductJobRegistry registry)
     {
         var owner = MonitorOwner(registry);

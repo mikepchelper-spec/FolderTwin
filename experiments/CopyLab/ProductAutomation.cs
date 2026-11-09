@@ -52,8 +52,8 @@ internal static class ProductAutomation
     internal static bool CanMonitor(ProductJobRegistry registry)
     {
         using var scheduler = new WindowsSchedule();
-        return scheduler.ReadMonitor(registry) is { Enabled: true, MeetsPolicy: true } task &&
-            string.Equals(task.Executable, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase);
+        string? verifiedDefinition = null;
+        return scheduler.CanMonitor(registry, ref verifiedDefinition);
     }
 
     internal static bool Expected(Exception error) => VersionJob.Expected(error) || error is COMException;
