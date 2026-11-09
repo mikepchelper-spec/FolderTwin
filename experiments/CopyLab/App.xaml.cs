@@ -16,7 +16,7 @@ public partial class App : Application
         bool productSyntheticPreview = e.Args is ["--product-synthetic-preview"] or ["--product-synthetic-preview", "compact" or "light" or "empty"];
         bool productSmoke = e.Args is ["--product-smoke"] or ["--product-usability-smoke"] or ["--product-preserved-smoke"] or ["--product-surface-smoke"] or ["--schedule-policy-audit"] or ["--history-audit"] or ["--tray-audit"] or ["--index-audit"];
         bool productScheduleSmoke = e.Args is ["--product-schedule-smoke"];
-        bool heldProductChild = e.Args is ["--held-product-child", _, _];
+        bool heldProductChild = e.Args is ["--held-product-child" or "--held-product-auto-child", _, _];
         bool heldRestoreChild = e.Args is ["--held-restore-child", _, _, _];
         bool heldMirrorChild = e.Args is ["--held-mirror-review-child", _, _];
         bool heldAbandonChild = e.Args is ["--held-product-abandon-child", _, _, _];
@@ -92,7 +92,7 @@ public partial class App : Application
             if (heldProductChild)
             {
                 if (!Guid.TryParseExact(e.Args[2], "N", out var heldId)) { Shutdown(2); return; }
-                int heldResult = await Task.Run(() => ProductRunProbe.HeldChild(e.Args[1], heldId));
+                int heldResult = await Task.Run(() => ProductRunProbe.HeldChild(e.Args[1], heldId, automatic: e.Args[0] == "--held-product-auto-child"));
                 Shutdown(heldResult);
                 return;
             }

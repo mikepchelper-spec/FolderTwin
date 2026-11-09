@@ -68,8 +68,8 @@ if (args is ["--restore-product-job", var restoreRegistry, var restoreJob, var r
 if (args is ["--held-restore-child", var restoreFixture, var heldRestoreJob, var heldRestoreRequest] &&
     Guid.TryParseExact(heldRestoreJob, "N", out var heldRestoreId) && Guid.TryParseExact(heldRestoreRequest, "N", out var heldRequestId))
     return ProductRestoreProbe.HeldChild(restoreFixture, heldRestoreId, heldRequestId);
-if (args is ["--held-product-child", var productFixture, var heldId] && Guid.TryParseExact(heldId, "N", out var heldJobId))
-    return ProductRunProbe.HeldChild(productFixture, heldJobId);
+if (args is ["--held-product-child" or "--held-product-auto-child", var productFixture, var heldId] && Guid.TryParseExact(heldId, "N", out var heldJobId))
+    return ProductRunProbe.HeldChild(productFixture, heldJobId, automatic: args[0] == "--held-product-auto-child");
 if (args is ["--product-store"])
     return ProductStoreProbe.Run();
 if (args is ["--reader-audit"])

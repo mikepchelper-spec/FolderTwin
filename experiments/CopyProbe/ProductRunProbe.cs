@@ -193,7 +193,7 @@ internal static class ProductRunProbe
             "Editing or reactivation changed the data identity or mode.");
     }
 
-    internal static int HeldChild(string root, Guid id)
+    internal static int HeldChild(string root, Guid id, bool automatic = false)
     {
         var fixture = LabWorkspace.Open(root);
         using var registry = new ProductJobRegistry(Path.Combine(fixture.Root, "settings"));
@@ -205,14 +205,14 @@ internal static class ProductRunProbe
             Console.WriteLine("READY");
             Console.Out.Flush();
             Console.ReadLine();
-        });
+        }, automatic: automatic);
         return result.State is ProductRunState.Confirmed or ProductRunState.Cancelled ? 0 : 1;
     }
 
     private static void CheckWorkers()
     {
         foreach (var mode in Enum.GetValues<ProductBackupMode>())
-        foreach (string action in new[] { "resume", "cancel", "terminate" })
+        foreach (string action in new[] { "resume", "cancel", "terminate", "auto-terminate" })
         {
             var fixture = LabWorkspace.Create();
             try
@@ -222,7 +222,13 @@ internal static class ProductRunProbe
                 string settings = Directory.CreateDirectory(Path.Combine(fixture.Root, "settings")).FullName;
                 File.WriteAllText(Path.Combine(source, "contenido.txt"), "worker-controlled synthetic data");
                 using var registry = new ProductJobRegistry(settings);
-                var job = registry.Create(new(mode.ToString(), mode, null), LocalJobRoots.ReviewDedicatedDestination(source, parent));
+                bool automatic = action == "auto-terminate";
+                bool terminate = automatic || action == "terminate";
+                TimeOnly? daily = automatic ? new TimeOnly(20, 30) : null;
+                var job = registry.Create(new(mode.ToString(), mode, daily), LocalJobRoots.ReviewDedicatedDestination(source, parent));
+                if (automatic)
+                    registry.UpdateSettings(job.Id, job.Options.Name, daily, true, false, ProductWatchMode.Watching,
+                        authorizeMirror: mode == ProductBackupMode.ProtectedMirror);
                 string executable = Environment.ProcessPath ?? throw new InvalidOperationException("Executable unavailable.");
                 var start = new ProcessStartInfo(executable)
                 {
@@ -231,7 +237,9 @@ internal static class ProductRunProbe
                 };
                 if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
                     start.ArgumentList.Add(Assembly.GetExecutingAssembly().Location);
-                foreach (string argument in new[] { "--held-product-child", fixture.Root, job.Id.ToString("N") }) start.ArgumentList.Add(argument);
+                start.ArgumentList.Add(automatic ? "--held-product-auto-child" : "--held-product-child");
+                start.ArgumentList.Add(fixture.Root);
+                start.ArgumentList.Add(job.Id.ToString("N"));
                 using var worker = Process.Start(start) ?? throw new InvalidOperationException("Could not start product worker.");
                 var errors = worker.StandardError.ReadToEndAsync();
                 using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
@@ -246,10 +254,16 @@ internal static class ProductRunProbe
                     worker.StandardInput.Flush();
                     Wait(() => registry.RunHistory(job.Id).Runs[0].Progress?.Paused == true, "The real worker did not pause.");
                     Check(registry.RunHistory(job.Id).Runs[0].Running, "A paused worker released its execution lease.");
-                    if (action == "terminate") worker.Kill();
+                    if (automatic)
+                    {
+                        Reject(() => ProductRunner.Run(registry, job.Id));
+                        Check(ProductRunner.RunScheduledAsync(settings, job.Id, () => true).GetAwaiter().GetResult() == 2 &&
+                            registry.RunHistory(job.Id).Runs.Length == 1, "An overlapping trigger started a second worker.");
+                    }
+                    if (terminate) worker.Kill();
                     else registry.RequestRun(job.Id, attempt.Intent.Id, action == "resume" ? ProductRunAction.Resume : ProductRunAction.Cancel);
                     Check(worker.WaitForExit(15000), "The product worker did not finish.");
-                    if (action != "terminate") Check(worker.ExitCode == 0, errors.GetAwaiter().GetResult());
+                    if (!terminate) Check(worker.ExitCode == 0, errors.GetAwaiter().GetResult());
                     var finished = registry.RunHistory(job.Id).Runs[0];
                     Check(!finished.Running && (action switch
                     {
@@ -259,7 +273,7 @@ internal static class ProductRunProbe
                     }), "The completed, cancelled or terminated worker was misreported.");
                     if (action != "resume")
                     {
-                        var retry = ProductRunner.Run(registry, job.Id);
+                        var retry = ProductRunner.Run(registry, job.Id, automatic: automatic);
                         Check(retry.State == ProductRunState.Confirmed && retry.Generation == finished.Generation,
                             retry.Detail ?? "The interrupted attempt did not resume the same generation.");
                     }
@@ -276,7 +290,7 @@ internal static class ProductRunProbe
                 Directory.Delete(fixture.Root, recursive: true);
             }
         }
-        Console.WriteLine("PASS real product workers pause, resume, cancel and recover after termination in all three modes; stale controls are rejected.");
+        Console.WriteLine("PASS real manual and automatic workers recover after termination in all modes. Pause, cancel, stale controls and overlapping triggers verified.");
     }
 
     private static void Wait(Func<bool> condition, string error)

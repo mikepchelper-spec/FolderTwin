@@ -226,10 +226,12 @@ internal static class VolumeProbe
         foreach (var mode in Enum.GetValues<ProductBackupMode>())
         {
             var job = registry.Create(new(mode.ToString(), mode, null), LocalJobRoots.ReviewDedicatedDestination(source, parent));
+            registry.UpdateSettings(job.Id, job.Options.Name, null, true, false, ProductWatchMode.Watching,
+                authorizeMirror: mode == ProductBackupMode.ProtectedMirror);
             using (var roots = LocalJobRoots.Reopen(new(job.Source,
                 new(job.Destination.LastVolumePath, job.Destination.Identity), 0, false)))
                 Check(!roots.Review.SameVolume, "The product-mode test did not use two NTFS volumes.");
-            var copied = ProductRunner.Run(registry, job.Id);
+            var copied = ProductRunner.Run(registry, job.Id, automatic: true);
             Check(copied.State == ProductRunState.Confirmed && copied.Generation is not null,
                 copied.Detail ?? "The product runner did not confirm its cross-volume backup.");
             Check(ProductRunner.Verify(registry, job.Id, copied.Generation!).State == ProductRunState.Confirmed,
@@ -251,7 +253,7 @@ internal static class VolumeProbe
         {
             var prior = registry.RunHistory(job.Id).Runs.First(run => run.Intent.Operation == ProductRunOperation.Backup &&
                 run.Result?.State == ProductRunState.Confirmed).Result!;
-            var attempt = ProductRunner.Run(registry, job.Id);
+            var attempt = ProductRunner.Run(registry, job.Id, automatic: true);
             Check(attempt.State == ProductRunState.WaitingForDestination,
                 attempt.Detail ?? "A product runner accepted the detached or substituted destination.");
             var history = registry.RunHistory(job.Id);
@@ -289,7 +291,7 @@ internal static class VolumeProbe
                     for (int i = 0; i < (128 * MiB) / block.Length && drive.AvailableFreeSpace > 2 * MiB; i++)
                         filler.Write(block);
                     filler.Flush(flushToDisk: true);
-                });
+                }, automatic: true);
                 Check(created && failed.State == ProductRunState.Review && failed.ErrorCode is
                     (112 or 39 or unchecked((int)0x80070070) or unchecked((int)0x80070027)),
                     failed.Detail ?? "The product runner did not report a real disk-full error.");
@@ -298,7 +300,7 @@ internal static class VolumeProbe
                 Console.WriteLine($"PASS {job.Options.Mode} reports actual disk full ({failed.ErrorCode}), preserves its pending generation and verifies the prior point.");
             }
             finally { if (created) File.Delete(padding); }
-            var resumed = ProductRunner.Run(registry, job.Id);
+            var resumed = ProductRunner.Run(registry, job.Id, automatic: true);
             Check(resumed.State == ProductRunState.Confirmed && resumed.Generation == failed.Generation &&
                 ProductRunner.Verify(registry, job.Id, resumed.Generation!).State == ProductRunState.Confirmed,
                 resumed.Detail ?? "The product runner did not resume its exact generation after capacity returned.");
@@ -319,10 +321,13 @@ internal static class VolumeProbe
         using var registry = new ProductJobRegistry(Path.Combine(state, "product-settings"));
         var jobs = registry.List().Jobs;
         Check(jobs.Length == 3, "The returned-volume fixture lost its product jobs.");
+        const string changed = "product backup after a Windows volume-letter change";
+        string source = Path.Combine(state, "product-source"), absent = Path.Combine(state, "product-source-absent");
+        File.WriteAllText(Path.Combine(source, "datos.txt"), changed);
         var generations = new Dictionary<Guid, string>();
         foreach (var job in jobs)
         {
-            var result = ProductRunner.Run(registry, job.Id);
+            var result = ProductRunner.Run(registry, job.Id, automatic: true);
             Check(result.State == ProductRunState.Confirmed && result.Generation is not null,
                 result.Detail ?? "A product runner did not resume after the volume returned with a new letter.");
             generations.Add(job.Id, result.Generation!);
@@ -330,7 +335,6 @@ internal static class VolumeProbe
                 registry.RunHistory(job.Id).Runs.Count(run => run.Result?.State == ProductRunState.WaitingForDestination) == 2,
                 "The product return failed verification or lost an absence/substitution incident.");
         }
-        string source = Path.Combine(state, "product-source"), absent = Path.Combine(state, "product-source-absent");
         Directory.Move(source, absent);
         try
         {
@@ -341,7 +345,7 @@ internal static class VolumeProbe
                 Check(ProductRunner.Restore(registry, job.Id, request).State == ProductRunState.Confirmed,
                     "The returned product backup could not restore without its source.");
                 CheckHash(Path.Combine(destination.Parent.VolumePath, destination.FolderName, "datos.txt"),
-                    SHA256.HashData("product backup between NTFS volumes"u8));
+                    SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(changed)));
             }
         }
         finally { Directory.Move(absent, source); }

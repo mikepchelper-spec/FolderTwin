@@ -60,7 +60,8 @@ internal static class ProductMonitorProbe
                     scheduler.RegisterMonitor(registry, previousVersion, atLogon: true);
                     scheduler.RunMonitorNow(registry);
                     await WaitAsync(() => OwnsMonitor(previousVersion) && registry.RunHistory(job.Id).Runs.Any(run =>
-                        run.Intent.Sequence > last.Intent.Sequence && !run.Running && run.Result?.State == ProductRunState.Confirmed),
+                        run.Intent.Sequence > last.Intent.Sequence && !run.Running &&
+                        run.Result?.State is ProductRunState.Confirmed or ProductRunState.Unchanged),
                         "The previous package did not start monitoring and reconcile the existing job.");
                     string updated = ProductDeployment.Install(registry, registry.ReviewMaintenance());
                     if (updated != current || scheduler.ReadMonitor(registry) is not { AtLogon: true, MeetsPolicy: true })
