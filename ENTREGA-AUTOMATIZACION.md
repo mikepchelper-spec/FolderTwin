@@ -2,7 +2,7 @@
 
 ## Candidata `3cb9c6a` en aceptación
 
-El código `3cb9c6a22146c8928f2ac1ed9449090e9a366e80` conserva el reemplazo acotado acumulativo cuando quedan archivos exclusivos del destino. Dos compilaciones independientes, a partir de árboles extraídos del mismo archivo de fuentes, produjeron los mismos 500 hashes y ZIP idénticos. La extracción pasó `Test-Portable.ps1`. La observación prolongada y las mediciones adicionales de escala desde este paquete se registran aparte al terminar.
+El código `3cb9c6a22146c8928f2ac1ed9449090e9a366e80` conserva el reemplazo acotado acumulativo cuando quedan archivos exclusivos del destino. Dos compilaciones independientes, a partir de árboles extraídos del mismo archivo de fuentes, produjeron los mismos 500 hashes y ZIP idénticos. La extracción pasó `Test-Portable.ps1`. Siguen en curso las mediciones adicionales de versionado y espejo a 329.000 archivos desde el mismo paquete.
 
 | Archivo | SHA-256 |
 |---|---|
@@ -25,6 +25,7 @@ La copia local está en `C:\FolderTwin-Distribucion\FolderTwin-3cb9c6a`. El ZIP 
 | Escala acumulativa desde el ZIP extraído | Confirmó en 20,076 s una edición de igual tamaño y fecha entre 329.000 archivos con un exclusivo en el destino. Restauró ambos archivos con el origen apartado. La comparación sin cambios mantuvo el catálogo anterior y la edición añadió una sola generación. [Contadores y escala](AUTOMATIZACION.md#medición-del-reemplazo-acotado). |
 | Actualización desde `c8a413a` | Una tarea temporal de la sesión interactiva ejecutó `--product-monitor-update-smoke` con código 0. El Programador inició el monitor, lo sustituyó tras una terminación real y procesó el cambio ocurrido durante la caída. La actualización traspasó el monitor al ejecutor nuevo, conservó el inicio al entrar en Windows y verificó la retirada y restauración sin origen. |
 | Reposo y recuperación nativa | `--product-monitor-schedule-soak` completó con código 0. En 120,01 s midió 0,25 % de un núcleo, 74.248.192 bytes residentes, 6.267 bytes leídos y 696 escritos. El monitor no despachó durante el reposo. El arnés lo terminó, observó otro proceso, recuperó la edición hecha durante la caída y retiró la tarea. |
+| Observación prolongada del paquete | `--product-monitor-soak` terminó en 278,52 s. Cada modo procesó 64 guardados por reemplazo con temporal y recuperó el contenido exacto del último. El primer despacho de cada ráfaga tomó entre 20,720 y 20,880 s. Los tres modos restauraron por SHA-256 un archivo de 32 MiB con el origen apartado. El ensayo también verificó reposo, reconexión, pausa, un segundo trabajo y el rechazo del destino sustituido. |
 
 La rama local conserva la candidata sin subir a GitHub. La validación pública de Windows `42212336681` terminó correctamente para RC2 (`d902f4c`). La evidencia de `3cb9c6a` procede de este paquete local. [Validación pública de RC2](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42212336681).
 
