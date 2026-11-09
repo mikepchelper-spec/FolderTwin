@@ -2,7 +2,7 @@
 
 ## Candidata `3cb9c6a` en aceptación
 
-El código `3cb9c6a22146c8928f2ac1ed9449090e9a366e80` conserva el reemplazo acotado acumulativo cuando quedan archivos exclusivos del destino. Dos compilaciones independientes, a partir de árboles extraídos del mismo archivo de fuentes, produjeron los mismos 500 hashes y ZIP idénticos. La extracción pasó `Test-Portable.ps1`. Las pruebas funcionales desde el ZIP y la medición con 329.000 archivos y un exclusivo siguen abiertas.
+El código `3cb9c6a22146c8928f2ac1ed9449090e9a366e80` conserva el reemplazo acotado acumulativo cuando quedan archivos exclusivos del destino. Dos compilaciones independientes, a partir de árboles extraídos del mismo archivo de fuentes, produjeron los mismos 500 hashes y ZIP idénticos. La extracción pasó `Test-Portable.ps1`. Siguen abiertas la medición con 329.000 archivos y un exclusivo y la comprobación nativa del Programador con esta compilación.
 
 | Archivo | SHA-256 |
 |---|---|
@@ -10,6 +10,18 @@ El código `3cb9c6a22146c8928f2ac1ed9449090e9a366e80` conserva el reemplazo acot
 | `SHA256SUMS.txt` | `f49822fdfa6bc955bb16db6b5e4d79e7c62753fa6979c24c7ece9cd13d505c94` |
 
 Para repetir el ZIP, usa los archivos de la compilación portable en orden ordinal por ruta relativa con `/`, compresión `Optimal` y fecha fija de entrada `2000-01-01 00:00:00` con desplazamiento cero. El informe se conserva fuera del ZIP que describe. Las comprobaciones ejecutadas desde la extracción anterior `9fa0c63` aprobaron el asistente, C: → D: y la reconciliación tras perder avisos. El ensayo de arranque sin argumentos exige un runner desechable. El ensayo nativo lanzado desde la sesión de herramientas agotó la espera sin observar el monitor. Se conserva esa incidencia para la comprobación en una tarea temporal.
+
+La copia local está en `C:\FolderTwin-Distribucion\FolderTwin-3cb9c6a`. El ZIP junto a esa carpeta mantiene el SHA-256 indicado y la extracción local volvió a pasar `Test-Portable.ps1`. Durante la aceptación se conserva el acceso directo a la compilación anterior.
+
+| Verificación de `3cb9c6a` | Resultado observado |
+|---|---|
+| Asistente de Ruta desde el ZIP extraído | Creó los tres modos automáticos, inició el primer respaldo al guardar y procesó una edición con la ventana cerrada. Comprobó la pausa persistente y restauró bytes con el origen apartado. |
+| Monitor C: → D: desde el ZIP extraído | Despachó una edición aislada en 2,506–2,521 s y confirmó en 3,254–3,945 s desde el cambio, según el modo. Comprobó exclusión de un segundo monitor, desaparición y retorno del destino, pausa y restauración sin origen. En acumulativo comprobó otra edición acotada después de que un archivo quedara solo en el destino y restauró ambos contenidos. |
+| Reconciliación desde el ZIP extraído | Restauró los bytes de dos ediciones con el origen apartado, una tras suprimir callbacks reales y otra tras inyectar el desbordamiento del vigilante. |
+| Interfaz y ciclo del paquete | `--product-smoke` aprobó instalación, retirada, reinstalación, trabajo y restauración en los tres modos, incidencias, navegación por teclado, ayuda, temas, bandeja, importación y retención. El ensayo usa un perfil desechable con selectores y programación inyectados. |
+| Trabajadores reales y fallos sintéticos | `--product-runs` terminó trabajadores manuales y automáticos y recuperó los tres modos. Comprobó pausa, cancelación, concurrencia de disparadores y secuencia ante cambios de reloj. `--product-auto-partial` comprobó recuperación parcial y disco lleno inyectado. `--product-auto-mirror` comprobó recuperación sin origen, límites de retiradas, conflictos, guardados mediante temporal y alternativas de comparación. `--tray-audit` mantuvo separadas las incidencias de respaldo y verificación. |
+| Compatibilidad desde el ZIP público de RC2 | El arnés creó trabajos, puntos, exportaciones e historial con el motor `d88d3b9d4f35b07aa80c1dbc7d90c41f0aa462f3d27f6fce75b92e7168cb2a05`. El motor de `3cb9c6a`, `77791939f6b719c1c9b3d9880cfe4113b979eda78fce74be0e64d867a4f77c5b`, abrió y verificó los tres modos y restauró el árbol y los bytes con el origen apartado. El hash del binario anterior coincide con su entrada en el ZIP público. |
+| Letras temporales en dos volúmenes NTFS | Se registraron los tres modos desde un alias de la carpeta desechable de D:. Se trasladó el alias legítimo a otra letra y se reutilizó la primera para un sustituto en C: con un marcador copiado. El motor del paquete informó la ausencia del destino registrado mientras su carpeta estaba apartada, dejó intacto el sustituto y restauró el cambio al volver el destino legítimo. Los alias se retiraron. El ensayo usa alias de sesión y deja pendiente la reasignación de una partición y el remontaje VHDX. |
 
 ## Paquete anterior `c8a413a`
 
