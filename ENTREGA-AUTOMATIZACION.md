@@ -24,6 +24,6 @@ La matriz de automatización registra también los resultados de cada revisión 
 
 ## Cierre pendiente
 
-Sigue abierta la medición de confirmación sobre árboles grandes en los modos que publican una carpeta actual. El arnés de volumen lleno y cambio de letra necesita un Windows aislado con permisos para montar un VHDX. Las pruebas con carpetas entre discos y los fallos inyectados tienen su propia evidencia.
+Sigue abierto el rendimiento a gran escala. En la medición con un árbol preparado de 329.000 archivos, el espejo del motor anterior confirmó y restauró la edición, pero tardó 920,57 s frente al presupuesto de 60 s. La medición aislada del motor más reciente sigue pendiente de resultado. El arnés de volumen lleno y cambio de letra necesita un Windows aislado con permisos para montar un VHDX. Las pruebas con carpetas entre discos y los fallos inyectados tienen su propia evidencia.
 
 El piloto de 7–14 días, USB físico, bloqueo y ciclos de sesión de Windows, reinicio, suspensión, otra cuenta o equipo, nube real, lector de pantalla y escalado real quedan pendientes. Usa el ZIP solo con datos sintéticos y conserva los respaldos personales aparte. [Protocolo del piloto](PILOTO.md).
