@@ -26,7 +26,7 @@ internal static class SchedulePolicyAuditProbe
         var ownerType = schedulerType.GetNestedType("Owner", BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("Scheduler owner contract unavailable.");
         var owner = Activator.CreateInstance(ownerType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            null, ["synthetic-task", "synthetic-owner", arguments, false, true, null, (TimeOnly?)new TimeOnly(20, 30)], null)
+            null, ["synthetic-task", "synthetic-owner", arguments, false, true, null, (TimeOnly?)new TimeOnly(20, 30), false], null)
             ?? throw new InvalidOperationException("Scheduler owner could not be created.");
         var policy = schedulerType.GetMethod("PolicyProblem", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("Scheduler policy contract unavailable.");

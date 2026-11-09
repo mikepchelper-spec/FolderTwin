@@ -14,3 +14,5 @@ dotnet $harness --waiting-controls "$package\FolderTwin.exe"
 `--drive-aliases` registra los tres modos desde una letra temporal que apunta al destino de D:. Cambia el alias, reutiliza la letra original para un sustituto en C: y comprueba identidades, ausencia, retorno y restauración. Retira sus propios alias al finalizar. El ensayo trabaja con alias de la sesión y deja la reasignación de una partición VHDX al laboratorio dedicado.
 
 `--waiting-controls` ejecuta el monitor del paquete y aparta temporalmente cada destino sintético de D:. Comprueba pausa, desactivación y retirada antes de devolver el destino. Exige reactivación explícita para respaldar y comprueba los bytes y el historial. Usa un registro nuevo y un monitor sin tarea nativa. La aceptación del Programador se ejecuta aparte.
+
+El mismo ensayo traslada al origen un árbol preparado fuera del alcance del vigilante con 256 archivos y renombra después su carpeta raíz. Recupera todos los descendientes con el origen apartado. Acumulativo debe conservar las dos rutas, versionado debe guardar el cambio de ruta y espejo debe conservar el árbol previo y pedir revisión ante el renombrado masivo.
