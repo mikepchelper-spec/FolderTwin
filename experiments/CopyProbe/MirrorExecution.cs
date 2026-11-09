@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
@@ -136,6 +137,7 @@ internal sealed partial class VersionStore
         if (!(previous?.DocumentHash ?? new byte[32]).AsSpan().SequenceEqual(plan.PreviousHash))
             throw new InvalidDataException("El punto anterior del espejo no corresponde al diario.");
         var before = baseline ?? previous;
+        bool checkedBefore = false;
         bool ready = MirrorJournal.HasState(directory, plan, "ready");
         if (!ready)
         {
@@ -152,6 +154,9 @@ internal sealed partial class VersionStore
             StageMirrorObjects(directory, plan, before, after, checkpoint);
             _ = ReadMirrorSource(plan);
             RequireMirrorContents(before, plan.CurrentIdentity);
+            // Reuse this exact current-tree comparison only in the fresh run.
+            // Resumption must inspect the mixed state again.
+            checkedBefore = freshPreview is not null;
             MirrorJournal.SetState(directory, plan, "ready");
             checkpoint?.Invoke(MirrorStep.Ready);
         }
@@ -176,7 +181,7 @@ internal sealed partial class VersionStore
             throw new InvalidDataException("Otra actualización cambió el punto actual del espejo.");
         if (registry.MirrorGeneration != plan.Generation)
         {
-            var presentDirectories = RequireRecoverableMirrorState(directory, plan, before, after);
+            var presentDirectories = RequireRecoverableMirrorState(directory, plan, before, after, checkedBefore);
             if (plan.Version >= 2)
                 GenerationRegistry.SetMirrorPending(root, binding, plan.Generation, plan.DocumentHash, beginRegistryCheckpoint);
             ApplyMirrorFiles(directory, plan, before, after, presentDirectories, checkpoint);
@@ -245,14 +250,17 @@ internal sealed partial class VersionStore
         return (before?.Files ?? []).Where(file => !next.TryGetValue(file.RelativePath, out var updated) || !SameMirrorFile(file, updated));
     }
 
-    private HashSet<string> RequireRecoverableMirrorState(SafeFileHandle directory, MirrorPlan plan, CatalogSnapshot? before, CatalogSnapshot after)
+    private HashSet<string> RequireRecoverableMirrorState(SafeFileHandle directory, MirrorPlan plan, CatalogSnapshot? before,
+        CatalogSnapshot after, bool checkedBefore)
     {
-        var current = AnalyzeSource(MirrorCurrentPath, plan.CurrentIdentity, WorkPhase.Verifying);
-        var observed = current.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
+        var current = checkedBefore ? null : AnalyzeSource(MirrorCurrentPath, plan.CurrentIdentity, WorkPhase.Verifying);
+        var currentFiles = current?.Files ?? before?.Files ?? [];
+        var currentDirectories = current?.Directories ?? before?.Directories ?? [];
+        var observed = currentFiles.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
         var previous = (before?.Files ?? []).ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
         var desired = after.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
         var directories = (before?.Directories ?? []).Concat(after.Directories).ToHashSet(StringComparer.Ordinal);
-        if (current.Directories.Any(path => !directories.Contains(path)) || current.Files.Any(file =>
+        if (currentDirectories.Any(path => !directories.Contains(path)) || currentFiles.Any(file =>
             !(previous.TryGetValue(file.RelativePath, out var old) && SameMirrorFile(old, file)) &&
             !(desired.TryGetValue(file.RelativePath, out var next) && SameMirrorFile(next, file))))
             throw new InvalidDataException("El espejo contiene cambios o rutas inesperadas. Se conservan para revisión.");
@@ -280,7 +288,7 @@ internal sealed partial class VersionStore
             if (!promoted)
                 VerifyStaged(staged, MirrorToken(next.RelativePath), next);
         }
-        return current.Directories.ToHashSet(StringComparer.Ordinal);
+        return currentDirectories.ToHashSet(StringComparer.Ordinal);
     }
 
     private static void VerifyStaged(SafeFileHandle directory, string token, BatchFile file)
@@ -295,9 +303,43 @@ internal sealed partial class VersionStore
     {
         using var staged = WindowsProbeNative.OpenOrCreatePlainDirectory(directory, "staged");
         var previous = before?.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
-        foreach (var file in after.Files.Where(file => !previous.TryGetValue(file.RelativePath, out var old) || !SameMirrorFile(old, file)))
+        var changed = after.Files.Where(file => !previous.TryGetValue(file.RelativePath, out var old) || !SameMirrorFile(old, file)).ToArray();
+        if (parallelAnalysis && checkpoint is null && changed.Length >= 512)
+        {
+            var options = new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount, 1, 4) };
+            foreach (var chunk in changed.Chunk(16))
+            {
+                if (chunk.Any(file => file.Length > 1024 * 1024))
+                {
+                    foreach (var file in chunk) StageSerial(file);
+                    continue;
+                }
+                observe?.Invoke(new(WorkPhase.Publishing, 0, after.Files.Length, chunk[0].RelativePath));
+                var failures = new Exception?[chunk.Length];
+                Parallel.For(0, chunk.Length, options, index =>
+                {
+                    try { Stage(chunk[index]); }
+                    catch (Exception error) when (VersionJob.Expected(error)) { failures[index] = error; }
+                });
+                for (int index = 0; index < chunk.Length; index++)
+                {
+                    if (failures[index] is not { } failure) continue;
+                    observe?.Invoke(new(WorkPhase.Publishing, 0, after.Files.Length, chunk[index].RelativePath));
+                    ExceptionDispatchInfo.Throw(failure);
+                }
+            }
+        }
+        else foreach (var file in changed) StageSerial(file);
+
+        void StageSerial(BatchFile file)
         {
             observe?.Invoke(new(WorkPhase.Publishing, 0, after.Files.Length, file.RelativePath));
+            Stage(file);
+            checkpoint?.Invoke(MirrorStep.Staged);
+        }
+
+        void Stage(BatchFile file)
+        {
             string token = MirrorToken(file.RelativePath);
             string final = Path.Combine(Destination, MirrorJournal.DirectoryName, MirrorJournal.OperationsName, plan.Generation, "staged", token);
             if (!WindowsProbeNative.PlainFileExists(staged, token))
@@ -321,7 +363,6 @@ internal sealed partial class VersionStore
                     throw new InvalidDataException("Un archivo preparado del espejo requiere revisión: " + result);
             }
             VerifyStaged(staged, token, file);
-            checkpoint?.Invoke(MirrorStep.Staged);
         }
     }
 

@@ -40,6 +40,7 @@ internal static class ProductAutomation
 
     internal static void StartMonitor(ProductJobRegistry registry, bool? atLogon = null)
     {
+        _ = registry.ReadWatchTiming();
         using var scheduler = new WindowsSchedule();
         var current = scheduler.ReadMonitor(registry);
         bool startup = atLogon ?? current?.AtLogon ?? true;

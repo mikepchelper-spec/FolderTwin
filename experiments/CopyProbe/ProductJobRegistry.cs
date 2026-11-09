@@ -120,8 +120,16 @@ internal sealed partial class ProductJobRegistry : IDisposable
         if (!WindowsProbeNative.PlainFileExists(directory.Root, name)) return ProductWatchTiming.Default;
         using var file = WindowsProbeNative.OpenPlainFile(directory.Root, name, FileAccess.Read, FileShare.Read, FileMode.Open);
         if (file.Length is < 1 or > 1024) throw new InvalidDataException("El archivo de intervalos del monitor tiene un tamaño inválido.");
-        var timing = JsonSerializer.Deserialize<ProductWatchTiming>(file, Json) ??
-            throw new InvalidDataException("El archivo de intervalos del monitor está vacío.");
+        ProductWatchTiming timing;
+        try
+        {
+            timing = JsonSerializer.Deserialize<ProductWatchTiming>(file, Json) ??
+                throw new InvalidDataException("El archivo de intervalos del monitor está vacío.");
+        }
+        catch (JsonException error)
+        {
+            throw new InvalidDataException("Revisa monitor-timing.json o retíralo para usar los intervalos iniciales.", error);
+        }
         timing.Validate();
         return timing;
     }

@@ -36,6 +36,21 @@ internal sealed class WindowsSchedule : IDisposable
     internal ScheduleInfo? ReadProductReviewed(ProductJobRegistry registry, ProductJob job) => ReadTask(ProductOwner(registry, job));
     internal ScheduleInfo? ReadMonitor(ProductJobRegistry registry) => ReadTask(MonitorOwner(registry));
 
+    internal bool MonitorHasRunningInstance(ProductJobRegistry registry)
+    {
+        var owner = MonitorOwner(registry);
+        dynamic? task = Find(owner.Name);
+        if (task is null) return false;
+        try
+        {
+            _ = VerifyOwnership((string)task.Xml, owner);
+            dynamic running = task.GetInstances(0);
+            try { return (int)running.Count != 0; }
+            finally { Marshal.FinalReleaseComObject(running); }
+        }
+        finally { Marshal.FinalReleaseComObject(task); }
+    }
+
     private ScheduleInfo? ReadTask(Owner owner)
     {
         dynamic? task = Find(owner.Name);

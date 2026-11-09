@@ -5,6 +5,7 @@ internal static class AutomaticPartialProbe
         foreach (var mode in Enum.GetValues<ProductBackupMode>())
             CheckMode(mode);
         Console.WriteLine("PASS automatic partial points preserve stable files, resume interrupted publication offline and converge in all three modes.");
+        Console.WriteLine("PASS injected disk-full error leaves the last point readable and automatically resumes the same generation in all modes.");
         return 0;
     }
 
@@ -83,6 +84,24 @@ internal static class AutomaticPartialProbe
             store.Restore(complete.Generation!, output);
             Check(File.ReadAllText(Path.Combine(output, "occupied.txt")) == "unavailable bytes" &&
                 File.ReadAllText(Path.Combine(output, "stable.txt")) == "stable during interruption", "Final point bytes differ.");
+
+            File.WriteAllText(stable, "new bytes after capacity returns");
+            const int diskFull = unchecked((int)0x80070070);
+            var exhausted = ProductRunner.Run(registry, job.Id, checkpoint: work =>
+            {
+                if (work.Phase == WorkPhase.Copying) throw new IOException("Synthetic disk-full error.", diskFull);
+            }, automatic: true);
+            Check(exhausted is { State: ProductRunState.Review, ErrorCode: diskFull, Generation: not null } &&
+                !store.ListPoints().Any(point => point.Id == exhausted.Generation) && !store.Verify(complete.Generation!),
+                "An injected disk-full error published data or lost the previous point.");
+            var afterCapacity = ProductRunner.Run(registry, job.Id, automatic: true);
+            Check(afterCapacity.State == ProductRunState.Confirmed && afterCapacity.Generation == exhausted.Generation,
+                afterCapacity.Detail ?? "Automatic recovery did not resume the pending disk-full generation.");
+            Directory.Move(source, detached);
+            output = Folder("capacity-restore");
+            store.Restore(afterCapacity.Generation!, output);
+            Check(File.ReadAllText(Path.Combine(output, "stable.txt")) == "new bytes after capacity returns",
+                "The recovered generation did not restore the changed bytes.");
         }
         finally
         {

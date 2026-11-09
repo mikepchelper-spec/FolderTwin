@@ -25,11 +25,18 @@ internal static class ProductDeployment
             }
             else scheduler!.RemoveProductReviewed(registry, job);
         }
-        if (monitor is { Enabled: true } && !string.Equals(monitor.Executable, executable, StringComparison.OrdinalIgnoreCase))
+        if (scheduler is not null && monitor is { Enabled: true })
         {
-            scheduler!.RegisterMonitor(registry, executable, monitor.AtLogon);
-            WaitMonitorStopped(registry);
-            if (maintenance.Jobs.Any(job => job.Enabled && job.WatchMode == ProductWatchMode.Watching))
+            if (!string.Equals(monitor.Executable, executable, StringComparison.OrdinalIgnoreCase))
+            {
+                scheduler.RegisterMonitor(registry, executable, monitor.AtLogon);
+                // The old supervisor may still be a running task after its
+                // monitor child has released the registry. IgnoreNew would
+                // silently ignore a request made during that interval.
+                WaitMonitorStopped(registry, () => scheduler.MonitorHasRunningInstance(registry));
+            }
+            if (maintenance.Jobs.Any(job => job.Enabled && job.WatchMode == ProductWatchMode.Watching) &&
+                !registry.MonitorOwnsRegistry())
                 scheduler.RunMonitorNow(registry);
         }
         return executable;
@@ -59,10 +66,10 @@ internal static class ProductDeployment
                 throw new IOException("Hay un horario en ejecución. Espera a que termine antes de gestionar la aplicación.");
     }
 
-    private static void WaitMonitorStopped(ProductJobRegistry registry)
+    private static void WaitMonitorStopped(ProductJobRegistry registry, Func<bool>? taskStillRunning = null)
     {
         var timer = Stopwatch.StartNew();
-        while (registry.MonitorOwnsRegistry())
+        while (registry.MonitorOwnsRegistry() || taskStillRunning?.Invoke() == true)
         {
             if (timer.Elapsed >= TimeSpan.FromSeconds(15))
                 throw new IOException("El monitor sigue activo. Espera a que libere la configuración y vuelve a revisar.");
