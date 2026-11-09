@@ -2,16 +2,16 @@
 
 ## Candidata `3cb9c6a` en aceptación
 
-El código `3cb9c6a22146c8928f2ac1ed9449090e9a366e80` conserva el reemplazo acotado acumulativo cuando quedan archivos exclusivos del destino. Dos compilaciones independientes, a partir de árboles extraídos del mismo archivo de fuentes, produjeron los mismos 500 hashes y ZIP idénticos. La extracción pasó `Test-Portable.ps1`. La comprobación nativa del Programador con esta compilación sigue abierta.
+El código `3cb9c6a22146c8928f2ac1ed9449090e9a366e80` conserva el reemplazo acotado acumulativo cuando quedan archivos exclusivos del destino. Dos compilaciones independientes, a partir de árboles extraídos del mismo archivo de fuentes, produjeron los mismos 500 hashes y ZIP idénticos. La extracción pasó `Test-Portable.ps1`. La observación prolongada y las mediciones adicionales de escala desde este paquete se registran aparte al terminar.
 
 | Archivo | SHA-256 |
 |---|---|
 | `FolderTwin-win-x64-3cb9c6a.zip` | `3ddba023c2ff49203e3aa57ce1fa6ded982e66fbdf5103a49afd6af548acca12` |
 | `SHA256SUMS.txt` | `f49822fdfa6bc955bb16db6b5e4d79e7c62753fa6979c24c7ece9cd13d505c94` |
 
-Para repetir el ZIP, usa los archivos de la compilación portable en orden ordinal por ruta relativa con `/`, compresión `Optimal` y fecha fija de entrada `2000-01-01 00:00:00` con desplazamiento cero. El informe se conserva fuera del ZIP que describe. Las comprobaciones ejecutadas desde la extracción anterior `9fa0c63` aprobaron el asistente, C: → D: y la reconciliación tras perder avisos. El ensayo de arranque sin argumentos exige un runner desechable. El ensayo nativo lanzado desde la sesión de herramientas agotó la espera sin observar el monitor. Se conserva esa incidencia para la comprobación en una tarea temporal.
+Para repetir el ZIP, usa los archivos de la compilación portable en orden ordinal por ruta relativa con `/`, compresión `Optimal` y fecha fija de entrada `2000-01-01 00:00:00` con desplazamiento cero. El informe se conserva fuera del ZIP que describe. La extracción anterior `9fa0c63` aprobó el asistente, C: → D: y reconciliación. Su ensayo nativo agotó la espera desde la sesión de herramientas. Las pruebas nativas de `3cb9c6a` se ejecutaron mediante una tarea temporal en la sesión interactiva. El ensayo de arranque sin argumentos en un perfil vacío sigue reservado para un runner desechable.
 
-La copia local está en `C:\FolderTwin-Distribucion\FolderTwin-3cb9c6a`. El ZIP junto a esa carpeta mantiene el SHA-256 indicado y la extracción local volvió a pasar `Test-Portable.ps1`. Durante la aceptación se conserva el acceso directo a la compilación anterior.
+La copia local está en `C:\FolderTwin-Distribucion\FolderTwin-3cb9c6a`. El ZIP junto a esa carpeta mantiene el SHA-256 indicado y la extracción local volvió a pasar `Test-Portable.ps1`. El acceso de Escritorio **FolderTwin candidata** apunta a su `FolderTwin.exe` sin argumentos. **FolderTwin RC2** conserva su destino propio.
 
 | Verificación de `3cb9c6a` | Resultado observado |
 |---|---|
@@ -23,6 +23,10 @@ La copia local está en `C:\FolderTwin-Distribucion\FolderTwin-3cb9c6a`. El ZIP 
 | Compatibilidad desde el ZIP público de RC2 | El arnés creó trabajos, puntos, exportaciones e historial con el motor `d88d3b9d4f35b07aa80c1dbc7d90c41f0aa462f3d27f6fce75b92e7168cb2a05`. El motor de `3cb9c6a`, `77791939f6b719c1c9b3d9880cfe4113b979eda78fce74be0e64d867a4f77c5b`, abrió y verificó los tres modos y restauró el árbol y los bytes con el origen apartado. El hash del binario anterior coincide con su entrada en el ZIP público. |
 | Letras temporales en dos volúmenes NTFS | Se registraron los tres modos desde un alias de la carpeta desechable de D:. Se trasladó el alias legítimo a otra letra y se reutilizó la primera para un sustituto en C: con un marcador copiado. El motor del paquete informó la ausencia del destino registrado mientras su carpeta estaba apartada, dejó intacto el sustituto y restauró el cambio al volver el destino legítimo. Los alias se retiraron. El ensayo usa alias de sesión y deja pendiente la reasignación de una partición y el remontaje VHDX. |
 | Escala acumulativa desde el ZIP extraído | Confirmó en 20,076 s una edición de igual tamaño y fecha entre 329.000 archivos con un exclusivo en el destino. Restauró ambos archivos con el origen apartado. La comparación sin cambios mantuvo el catálogo anterior y la edición añadió una sola generación. [Contadores y escala](AUTOMATIZACION.md#medición-del-reemplazo-acotado). |
+| Actualización desde `c8a413a` | Una tarea temporal de la sesión interactiva ejecutó `--product-monitor-update-smoke` con código 0. El Programador inició el monitor, lo sustituyó tras una terminación real y procesó el cambio ocurrido durante la caída. La actualización traspasó el monitor al ejecutor nuevo, conservó el inicio al entrar en Windows y verificó la retirada y restauración sin origen. |
+| Reposo y recuperación nativa | `--product-monitor-schedule-soak` completó con código 0. En 120,01 s midió 0,25 % de un núcleo, 74.248.192 bytes residentes, 6.267 bytes leídos y 696 escritos. El monitor no despachó durante el reposo. El arnés lo terminó, observó otro proceso, recuperó la edición hecha durante la caída y retiró la tarea. |
+
+La rama local conserva la candidata sin subir a GitHub. La validación pública de Windows `42212336681` terminó correctamente para RC2 (`d902f4c`). La evidencia de `3cb9c6a` procede de este paquete local. [Validación pública de RC2](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42212336681).
 
 ## Paquete anterior `c8a413a`
 

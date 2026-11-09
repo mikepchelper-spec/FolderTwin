@@ -8,11 +8,11 @@
 
 La candidata de interfaz `7c568d6` añadió primer uso, ayuda contextual, diagnóstico revisable y acceso a la salida recuperada. Su informe conserva las pruebas desde paquete y las dos compilaciones reproducibles. [Aceptación histórica de interfaz](ENTREGA-INTERFAZ.md).
 
-La revisión local **Ruta** muestra las carpetas del trabajo como un trayecto de origen a destino y mantiene las acciones principales a la vista. Centro, Mesa, Archivo y Pulso quedan en el [plan de interfaz](PLAN.md). El acceso local **FolderTwin candidata** apunta a la revisión Ruta instalada. Consulta **Ayuda y versión** para identificar su compilación.
+La revisión local **Ruta** muestra las carpetas del trabajo como un trayecto de origen a destino y mantiene las acciones principales a la vista. Centro, Mesa, Archivo y Pulso quedan en el [plan de interfaz](PLAN.md). El acceso local **FolderTwin candidata** apunta a `3cb9c6a`. Consulta **Ayuda y versión** para identificar la compilación.
 
 ## Leer primero
 
-La candidata local incorpora la vigilancia continua. El código comprueba ediciones puntuales en acumulativo y espejo y mantiene la comparación completa periódica. A 329.000 archivos, el espejo confirmó una edición en 27,4 s y el acumulativo empaquetado en 20,1 s con un exclusivo del destino. Sigue abierta la comprobación nativa del Programador con el paquete nuevo. [Matriz de automatización](AUTOMATIZACION.md) · [Evidencia de paquetes locales](ENTREGA-AUTOMATIZACION.md).
+La candidata local incorpora la vigilancia continua. El código comprueba ediciones puntuales en acumulativo y espejo y mantiene la comparación completa periódica. A 329.000 archivos, el espejo confirmó una edición en 27,4 s y el acumulativo empaquetado en 20,1 s con un exclusivo del destino. La candidata pasó el traspaso y la recuperación nativos del monitor. [Matriz de automatización](AUTOMATIZACION.md) · [Evidencia de paquetes locales](ENTREGA-AUTOMATIZACION.md).
 
 Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 
