@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography;
 
 namespace CopyLab;
 
@@ -276,7 +277,8 @@ internal static class ProductMonitorProbe
                 var second = await WaitForRunAsync(first.Intent.Sequence, ProductRunState.Confirmed);
                 Console.Error.WriteLine(FormattableString.Invariant(
                     $"{mode} edit: dispatch_seconds={(second.Intent.StartedUtc - changeAt).TotalSeconds:F3}; observed_confirmed_seconds={latency.Elapsed.TotalSeconds:F3}."));
-                if (soak && mode == ProductBackupMode.Versions)
+                byte[]? largeHash = null;
+                if (soak)
                 {
                     DateTimeOffset burstStart = DateTimeOffset.UtcNow;
                     string burstFile = Path.Combine(source, "burst.txt");
@@ -314,8 +316,20 @@ internal static class ProductMonitorProbe
                     if (File.ReadAllText(Path.Combine(burstOutput, "burst.txt")) != $"save {edits}")
                         throw new InvalidOperationException("The trailing save was lost during a backup.");
                     Console.Error.WriteLine(FormattableString.Invariant(
-                        $"Burst: edits={edits}; dispatch_seconds={(attempts[0].Intent.StartedUtc - burstStart).TotalSeconds:F3}; final_bytes_restored=true."));
+                        $"{mode} burst: edits={edits}; dispatch_seconds={(attempts[0].Intent.StartedUtc - burstStart).TotalSeconds:F3}; final_bytes_restored=true."));
                     second = finalBurst;
+
+                    string large = Path.Combine(source, "large.bin");
+                    byte[] block = new byte[1024 * 1024];
+                    var random = new Random(2026);
+                    using (var largeOutput = new FileStream(large, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                        for (int part = 0; part < 32; part++)
+                        {
+                            random.NextBytes(block);
+                            largeOutput.Write(block);
+                        }
+                    using (var input = File.OpenRead(large)) largeHash = SHA256.HashData(input);
+                    second = await WaitForRunAsync(second.Intent.Sequence, ProductRunState.Confirmed, timeout: TimeSpan.FromSeconds(75));
                 }
                 string detached = Path.Combine(Path.GetDirectoryName(job.Destination.LastVolumePath)!, "detached");
                 Directory.Move(job.Destination.LastVolumePath, detached);
@@ -373,6 +387,13 @@ internal static class ProductMonitorProbe
                     throw new InvalidOperationException("The automatic point did not restore the expected bytes without its source.");
                 if (File.Exists(Path.Combine(output, "retired.txt")) != (mode == ProductBackupMode.Accumulative))
                     throw new InvalidOperationException("The automatic point handled retirement differently from its selected mode.");
+                if (largeHash is not null)
+                {
+                    using var input = File.OpenRead(Path.Combine(output, "large.bin"));
+                    if (input.Length != 32 * 1024 * 1024 || !SHA256.HashData(input).AsSpan().SequenceEqual(largeHash))
+                        throw new InvalidOperationException("The automatic point did not restore the large file with matching bytes.");
+                    Console.Error.WriteLine($"{mode} large file: restored_bytes={input.Length}; hash_matches=true.");
+                }
                 string earlier = Directory.CreateDirectory(Path.Combine(workspace.Root, "restore-earlier")).FullName;
                 store.Restore(first.Generation!, earlier);
                 if (File.ReadAllText(Path.Combine(earlier, "retired.txt")) != "keep this point recoverable")
@@ -387,11 +408,12 @@ internal static class ProductMonitorProbe
                 }
             }
 
-            async Task<ProductRunView> WaitForRunAsync(long after, ProductRunState state, Guid? jobId = null, DateTimeOffset? since = null)
+            async Task<ProductRunView> WaitForRunAsync(long after, ProductRunState state, Guid? jobId = null,
+                DateTimeOffset? since = null, TimeSpan? timeout = null)
             {
                 var timer = Stopwatch.StartNew();
                 ProductRunHistory? observed = null;
-                while (timer.Elapsed < TimeSpan.FromSeconds(30))
+                while (timer.Elapsed < (timeout ?? TimeSpan.FromSeconds(30)))
                 {
                     if (monitor.HasExited) throw new InvalidOperationException($"The monitor stopped with exit code {monitor.ExitCode}.");
                     observed = registry.RunHistory(jobId ?? job.Id);

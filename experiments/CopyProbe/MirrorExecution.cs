@@ -213,7 +213,7 @@ internal sealed partial class VersionStore
             var preparing = freshPreview?.SourcePlan ?? ReadMirrorSource(plan, retrySourceChanges: automatic);
             if (plan.Version != 3 && preparing.Files.Length == 0 && preparing.Directories.Length == 0 && !plan.EmptyReviewed)
                 throw new InvalidDataException("No se autorizó una actualización con origen vacío.");
-            StageMirrorObjects(directory, plan, before, after, checkpoint);
+            StageMirrorObjects(root, directory, before, after, checkpoint);
             _ = ReadMirrorSource(plan, retrySourceChanges: automatic);
             RequireMirrorContents(before, plan.CurrentIdentity);
             // Reuse this exact current-tree comparison only in the fresh run.
@@ -363,10 +363,12 @@ internal sealed partial class VersionStore
         file.Metadata?.RequireMatch(input.SafeFileHandle);
     }
 
-    private void StageMirrorObjects(SafeFileHandle directory, MirrorPlan plan, CatalogSnapshot? before, CatalogSnapshot after,
+    private void StageMirrorObjects(SafeFileHandle root, SafeFileHandle directory, CatalogSnapshot? before, CatalogSnapshot after,
         Action<MirrorStep>? checkpoint)
     {
         using var staged = WindowsProbeNative.OpenOrCreatePlainDirectory(directory, "staged");
+        using var objects = WindowsProbeNative.OpenPlainDirectory(root, ObjectDirectory);
+        using var algorithm = WindowsProbeNative.OpenPlainDirectory(objects, Algorithm);
         var previous = before?.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
         var changed = after.Files.Where(file => !previous.TryGetValue(file.RelativePath, out var old) || !SameMirrorFile(old, file)).ToArray();
         if (parallelAnalysis && checkpoint is null && changed.Length >= 512)
@@ -406,11 +408,10 @@ internal sealed partial class VersionStore
         void Stage(BatchFile file)
         {
             string token = MirrorToken(file.RelativePath);
-            string final = Path.Combine(Destination, MirrorJournal.DirectoryName, MirrorJournal.OperationsName, plan.Generation, "staged", token);
             if (!WindowsProbeNative.PlainFileExists(staged, token))
             {
-                string temporary = Path.Combine(Path.GetDirectoryName(final)!, FolderBatch.ControlPrefix + token + ".tmp");
-                var result = CopyRecovery.Recover(workspace.Root, temporary, final, expectedHash: file.Hash, metadata: file.Metadata);
+                string temporary = FolderBatch.ControlPrefix + token + ".tmp";
+                var result = CopyRecovery.Recover(staged, temporary, token, file.Hash, file.Metadata);
                 if (result == RecoveryResult.NoReceipt)
                 {
                     // CAS is already confirmed. Preserve an interrupted staging
@@ -421,8 +422,9 @@ internal sealed partial class VersionStore
                             using var abandoned = WindowsProbeNative.OpenPlainFile(staged, name, FileAccess.Read, FileShare.None, rename: true);
                             WindowsProbeNative.RenameNew(abandoned.SafeFileHandle, staged, "unverified-" + token + "-" + Guid.NewGuid().ToString("N"));
                         }
-                    VerifiedCopy.Run(ObjectPath(Digest(file)), final, temporary, expectedHash: file.Hash,
-                        recoveryRoot: workspace.Root, metadata: file.Metadata);
+                    string digest = Digest(file);
+                    using var bucket = WindowsProbeNative.OpenPlainDirectory(algorithm, digest[..2]);
+                    VerifiedCopy.RunWithinDirectories(bucket, digest, staged, token, temporary, file.Hash, file.Metadata);
                 }
                 else if (result is not (RecoveryResult.Published or RecoveryResult.AlreadyPublished))
                     throw new InvalidDataException("Un archivo preparado del espejo requiere revisión: " + result);

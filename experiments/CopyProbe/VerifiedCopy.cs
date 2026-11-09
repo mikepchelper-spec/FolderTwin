@@ -38,6 +38,16 @@ internal static class VerifiedCopy
             checkpoint, expectedHash, cancellationToken, binding: null, metadata, resumeUnverifiedPrefix);
     }
 
+    internal static void RunWithinDirectories(SafeFileHandle sourceDirectory, string source, SafeFileHandle destinationDirectory,
+        string destination, string temporary, byte[] expectedHash, FileMetadata? metadata)
+    {
+        DirectoryFence.CheckName(source);
+        DirectoryFence.CheckName(destination);
+        DirectoryFence.CheckName(temporary);
+        Copy(source, destination, temporary, sourceDirectory, destinationDirectory, checkpoint: null,
+            expectedHash, CancellationToken.None, binding: null, metadata, resumeUnverifiedPrefix: false);
+    }
+
     private static void Copy(string source, string destination, string temporary,
         SafeFileHandle? sourceDirectory, SafeFileHandle? directory, Action<CopyStep, string>? checkpoint,
         byte[]? expectedHash, CancellationToken cancellationToken, DestinationBinding? binding, FileMetadata? metadata,

@@ -94,7 +94,17 @@ El primer llenado acumulativo de 65.536 archivos alcanzó su límite de 25 minut
 
 En el Programador nativo, el monitor promedió 2,72 % de un núcleo en 120 s al volver a comprobar el paquete en cada consulta. Reutilizar la conexión y comparar la definición ya comprobada bajó la lectura de 1.152.840 a 6.267 bytes y el uso a 0,96 %. Separar el sondeo de propiedad del latido lo bajó a 0,60 %. Con la señal de cambios de tarea, `c8a413a` registró 0,40 % de un núcleo, 73.818.112 bytes residentes, 6.267 bytes leídos y 696 escritos en 120,02 s. El mismo ensayo terminó el monitor, observó su sustitución y restauró una edición hecha mientras estaba detenido.
 
+### Siguiente verificación de rendimiento
+
+Repite la medición de edición sobre un árbol preparado con un solo trabajo activo, sin otra medición de escritura. Registra por separado inventario del origen, comparación del destino, publicación y relectura final. Si el coste sigue por encima de 60 s, prueba una ruta automática acotada por archivos con avisos del sistema y conserva la reconciliación integral para arranque, pérdida de avisos, retorno y comprobación periódica.
+
+La ruta acotada debe abrir y validar por hash los archivos que actualiza. Una retirada exige comprobar el inventario necesario, la identidad de las raíces, el estado anterior del destino, el punto recuperable y el alcance admitido. Una pérdida de precisión vuelve a la comparación completa. Si queda contenido por revisar, la interfaz mantiene separadas la edición confirmada, la comparación completa y la verificación integral. La medición tiene que comprobar los bytes restaurados, incluso tras un cambio de igual tamaño y fecha y con el origen apartado.
+
+Como referencia de diseño, Syncthing usa avisos agrupados para analizar subrutas y mantiene recorridos periódicos. FolderTwin puede adoptar esa separación conservando su comprobación por contenido y la política de retiradas recuperables. [Documentación de Syncthing](https://docs.syncthing.net/users/syncing) · [Analizador por subrutas](https://github.com/syncthing/syncthing/blob/main/lib/model/folder.go).
+
 Desde el paquete `c70ac2c`, las ediciones aisladas despacharon en 2,77–2,82 s en los tres modos y el monitor promedió 0,21 % de un núcleo en 15 s de reposo. Un ensayo posterior de desarrollo midió 120,02 s de reposo, 0,27 % de un núcleo, 62,20 MB residentes, 8.272 bytes leídos y 696 escritos. En ese ensayo una ráfaga de 64 guardados mediante archivo temporal y reemplazo despachó en 21,94 s. Se restauró el contenido exacto del último guardado y el mismo ensayo comprobó reconexión, equidad y sustitución. El ensayo inyectado de reconciliación usa una suscripción real con sus callbacks desactivados. Comprueba el contenido de los dos puntos con el origen apartado, uno sin avisos y el otro tras inyectar la condición que usa el callback de error.
+
+El ensayo ampliado de desarrollo recuperó el último de 63 o 64 guardados en cada modo. Los primeros despachos tomaron 21,52 s en acumulativo, 21,38 s en versionado y 20,83 s en espejo. Cada modo restauró después un archivo de 32 MiB con SHA-256 coincidente y el origen apartado. El ensayo de preparación del espejo reutilizando los handles del almacén conservó la escritura, flush, relectura y diario por archivo. A 4.096 archivos confirmó la primera copia en 60,34 s y la edición de igual tamaño y fecha en 5,64 s bajo la carga de esta campaña.
 
 ## Puntos parciales recuperables
 

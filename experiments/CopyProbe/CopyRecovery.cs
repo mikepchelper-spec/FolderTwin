@@ -77,6 +77,14 @@ internal static class CopyRecovery
         using var fence = new DirectoryFence(root, temporary, destination);
         var directory = fence.Parent(destination);
         using var marker = binding?.OpenVerifiedMarker(directory);
+        return Recover(directory, Path.GetFileName(temporary), Path.GetFileName(destination), expectedHash, metadata);
+    }
+
+    internal static RecoveryResult Recover(SafeFileHandle directory, string temporary, string destination,
+        byte[]? expectedHash, FileMetadata? metadata)
+    {
+        DirectoryFence.CheckName(temporary);
+        DirectoryFence.CheckName(destination);
         string receiptPath = ReceiptPath(temporary);
         if (!WindowsProbeNative.PlainFileExists(directory, LockPath(temporary)))
             return WindowsProbeNative.PlainFileExists(directory, receiptPath) ? RecoveryResult.InvalidReceipt : RecoveryResult.NoReceipt;
