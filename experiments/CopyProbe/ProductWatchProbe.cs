@@ -32,6 +32,15 @@ internal static class ProductWatchProbe
         clock.Tick = 18;
         Check(signal.TakeDue(quiet, maximum, out hints) && hints is null,
             "A batch exceeding the hint limit did not request a complete comparison.");
+        signal.Changed("folder", metadataOnly: true);
+        signal.Changed("folder\\old.txt", metadataOnly: true);
+        signal.Changed("folder\\old.txt");
+        signal.Changed("folder\\new.txt");
+        signal.Changed("folder\\new.txt", metadataOnly: true);
+        clock.Tick = 20;
+        Check(signal.TakeDue(quiet, maximum, out hints) && hints is ["?folder", "folder\\old.txt", "folder\\new.txt"] &&
+            ProductWatchSignal.ValidEditHints(hints) && !ProductWatchSignal.ValidEditHints(["?folder", "folder"]),
+            "The worker could not distinguish directory metadata from a path-name event.");
 
         var workspace = LabWorkspace.Create();
         try

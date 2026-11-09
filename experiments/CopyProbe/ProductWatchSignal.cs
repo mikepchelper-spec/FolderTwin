@@ -2,7 +2,7 @@ internal sealed class ProductWatchSignal(TimeProvider clock, Action? wake = null
 {
     internal const int MaximumEditHints = 16;
     private readonly object gate = new();
-    private readonly HashSet<string> edits = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, bool> edits = new(StringComparer.OrdinalIgnoreCase);
     private long? first;
     private long last;
     private bool reconcile = true;
@@ -14,7 +14,7 @@ internal sealed class ProductWatchSignal(TimeProvider clock, Action? wake = null
         get { lock (gate) return reconcile || first is not null; }
     }
 
-    internal void Changed(string? path = null)
+    internal void Changed(string? path = null, bool metadataOnly = false)
     {
         lock (gate)
         {
@@ -22,7 +22,13 @@ internal sealed class ProductWatchSignal(TimeProvider clock, Action? wake = null
             first ??= last;
             if (!reconcile && !wholeBatch)
             {
-                if (path is null || !ValidEditHint(path) || edits.Add(path) && edits.Count > MaximumEditHints)
+                bool valid = path is not null && ValidEditHint(path);
+                if (valid)
+                {
+                    // A name event takes precedence over Changed for the same path.
+                    if (!edits.TryGetValue(path!, out bool nameEvent) || !nameEvent) edits[path!] = !metadataOnly;
+                }
+                if (!valid || edits.Count > MaximumEditHints)
                 {
                     wholeBatch = true;
                     edits.Clear();
@@ -66,7 +72,8 @@ internal sealed class ProductWatchSignal(TimeProvider clock, Action? wake = null
             if (!reconcile && (first is null ||
                 clock.GetElapsedTime(last, now) < quiet && clock.GetElapsedTime(first.Value, now) < maximum))
                 return false;
-            if (!reconcile && !wholeBatch && edits.Count != 0) editHints = edits.ToArray();
+            if (!reconcile && !wholeBatch && edits.Count != 0)
+                editHints = edits.Select(edit => edit.Value ? edit.Key : "?" + edit.Key).ToArray();
             edits.Clear();
             wholeBatch = false;
             first = null;
@@ -75,8 +82,12 @@ internal sealed class ProductWatchSignal(TimeProvider clock, Action? wake = null
         }
     }
 
-    internal static bool ValidEditHints(string[] paths) => paths.Length is > 0 and <= MaximumEditHints &&
-        paths.All(ValidEditHint) && paths.Distinct(StringComparer.OrdinalIgnoreCase).Count() == paths.Length;
+    internal static bool MetadataHint(string hint) => hint.StartsWith('?');
+
+    internal static string HintPath(string hint) => MetadataHint(hint) ? hint[1..] : hint;
+
+    internal static bool ValidEditHints(string[] hints) => hints.Length is > 0 and <= MaximumEditHints &&
+        hints.Select(HintPath).All(ValidEditHint) && hints.Select(HintPath).Distinct(StringComparer.OrdinalIgnoreCase).Count() == hints.Length;
 
     private static bool ValidEditHint(string path)
     {
@@ -104,7 +115,7 @@ internal sealed class ProductWatchSignal(TimeProvider clock, Action? wake = null
         try
         {
             watcher.Created += (_, args) => Changed(args.Name);
-            watcher.Changed += (_, args) => Changed(args.Name);
+            watcher.Changed += (_, args) => Changed(args.Name, metadataOnly: true);
             watcher.Deleted += (_, args) => Changed(args.Name);
             watcher.Renamed += (_, args) => { Changed(args.OldName); Changed(args.Name); };
             watcher.Error += (_, _) => RequireReconciliation(failedWatcher: true);

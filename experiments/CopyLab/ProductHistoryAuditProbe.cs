@@ -119,7 +119,7 @@ internal static class ProductHistoryAuditProbe
         }
     }
 
-    private static byte[] Encode<T>(T record)
+    internal static byte[] Encode<T>(T record)
     {
         byte[] json = JsonSerializer.SerializeToUtf8Bytes(record);
         return [.. SHA256.HashData(json), .. json];

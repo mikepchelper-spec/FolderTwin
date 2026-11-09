@@ -10,7 +10,7 @@ internal static class AutomaticMirrorRules
     internal static bool ValidSetting(int version, ProductBackupMode mode, ProductWatchMode watching) =>
         version == 0 || version == Version && mode == ProductBackupMode.ProtectedMirror && watching != ProductWatchMode.Off;
 
-    internal static string[] Check(MirrorPreview preview, ProductRunIntent intent, ProductRunHistory history)
+    internal static string[] Check(MirrorPreview preview, ProductRunIntent intent, Func<ProductRunHistory> readHistory)
     {
         if (preview.RequiresEmptyReview)
             throw new InvalidDataException("El origen vacío requiere una revisión del espejo.");
@@ -19,6 +19,7 @@ internal static class AutomaticMirrorRules
         if (affected.Length > batchLimit)
             throw new InvalidDataException($"La actualización afecta a más de {batchLimit} rutas existentes. Revisa los cambios del espejo.");
         if (affected.Length == 0) return [];
+        var history = readHistory();
         if (history.Unreadable != 0)
             throw new InvalidDataException("El historial contiene intentos ilegibles. Revisa el espejo antes de retirar o reemplazar archivos.");
 

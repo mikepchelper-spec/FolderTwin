@@ -104,6 +104,7 @@ internal static class ProductRunProbe
                 "A torn history record was removed, reused its sequence or stopped independent backup work.");
             CheckScheduledRetries(registry, versioned, settings).GetAwaiter().GetResult();
             CheckContinuousAdmission(registry, versioned, settings);
+            CheckDisplayHistory(registry, settings, jobs.Single(job => job.Options.Mode == ProductBackupMode.Accumulative));
             CheckWorkers();
             Console.WriteLine("PASS persistent product attempts execute all three modes, retain issues, order independently of the clock and require mirror approval.");
             return 0;
@@ -114,6 +115,38 @@ internal static class ProductRunProbe
             Directory.Delete(workspace.Root, recursive: true);
         }
         string Folder(string name) => Directory.CreateDirectory(Path.Combine(workspace.Root, name)).FullName;
+    }
+
+    private static void CheckDisplayHistory(ProductJobRegistry registry, string settings, ProductJob job)
+    {
+        var clock = new HistoryClock();
+        var display = new ProductJobRegistry.DisplayRunHistory(clock);
+        var first = display.Read(registry, job.Id).Runs.Last();
+        using (var lease = registry.StartRun(job.Id))
+        {
+            Check(display.Read(registry, job.Id).Runs[0] is { Running: true }, "The display missed a newly reserved attempt.");
+            lease.Progress(new(WorkPhase.Analyzing, 0, 1), paused: true);
+            Check(display.Read(registry, job.Id).Runs[0].Progress?.Paused == true, "The display cached active progress.");
+            lease.Finish(ProductRunState.Unchanged);
+        }
+        Check(display.Read(registry, job.Id).Runs[0].Result?.State == ProductRunState.Unchanged, "The display missed a newly published result.");
+        string path = Path.Combine(settings, job.Id.ToString("N"), "runs",
+            $"{first.Intent.Sequence:D20}-{first.Intent.Id:N}", "result");
+        byte[] valid = File.ReadAllBytes(path);
+        File.WriteAllText(path, "corrupted synthetic result");
+        Check(registry.RunHistory(job.Id).Unreadable == 1, "The display cache masked an authoritative history error.");
+        clock.Timestamp = 30 * clock.TimestampFrequency;
+        Check(display.Read(registry, job.Id).Unreadable == 1, "The display did not revalidate old records after expiry.");
+        File.WriteAllBytes(path, valid);
+        display.Invalidate();
+        Check(display.Read(registry, job.Id).Runs.Last().Result?.State == ProductRunState.Confirmed,
+            "An explicit display refresh did not load the repaired result.");
+    }
+
+    private sealed class HistoryClock : TimeProvider
+    {
+        internal long Timestamp { get; set; }
+        public override long GetTimestamp() => Timestamp;
     }
 
     private static void CheckContinuousAdmission(ProductJobRegistry registry, ProductJob job, string location)

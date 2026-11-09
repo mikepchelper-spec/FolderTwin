@@ -9,6 +9,7 @@ public partial class ProductWindow
 {
     private readonly DispatcherTimer runtimeTimer;
     private readonly Dictionary<Guid, ProductRunHistory> runSnapshots = [];
+    private readonly ProductJobRegistry.DisplayRunHistory displayHistory = new();
     private readonly Dictionary<Guid, Process> workerProcesses = [];
     private readonly Dictionary<Guid, long> reportedResults = [];
     private bool polling;
@@ -45,7 +46,7 @@ public partial class ProductWindow
         catch (Exception error) when (VersionJob.Expected(error)) { SetStatus("No se pudo actualizar el estado local. " + error.Message); }
     }
 
-    private async Task RefreshRuntimeAsync()
+    private async Task RefreshRuntimeAsync(bool rereadHistory = false)
     {
         if (closed) return;
         // Explicit callers need a fresh snapshot even when the timer already
@@ -62,7 +63,8 @@ public partial class ProductWindow
             var snapshots = await Task.Run(() =>
             {
                 using var registry = openRegistry();
-                return jobs.Select(row => (row.Id, History: registry.RunHistory(row.Id))).ToArray();
+                if (rereadHistory) displayHistory.Invalidate();
+                return jobs.Select(row => (row.Id, History: displayHistory.Read(registry, row.Id))).ToArray();
             });
             if (closed) return;
             foreach (var (id, history) in snapshots)
@@ -112,7 +114,7 @@ public partial class ProductWindow
                 "Siguiente paso · Pulsa Respaldar ahora para crear la primera copia.") :
             recoverable?.Result is { Scoped: true } && recoverable.Intent.Sequence > (reconciled?.Intent.Sequence ?? 0) &&
                 verified?.Generation != recoverable.Generation ?
-            "Se comprobaron las ediciones del último punto. El monitor hará una comparación completa periódica." :
+            "Se comprobaron los cambios del último punto. El monitor hará una comparación completa periódica." :
             verified is null || verified.Generation != recoverable?.Generation ?
             "Siguiente paso · Abre Recuperar archivos y verifica este respaldo. Después recupera una muestra en una carpeta nueva." :
             restored is null ? "Siguiente paso · Recupera una muestra en una carpeta nueva y abre los archivos para comprobarlos." :

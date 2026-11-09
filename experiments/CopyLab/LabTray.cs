@@ -35,8 +35,8 @@ internal sealed class LabTray : IDisposable
             "FolderTwin · espacio de pruebas") { }
 
     internal LabTray(Func<ProductJobRegistry> openRegistry, Action openMain, Action exit, bool notifications = true,
-        Action<Guid>? openIssue = null)
-        : this(() => { using var registry = openRegistry(); return TraySnapshot.ReadProduct(registry); },
+        Action<Guid>? openIssue = null, ProductJobRegistry.DisplayRunHistory? displayHistory = null)
+        : this(() => { using var registry = openRegistry(); return TraySnapshot.ReadProduct(registry, displayHistory); },
             id =>
             {
                 using var registry = openRegistry();

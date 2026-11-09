@@ -52,10 +52,10 @@ internal sealed partial class ProductJobRegistry
             if (automatic && (operation != ProductRunOperation.Backup || definition.WatchMode != ProductWatchMode.Watching))
                 throw new InvalidDataException("La vigilancia de este trabajo está pausada o desactivada.");
             using var runs = WindowsProbeNative.OpenOrCreatePlainDirectory(job, "runs");
-            var history = ReadRuns(job, runs, id);
+            var entries = WindowsProbeNative.ReadDirectory(runs).ToArray();
             // Preserve unreadable records. Their directory sequence still reserves
             // the number, so a torn history write cannot cause sequence reuse.
-            long previousSequence = WindowsProbeNative.ReadDirectory(runs).Select(entry => DirectorySequence(entry.Name)).DefaultIfEmpty(0).Max();
+            long previousSequence = entries.Select(entry => DirectorySequence(entry.Name)).DefaultIfEmpty(0).Max();
             if (previousSequence == long.MaxValue)
                 throw new InvalidDataException("El historial alcanzó el límite de secuencia. Conserva los registros para revisión.");
             long sequence = previousSequence + 1;
@@ -67,20 +67,49 @@ internal sealed partial class ProductJobRegistry
             {
                 RetentionJournal.WriteFile(directory, "intent", Encode(intent));
                 var active = WindowsProbeNative.OpenPlainFile(directory, "active.lock", FileAccess.ReadWrite, FileShare.None, FileMode.CreateNew);
-                return new ProductRunLease(definition, intent, history, job, directory, execution, active);
+                return new ProductRunLease(definition, intent, () =>
+                {
+                    using var previous = WindowsProbeNative.OpenPlainDirectory(job, "runs");
+                    return ReadRuns(job, previous, id, entries);
+                }, job, directory, execution, active);
             }
             catch { directory.Dispose(); throw; }
         }
         catch { execution?.Dispose(); job.Dispose(); throw; }
     }
 
-    internal ProductRunHistory RunHistory(Guid id)
+    internal ProductRunHistory RunHistory(Guid id) => RunHistory(id, completed: null);
+
+    private ProductRunHistory RunHistory(Guid id, Dictionary<string, ProductRunView>? completed)
     {
         using var job = OpenJob(id);
         _ = ReadConfirmed(job, ReadIntent(job, id));
         if (!DirectoryPresent(job, "runs")) return new([], 0);
         using var runs = WindowsProbeNative.OpenPlainDirectory(job, "runs");
-        return ReadRuns(job, runs, id);
+        return ReadRuns(job, runs, id, completed: completed);
+    }
+
+    // Only the desktop reads these snapshots. Execution, approval, retries and
+    // reconciliation continue to read the durable records under their own locks.
+    internal sealed class DisplayRunHistory(TimeProvider? clock = null)
+    {
+        private readonly TimeProvider clock = clock ?? TimeProvider.System;
+        private readonly Dictionary<Guid, (long Started, Dictionary<string, ProductRunView> Entries)> jobs = [];
+
+        internal ProductRunHistory Read(ProductJobRegistry registry, Guid id)
+        {
+            lock (jobs)
+            {
+                if (!jobs.TryGetValue(id, out var cached) || clock.GetElapsedTime(cached.Started) >= TimeSpan.FromSeconds(30))
+                    jobs[id] = cached = (clock.GetTimestamp(), new(StringComparer.Ordinal));
+                return registry.RunHistory(id, cached.Entries);
+            }
+        }
+
+        internal void Invalidate()
+        {
+            lock (jobs) jobs.Clear();
+        }
     }
 
     internal void RequestRun(Guid jobId, Guid runId, ProductRunAction action)
@@ -101,19 +130,28 @@ internal sealed partial class ProductJobRegistry
         RetentionJournal.WriteFile(run, CommandName(number), Encode(new ProductRunCommand(1, IntentHash(selected.Intent), number, action)));
     }
 
-    private ProductRunHistory ReadRuns(SafeFileHandle job, SafeFileHandle runs, Guid id)
+    private ProductRunHistory ReadRuns(SafeFileHandle job, SafeFileHandle runs, Guid id,
+        IEnumerable<WindowsProbeNative.DirectoryEntry>? entries = null, Dictionary<string, ProductRunView>? completed = null)
     {
         var found = new List<ProductRunView>();
         int unreadable = 0;
         var sequences = new HashSet<long>();
-        foreach (var entry in WindowsProbeNative.ReadDirectory(runs).Where(entry => entry.Name is not ("." or "..")))
+        byte[] jobStamp = JobStamp(job);
+        foreach (var entry in (entries ?? WindowsProbeNative.ReadDirectory(runs)).Where(entry => entry.Name is not ("." or "..")))
         {
             try
             {
+                if (completed?.TryGetValue(entry.Name, out var saved) == true &&
+                    entry.Attributes.HasFlag(FileAttributes.Directory) && !entry.Attributes.HasFlag(FileAttributes.ReparsePoint) &&
+                    saved.Intent.JobStamp.AsSpan().SequenceEqual(jobStamp))
+                {
+                    if (sequences.Add(saved.Intent.Sequence)) found.Add(saved); else unreadable++;
+                    continue;
+                }
                 using var run = WindowsProbeNative.OpenPlainDirectory(runs, entry.Name);
                 var intent = Decode<ProductRunIntent>(run, "intent");
                 if (intent.Version != 1 || intent.Job != id || intent.Id == Guid.Empty || intent.Sequence < 1 ||
-                    entry.Name != RunName(intent) || !intent.JobStamp.AsSpan().SequenceEqual(JobStamp(job)) ||
+                    entry.Name != RunName(intent) || !intent.JobStamp.AsSpan().SequenceEqual(jobStamp) ||
                     intent.StartedUtc.Offset != TimeSpan.Zero || !Enum.IsDefined(intent.Operation) ||
                     !ValidRestoreReference(intent.Operation, intent.RestoreRequest) ||
                     intent.Automatic && intent.Operation != ProductRunOperation.Backup || !sequences.Add(intent.Sequence))
@@ -185,7 +223,10 @@ internal sealed partial class ProductJobRegistry
                     charge = Decode<ProductMirrorCharge>(run, "mirror-charge");
                     ValidateMirrorCharge(charge, intent, generation ?? ReadGeneration(run, intent));
                 }
-                found.Add(new(intent, result, generation, progress, running, retry, retryRunning, restore, mirror, abandon, charge));
+                var view = new ProductRunView(intent, result, generation, progress, running, retry, retryRunning, restore, mirror, abandon, charge);
+                found.Add(view);
+                if (completed is not null && result is { State: not (ProductRunState.Busy or ProductRunState.WaitingForSource or ProductRunState.WaitingForDestination) })
+                    completed[entry.Name] = view;
             }
             catch (Exception error) when (VersionJob.Expected(error)) { unreadable++; }
         }
@@ -310,17 +351,18 @@ internal sealed partial class ProductJobRegistry
     {
         internal ProductJob Job { get; }
         internal ProductRunIntent Intent { get; }
-        internal ProductRunHistory Previous { get; }
+        internal ProductRunHistory Previous => previous.Value;
         internal string? Generation { get; private set; }
+        private readonly Lazy<ProductRunHistory> previous;
         private readonly SafeFileHandle job;
         private readonly SafeFileHandle run;
         private readonly FileStream execution;
         private readonly FileStream active;
         private long revision;
 
-        internal ProductRunLease(ProductJob job, ProductRunIntent intent, ProductRunHistory previous,
+        internal ProductRunLease(ProductJob job, ProductRunIntent intent, Func<ProductRunHistory> readPrevious,
             SafeFileHandle jobDirectory, SafeFileHandle run, FileStream execution, FileStream active)
-        { Job = job; Intent = intent; Previous = previous; this.job = jobDirectory; this.run = run; this.execution = execution; this.active = active; }
+        { Job = job; Intent = intent; previous = new(readPrevious); this.job = jobDirectory; this.run = run; this.execution = execution; this.active = active; }
 
         internal void SetGeneration(string generation)
         {
@@ -336,7 +378,7 @@ internal sealed partial class ProductJobRegistry
         }
         internal void AuthorizeAutomaticMirror(MirrorPreview preview)
         {
-            string[] paths = AutomaticMirrorRules.Check(preview, Intent, Previous);
+            string[] paths = AutomaticMirrorRules.Check(preview, Intent, () => Previous);
             SetGeneration(preview.Generation);
             if (paths.Length == 0) return;
             var charge = new ProductMirrorCharge(AutomaticMirrorRules.Version, IntentHash(Intent), preview.Generation, paths);

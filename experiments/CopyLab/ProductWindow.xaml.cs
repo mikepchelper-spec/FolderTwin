@@ -283,7 +283,7 @@ public partial class ProductWindow : Window
 
     private void RefreshJobsClick(object sender, RoutedEventArgs e)
     {
-        if (!busy) Start(LoadListAsync);
+        if (!busy) Start(async () => { await LoadListAsync(); await RefreshRuntimeAsync(rereadHistory: true); });
     }
 
     private void ResumeRegistrationClick(object sender, RoutedEventArgs e)

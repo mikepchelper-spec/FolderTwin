@@ -7,7 +7,7 @@ Serie candidata de FolderTwin 1.0 para ensayos sintéticos. **COMPILACION.json**
 - Primer inicio con **Crear mi primer respaldo**, ejemplos de los tres modos y pasos para verificar y recuperar una muestra.
 - **Automático al detectar cambios** inicia la primera copia al guardar un trabajo nuevo y agrupa los cambios siguientes. El monitor permanece activo con la ventana cerrada y puede arrancar al iniciar sesión.
 - El espejo admite retiradas ordinarias recuperables cuando el usuario las autoriza por trabajo. La vigilancia reanuda el análisis al volver un destino registrado. Un archivo ocupado puede dejar un punto parcial con los datos legibles.
-- En acumulativo y espejo, las ediciones puntuales pueden confirmarse mediante una comparación acotada si las rutas conservan la estructura del punto anterior. La interfaz distingue ese resultado de una comparación completa y de una verificación integral.
+- En acumulativo y espejo, las altas, ediciones, renombrados y bajas de archivos pueden confirmarse mediante una comparación acotada si las carpetas conservan su estructura y las rutas afectadas se pueden comprobar. El espejo conserva el consentimiento y los límites de retiradas. La interfaz distingue ese resultado de una comparación completa y de una verificación integral.
 - **ⓘ Ayuda y versión** y F1 ofrecen explicaciones por control, requisitos de acciones deshabilitadas, guía local y soporte. El diagnóstico permite revisar y copiar un resumen mínimo de versión y estados.
 - Las acciones habituales permanecen sobre los detalles desplazables. Una recuperación confirmada habilita **Abrir carpeta recuperada**.
 - El espejo habilita Aplicar después de aceptar las revisiones adicionales que requiere el inventario.

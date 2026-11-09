@@ -13,7 +13,7 @@ public partial class ProductWindow
         {
             productTray ??= new LabTray(openRegistry, ShowProductWindow, () => { ShowProductWindow(); Close(); },
                 notifications: testPicker is null && testWorker is null && testSchedule is null,
-                openIssue: OpenTrayIssue);
+                openIssue: OpenTrayIssue, displayHistory: displayHistory);
             await productTray.RefreshAsync();
             Hide();
         });

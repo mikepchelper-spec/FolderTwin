@@ -63,7 +63,7 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
         return new(status, age, jobs.Jobs.Select(job => job.Id).ToArray(), attention.Distinct().ToArray());
     }
 
-    internal static TraySnapshot ReadProduct(ProductJobRegistry registry)
+    internal static TraySnapshot ReadProduct(ProductJobRegistry registry, ProductJobRegistry.DisplayRunHistory? displayHistory = null)
     {
         var list = registry.List();
         var jobs = list.Jobs.Where(job => job.Enabled && !job.Retired).ToArray();
@@ -76,7 +76,7 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
             attention.Add("monitor-stopped");
         foreach (var job in jobs)
         {
-            var history = registry.RunHistory(job.Id);
+            var history = displayHistory?.Read(registry, job.Id) ?? registry.RunHistory(job.Id);
             if (history.Unreadable != 0) attention.Add($"{job.Id:N}-history");
             bool running = history.Runs.Any(run => run.Running);
             if (running) busy++; else runnable.Add(job.Id);

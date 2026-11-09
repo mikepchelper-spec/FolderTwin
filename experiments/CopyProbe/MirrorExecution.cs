@@ -54,10 +54,8 @@ internal sealed partial class VersionStore
         LabWorkspace.RequireSpace(fresh.EstimatedBytes, fresh.AvailableBytes);
         try
         {
-            var changed = fresh.Scoped ? fresh.AffectedPaths!.ToHashSet(StringComparer.Ordinal) : null;
             CopyAndConfirm(root.Root, fresh.SourcePlan, fresh.Generation, checkpoint: null, objectCheckpoint: null,
-                prepareOnly: true, retrySourceChanges: true,
-                scopedFiles: changed is null ? null : fresh.SourcePlan.Files.Where(file => changed.Contains(file.RelativePath)).ToArray());
+                prepareOnly: true, retrySourceChanges: true, scopedFiles: fresh.ScopedFiles);
         }
         catch (SourceChangedDuringBackupException error)
         {
@@ -173,7 +171,7 @@ internal sealed partial class VersionStore
         using var pending = WindowsProbeNative.OpenPlainDirectory(root, PendingDirectory);
         bool automatic = MirrorJournal.HasState(directory, plan, "automatic");
         if (plan.Scoped && !automatic)
-            throw new InvalidDataException("Falta la autorización registrada para el reemplazo acotado.");
+            throw new InvalidDataException("Falta la autorización registrada para la actualización acotada.");
         BatchPlan? sourceInventory = null;
         CatalogSnapshot? baseline = null;
         if (plan.Version == 3 && !plan.Scoped)
@@ -197,11 +195,11 @@ internal sealed partial class VersionStore
             verifyObjects: freshPreview is null && !plan.Scoped);
         if (!(previous?.DocumentHash ?? new byte[32]).AsSpan().SequenceEqual(plan.PreviousHash))
             throw new InvalidDataException("El punto anterior del espejo no corresponde al diario.");
-        // A scoped replacement carries the merged point and the prior baseline.
+        // A scoped update carries the merged point and the prior baseline.
         // Destination-only files keep their prior entries in the merged point.
         if (plan.Scoped && plan.Version == 3 && (!plan.DocumentHash.AsSpan().SequenceEqual(plan.SourceHash) ||
             !plan.PreviousHash.AsSpan().SequenceEqual(plan.BaselineHash)))
-            throw new InvalidDataException("El reemplazo acumulativo no coincide con los catálogos del diario.");
+            throw new InvalidDataException("La actualización acumulativa no coincide con los catálogos del diario.");
         var before = baseline ?? previous;
         var scoped = plan.Scoped ? ScopeMirror(previous, new(binding, intent.Directories, intent.Files, plan.DocumentHash)) : default;
         if (plan.Scoped) VerifyObjects(root, scoped.Before.Files);
@@ -353,10 +351,14 @@ internal sealed partial class VersionStore
         var currentFiles = current?.Files ?? before?.Files ?? [];
         if (fullScopedBefore is not null && !checkedBefore)
         {
-            var touched = before!.Files.Select(file => file.RelativePath).ToHashSet(StringComparer.Ordinal);
-            if (!SameScopedLayout(FolderInventory.Scan(MirrorCurrentPath, BatchCatalog.VersionMaximumEntries), fullScopedBefore, touched, touched))
+            var priorPaths = before!.Files.Select(file => file.RelativePath).ToHashSet(StringComparer.Ordinal);
+            var additions = after.Files.Where(file => !priorPaths.Contains(file.RelativePath)).ToArray();
+            var touchedFiles = before.Files.Concat(additions).ToArray();
+            var touched = touchedFiles.Select(file => file.RelativePath).ToHashSet(StringComparer.Ordinal);
+            var possible = additions.Length == 0 ? fullScopedBefore : fullScopedBefore with { Files = [.. fullScopedBefore.Files, .. additions] };
+            if (!SameScopedLayout(FolderInventory.Scan(MirrorCurrentPath, BatchCatalog.VersionMaximumEntries), possible, touched, touched))
                 throw new InvalidDataException("La estructura del espejo cambió durante la recuperación acotada.");
-            currentFiles = (before?.Files ?? []).Select(file =>
+            currentFiles = touchedFiles.Select(file =>
             {
                 try { return ReadScopedFile(MirrorCurrentPath, file.RelativePath); }
                 catch (FileNotFoundException) { return null; }

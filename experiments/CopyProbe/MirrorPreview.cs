@@ -4,7 +4,7 @@ internal sealed record MirrorPreview(string Generation, BatchPlan SourcePlan, by
     byte[] RegistryHash, byte[] CurrentIdentity, int Added, int Replaced, int Removed, int AddedDirectories, int RemovedDirectories,
     string[] Conflicts, long StageBytes, long EstimatedBytes, ulong AvailableBytes, int MaximumChangePercent,
     bool RequiresEmptyReview, bool RequiresMassReview, BatchPlan? Baseline = null,
-    int PreviousEntries = 0, string[]? AffectedPaths = null, bool Scoped = false);
+    int PreviousEntries = 0, string[]? AffectedPaths = null, bool Scoped = false, BatchFile[]? ScopedFiles = null);
 
 internal sealed partial class VersionStore
 {

@@ -20,12 +20,13 @@ internal static class AutomaticMirrorProbe
             var store = VersionStore.OpenProduct(job);
 
             File.Delete(Path.Combine(source, Name(0)));
-            Check(RunAutomatic().State == ProductRunState.Review && ExistsInMirror(0),
+            Check(ProductRunner.Run(registry, job.Id, automatic: true, editHints: [Name(0)]).State == ProductRunState.Review && ExistsInMirror(0),
                 "An unattended retirement was accepted without consent.");
             registry.UpdateSettings(job.Id, job.Options.Name, null, true, false, authorizeMirror: true);
             using (var reopened = new ProductJobRegistry(settings))
                 Check(reopened.Get(job.Id).AutomaticMirrorPolicy == AutomaticMirrorRules.Version, "Mirror consent was not durable.");
-            Check(RunAutomatic().State == ProductRunState.Confirmed && !ExistsInMirror(0), "An ordinary retirement did not converge.");
+            Check(ProductRunner.Run(registry, job.Id, automatic: true, editHints: [Name(0)]) is
+                { State: ProductRunState.Confirmed, Scoped: true } && !ExistsInMirror(0), "An ordinary retirement did not converge.");
 
             string detached = Path.Combine(fixture.Root, "source-detached");
             Directory.Move(source, detached);
@@ -34,7 +35,8 @@ internal static class AutomaticMirrorProbe
             Directory.Move(detached, source);
 
             for (int i = 1; i <= 6; i++) Move(i, source, away);
-            Check(RunAutomatic().State == ProductRunState.Review && Enumerable.Range(1, 6).All(ExistsInMirror),
+            Check(ProductRunner.Run(registry, job.Id, automatic: true, editHints: Enumerable.Range(1, 6).Select(Name).ToArray()).State == ProductRunState.Review &&
+                Enumerable.Range(1, 6).All(ExistsInMirror),
                 "A destructive batch exceeded its proportional budget.");
             for (int i = 1; i <= 6; i++) Move(i, away, source);
 
@@ -45,7 +47,7 @@ internal static class AutomaticMirrorProbe
                 Check(result.State == ProductRunState.Confirmed && !ExistsInMirror(i), result.Detail ?? "An ordinary retirement was not applied.");
             }
             File.Delete(Path.Combine(source, Name(8)));
-            var split = ProductRunner.Run(registry, job.Id, clock: () => DateTimeOffset.UtcNow.AddMinutes(-30), automatic: true);
+            var split = ProductRunner.Run(registry, job.Id, clock: () => DateTimeOffset.UtcNow.AddMinutes(-30), automatic: true, editHints: [Name(8)]);
             Check(split.State == ProductRunState.Review && ExistsInMirror(8) &&
                 split.Detail?.Contains("recientes", StringComparison.Ordinal) == true,
                 "Splitting a destructive change into small batches or moving the clock bypassed the rolling budget.");
@@ -131,6 +133,7 @@ internal static class AutomaticMirrorProbe
                     "Archiving a superseded mirror operation lost its recoverable snapshot.");
 
                 string editing = Folder("scoped-source-" + mode);
+                string existingFolder = Directory.CreateDirectory(Path.Combine(editing, "existing")).FullName;
                 for (int index = 0; index < 12; index++) File.WriteAllText(Path.Combine(editing, Name(index)), "before");
                 var scoped = registry.Create(new("Synthetic scoped " + mode, mode, null),
                     LocalJobRoots.ReviewDedicatedDestination(editing, destinations));
@@ -180,6 +183,69 @@ internal static class AutomaticMirrorProbe
                 Check(added is { State: ProductRunState.Confirmed, Scoped: false } && File.Exists(Path.Combine(scopedStore.MirrorCurrentPath, "added.txt")),
                     "A scoped hint bypassed an actual change in the tree layout.");
 
+                const string newName = @"existing\new.txt", renamedName = @"existing\renamed.txt";
+                string newPath = Path.Combine(existingFolder, "new.txt");
+                File.WriteAllText(newPath, "scoped new bytes");
+                var newFile = ProductRunner.Run(registry, scoped.Id, automatic: true, editHints: ["?existing", newName]);
+                Check(newFile is { State: ProductRunState.Confirmed, Scoped: true }, newFile.Detail ?? "An isolated addition used a complete comparison.");
+                File.Move(newPath, Path.Combine(existingFolder, "renamed.txt"));
+                if (mode == ProductBackupMode.ProtectedMirror)
+                {
+                    registry.UpdateSettings(scoped.Id, scoped.Options.Name, null, true, false, ProductWatchMode.Watching, authorizeMirror: false);
+                    var withheldRename = ProductRunner.Run(registry, scoped.Id, automatic: true, editHints: ["?existing", newName, renamedName]);
+                    Check(withheldRename.State == ProductRunState.Review && File.Exists(Path.Combine(scopedStore.MirrorCurrentPath, newName)),
+                        "A scoped rename bypassed retirement consent.");
+                    registry.UpdateSettings(scoped.Id, scoped.Options.Name, null, true, false, ProductWatchMode.Watching, authorizeMirror: true);
+                }
+                interrupted = null;
+                try
+                {
+                    scopedStore.UpdateAutomaticMirror(scoped.Source.VolumePath, captureAffectedPaths: true, preview =>
+                    {
+                        Check(preview.Scoped && preview.Added == 1 && preview.Removed == (mode == ProductBackupMode.ProtectedMirror ? 1 : 0),
+                            "A simple rename did not produce the expected scoped delta.");
+                        Check(preview.AffectedPaths!.SequenceEqual(mode == ProductBackupMode.ProtectedMirror ? [newName] : []),
+                            "A rename did not charge exactly the previously protected path it retires.");
+                        interrupted = preview.Generation;
+                        return true;
+                    }, checkpoint: step =>
+                    {
+                        if (step == MirrorStep.Promoted) throw new IOException("Synthetic interruption after rename promotion.");
+                    }, editHints: ["?existing", newName, renamedName]);
+                    throw new InvalidOperationException("The scoped rename interruption was not reached.");
+                }
+                catch (IOException error) when (error.Message == "Synthetic interruption after rename promotion.") { }
+                Directory.Move(editing, detachedEditing);
+                var resumedRename = ProductRunner.Run(registry, scoped.Id, automatic: true);
+                Check(resumedRename is { State: ProductRunState.Confirmed, Scoped: true } && resumedRename.Generation == interrupted &&
+                    File.Exists(Path.Combine(scopedStore.MirrorCurrentPath, newName)) == (mode == ProductBackupMode.Accumulative),
+                    resumedRename.Detail ?? "The interrupted rename could not finish without the source.");
+                string renamedRestore = Folder("renamed-restore-" + mode), originalRestore = Folder("original-restore-" + mode);
+                scopedStore.Restore(resumedRename.Generation!, renamedRestore, renamedName);
+                scopedStore.Restore(newFile.Generation!, originalRestore, newName);
+                Check(File.ReadAllText(Path.Combine(renamedRestore, renamedName)) == "scoped new bytes" &&
+                    File.ReadAllText(Path.Combine(originalRestore, newName)) == "scoped new bytes", "The new and previous paths did not restore offline.");
+                Directory.Move(detachedEditing, editing);
+
+                string occupied = Path.Combine(existingFolder, "occupied.txt");
+                using (var writer = new FileStream(occupied, FileMode.CreateNew, FileAccess.Write, FileShare.ReadWrite))
+                {
+                    writer.WriteByte(42);
+                    writer.Flush();
+                    var busy = ProductRunner.Run(registry, scoped.Id, automatic: true, editHints: ["?existing", @"existing\occupied.txt"]);
+                    Check(busy.State == ProductRunState.Busy && !File.Exists(Path.Combine(scopedStore.MirrorCurrentPath, @"existing\occupied.txt")),
+                        "The isolated addition applied a path that could not be read safely.");
+                }
+                File.Delete(occupied);
+                string replacement = Folder("replacement-directory-" + mode);
+                File.WriteAllText(Path.Combine(replacement, "renamed.txt"), "changed same size");
+                Directory.Move(existingFolder, Path.Combine(fixture.Root, "previous-directory-" + mode));
+                Directory.Move(replacement, existingFolder);
+                var folderSwap = ProductRunner.Run(registry, scoped.Id, automatic: true, editHints: ["existing", renamedName]);
+                Check(folderSwap is { State: ProductRunState.Confirmed, Scoped: false } &&
+                    File.ReadAllText(Path.Combine(scopedStore.MirrorCurrentPath, renamedName)) == "changed same size",
+                    "A real directory name event was treated as metadata-only.");
+
                 if (mode == ProductBackupMode.Accumulative)
                 {
                     File.Delete(Path.Combine(editing, "added.txt"));
@@ -212,7 +278,7 @@ internal static class AutomaticMirrorProbe
             }
             Console.WriteLine("PASS automatic mirror consent, recoverable retirement, small-folder edits, split mass changes, rollback of clock, empty source and external conflict.");
             Console.WriteLine("PASS late source drift preserves the prepared snapshot without mutating current, then converges in both mirror modes.");
-            Console.WriteLine("PASS scoped same-size same-time edits with a vanished temporary, interruption and offline restoration, full structural fallback and destination conflict in both mirror modes.");
+            Console.WriteLine("PASS scoped edits, isolated additions, rename consent, mixed-state resumption and offline restoration, full structural fallback and destination conflicts in both mirror modes.");
             return 0;
 
             ProductRunResult RunAutomatic() => ProductRunner.Run(registry, job.Id, automatic: true);
