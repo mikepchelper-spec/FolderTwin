@@ -262,7 +262,7 @@ internal static class GenerationRegistry
                     else if (payload.Kind == "mirror")
                     {
                         // The first mirror format published the final event directly.
-                        if (mirror == payload.Generation || expired.Contains(payload.Generation) ||
+                        if (VersionStore.IsPartialPoint(payload.Generation) || mirror == payload.Generation || expired.Contains(payload.Generation) ||
                             pendingMirror is not null && pendingMirror != payload.Generation)
                             throw new InvalidDataException("La referencia actual del espejo no es válida.");
                         mirror = payload.Generation;
@@ -270,7 +270,7 @@ internal static class GenerationRegistry
                     }
                     else if (payload.Kind == "mirror-begin")
                     {
-                        if (pendingMirror is not null || mirror == payload.Generation || expired.Contains(payload.Generation))
+                        if (VersionStore.IsPartialPoint(payload.Generation) || pendingMirror is not null || mirror == payload.Generation || expired.Contains(payload.Generation))
                             throw new InvalidDataException("El registro contiene actualizaciones de espejo contradictorias.");
                         pendingMirror = payload.Generation;
                     }

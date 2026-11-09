@@ -85,19 +85,26 @@ internal static partial class ProductRunner
         using var run = registry.StartRun(id, clock, automatic: automatic);
         var control = new Controller(run, checkpoint);
         var job = run.Job;
+        VersionStore? store = null;
         try
         {
             if (approvalId is not null && (job.Options.Mode != ProductBackupMode.ProtectedMirror || automatic))
                 throw new InvalidDataException("La aprobación no corresponde al modo de este trabajo.");
             control.Observe(new(WorkPhase.Analyzing, 0, 0));
-            var store = VersionStore.OpenProduct(job, initialize: true, observe: control.Observe);
+            store = VersionStore.OpenProduct(job, initialize: true, observe: control.Observe);
+            if (automatic && store.ResumePartialPoint(job.Source.VolumePath, job.Source.Identity) is { } resumed)
+            {
+                run.SetGeneration(resumed);
+                return run.Finish(ProductRunState.Busy, clock: clock,
+                    detail: "Se recuperó un punto parcial. Todavía falta comparar y respaldar todo el origen.");
+            }
             if (job.Options.Mode == ProductBackupMode.Versions)
             {
                 var pending = store.ListPending();
                 if (pending.Length > 1) throw new InvalidDataException("Hay varios puntos pendientes de revisar.");
                 string? previous = run.Previous.Runs.Where(item => item.Intent.Operation == ProductRunOperation.Backup)
                     .TakeWhile(item => item.Result?.State != ProductRunState.Confirmed)
-                    .FirstOrDefault(item => item.Generation is not null)?.Generation;
+                    .FirstOrDefault(item => item.Generation is { } point && !VersionStore.IsPartialPoint(point))?.Generation;
                 if (previous is not null && store.IsAbandonedGeneration(previous)) previous = null;
                 string generation = pending.SingleOrDefault()?.Id ?? previous ?? VersionStore.NewGenerationId();
                 if (!automatic) run.SetGeneration(generation);
@@ -179,7 +186,25 @@ internal static partial class ProductRunner
             ProductRunState state = VersionJob.SharingViolation(error) ? ProductRunState.Busy : Availability(job);
             int code = error is Win32Exception native ? native.NativeErrorCode : error.InnerException is Win32Exception inner ?
                 inner.NativeErrorCode : error.HResult;
-            return run.Finish(state, control.Current.RelativePath, code, clock, error.Message);
+            string? path = control.Current.RelativePath;
+            if (state == ProductRunState.Busy && automatic && store is not null && run.Generation is null &&
+                control.Current is { Phase: WorkPhase.Analyzing, RelativePath: not null })
+            {
+                try
+                {
+                    var partial = store.CaptureReadableFiles(job.Source.VolumePath, run.SetGeneration);
+                    if (partial.Generation is not null)
+                        return run.Finish(ProductRunState.Busy, partial.OccupiedPath ?? path, code, clock,
+                            "Hay un punto parcial con archivos legibles. El respaldo completo sigue pendiente.");
+                }
+                catch (OperationCanceledException) { return run.Finish(ProductRunState.Cancelled, path, clock: clock); }
+                catch (Exception failedPartial) when (VersionJob.Expected(failedPartial))
+                {
+                    return run.Finish(ProductRunState.Busy, path, code, clock,
+                        "El respaldo completo sigue pendiente y no se confirmó un punto parcial. " + failedPartial.Message);
+                }
+            }
+            return run.Finish(state, path, code, clock, error.Message);
         }
     }
 
@@ -227,8 +252,9 @@ internal static partial class ProductRunner
         try
         {
             var store = VersionStore.OpenProduct(run.Job, observe: control.Observe);
-            bool degraded = run.Job.Options.Mode == ProductBackupMode.Accumulative ||
-                run.Job.Options.Mode == ProductBackupMode.ProtectedMirror && store.RegisteredGenerations().MirrorGeneration == generation
+            bool degraded = !VersionStore.IsPartialPoint(generation) &&
+                (run.Job.Options.Mode == ProductBackupMode.Accumulative ||
+                 run.Job.Options.Mode == ProductBackupMode.ProtectedMirror && store.RegisteredGenerations().MirrorGeneration == generation)
                 ? store.VerifyCurrent(generation) : store.Verify(generation);
             return run.Finish(ProductRunState.Confirmed, degraded: degraded);
         }

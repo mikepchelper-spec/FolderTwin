@@ -9,6 +9,7 @@ internal sealed partial class VersionStore
         Action<RegistryStep>? beginRegistryCheckpoint = null)
     {
         _ = GenerationTime(review.Generation);
+        if (IsPartialPoint(review.Generation)) throw new InvalidDataException("Un punto parcial no actualiza el espejo.");
         using var scope = workspace.OpenRegisteredRoot();
         workspace.CheckRoots(review.SourcePlan.Source, Destination);
         using var root = new DirectoryFence(Destination);
@@ -75,6 +76,7 @@ internal sealed partial class VersionStore
     internal void ResumeMirror(string generation, Action<MirrorStep>? checkpoint = null, Action<RegistryStep>? registryCheckpoint = null)
     {
         _ = GenerationTime(generation);
+        if (IsPartialPoint(generation)) throw new InvalidDataException("Un punto parcial no actualiza el espejo.");
         using var scope = workspace.OpenRegisteredRoot();
         using var root = new DirectoryFence(Destination);
         using var marker = binding.OpenVerifiedMarker(root.Root);

@@ -10,7 +10,7 @@ public partial class ProductWindow
     private sealed record RecoveryDate(VersionPoint Point)
     {
         public string Label => Point.CreatedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture) +
-            $" · {Point.FileCount:N0} archivos" + (Point.Problem is not null ? " · Requiere revisión" :
+            $" · {Point.FileCount:N0} archivos" + (Point.Partial ? " · Punto parcial" : "") + (Point.Problem is not null ? " · Requiere revisión" :
                 Point.Expired ? " · Expirado" : Point.Degraded ? " · Una réplica íntegra" : "");
     }
     private sealed record RestoreChoice(string Generation, DedicatedDestinationReview Destination, string? RelativeFile = null);
@@ -106,8 +106,9 @@ public partial class ProductWindow
             {
                 var store = VersionStore.OpenProduct(job);
                 var available = store.ListPoints();
-                return job.Options.Mode == ProductBackupMode.Accumulative ?
-                    available.Where(point => point.Id == store.RegisteredGenerations().MirrorGeneration).ToArray() : available;
+                if (job.Options.Mode != ProductBackupMode.Accumulative) return available;
+                string? current = store.RegisteredGenerations().MirrorGeneration;
+                return available.Where(point => point.Partial || point.Id == current).ToArray();
             });
             if (points.Length == 0) throw new InvalidDataException("Este trabajo todavía no tiene un respaldo confirmado.");
             recoveryJob = job;
@@ -145,8 +146,8 @@ public partial class ProductWindow
         RecoverySearch.Text = "";
         RecoveryOnlyChanges.IsChecked = false;
         if (row.Point.Problem is { } problem) throw new InvalidDataException(problem);
-        var previous = RecoveryDates.Items.OfType<RecoveryDate>().SkipWhile(candidate => candidate.Point.Id != row.Point.Id)
-            .Skip(1).FirstOrDefault(candidate => candidate.Point is { Problem: null, Expired: false });
+        var previous = row.Point.Partial ? null : RecoveryDates.Items.OfType<RecoveryDate>().SkipWhile(candidate => candidate.Point.Id != row.Point.Id)
+            .Skip(1).FirstOrDefault(candidate => candidate.Point is { Problem: null, Expired: false, Partial: false });
         var loaded = await Task.Run(() =>
         {
             var store = VersionStore.OpenProduct(job);
@@ -175,6 +176,7 @@ public partial class ProductWindow
         RecoveryComparison.Text = loaded.previousId is null ? "Sin un punto anterior disponible para comparar." :
             $"Comparando {row.Label} con {previous!.Label}. Los eliminados se recuperan desde el punto anterior.";
         RecoverySummary.Text = $"{loaded.current.Files.Length:N0} archivos · {loaded.current.Directories.Length:N0} carpetas. " +
+            (row.Point.Partial ? "Contiene solo los archivos legibles de ese intento. " : "") +
             (row.Point.Expired ? "Punto expirado. Deshaz su cuarentena antes de recuperarlo." : "La recuperación crea una carpeta nueva.") +
             (loaded.current.Degraded ? " Solo una réplica del catálogo está íntegra." : "");
         await LoadRecoveryPageAsync();

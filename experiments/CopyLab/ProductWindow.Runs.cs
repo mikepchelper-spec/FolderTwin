@@ -92,7 +92,8 @@ public partial class ProductWindow
         var latest = history.Runs.FirstOrDefault();
         var active = history.Runs.FirstOrDefault(run => run.Running);
         var correct = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Backup && run.Result?.State == ProductRunState.Confirmed);
-        var verified = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Verify && run.Result?.State == ProductRunState.Confirmed);
+        var verified = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Verify &&
+            run.Result?.State == ProductRunState.Confirmed && run.Generation is { } point && !VersionStore.IsPartialPoint(point));
         var reconciled = history.Runs.FirstOrDefault(run => run.Intent.Automatic && run.Result?.State is ProductRunState.Confirmed or ProductRunState.Unchanged);
         LastReconciliationText.Text = job?.WatchMode == ProductWatchMode.Off || job is null ? "" :
             "Última comparación automática · " + RouteDate(reconciled?.Result?.FinishedUtc);
@@ -210,6 +211,7 @@ public partial class ProductWindow
                 ProductRunOperation.ReviewAbandon => "Plan pendiente revisado",
                 ProductRunOperation.AbandonVersion => "Plan anterior conservado; crea un respaldo nuevo",
                 ProductRunOperation.Restore => "Recuperación completa",
+                ProductRunOperation.Verify when last.Generation is { } point && VersionStore.IsPartialPoint(point) => "Punto parcial verificado",
                 ProductRunOperation.Verify => "Verificación completa",
                 _ => "Respaldo completo"
             },
@@ -239,6 +241,8 @@ public partial class ProductWindow
         ProductRunState.Confirmed when run.Restore is { } restore => "Recuperación completa y verificada.\n" +
             Path.Combine(restore.Target.Parent.VolumePath, restore.Target.FolderName) +
             (result.Degraded ? "\nUna réplica del catálogo necesita revisión." : ""),
+        ProductRunState.Confirmed when run.Intent.Operation == ProductRunOperation.Verify &&
+            run.Generation is { } point && VersionStore.IsPartialPoint(point) => "Se verificaron los archivos del punto parcial.",
         ProductRunState.Confirmed => run.Intent.Operation == ProductRunOperation.Verify ? "Verificación completa del contenido." +
             (result.Degraded ? " Una réplica del catálogo necesita revisión." : "") : "Respaldo completo y verificado.",
         ProductRunState.Cancelled when run.Intent.Operation == ProductRunOperation.Restore =>
@@ -248,6 +252,8 @@ public partial class ProductWindow
         ProductRunState.Cancelled => "Operación cancelada en un límite recuperable. Reintenta para continuar el trabajo pendiente.",
         ProductRunState.WaitingForSource => "El origen no está disponible. Los puntos anteriores se conservan. Reconecta la misma carpeta y reintenta.",
         ProductRunState.WaitingForDestination => "El disco o carpeta de destino no está disponible. Los resultados anteriores se conservan. Reconecta el destino registrado y reintenta.",
+        ProductRunState.Busy when result.Generation is { } partial && VersionStore.IsPartialPoint(partial) =>
+            "Respaldo completo pendiente. Abre Recuperar para consultar el punto parcial con los archivos legibles.",
         ProductRunState.Busy => "Un archivo o el destino está en uso. Cierra la aplicación que lo usa o espera a que termine la otra operación. Luego reintenta.",
         ProductRunState.Unchanged => "La comparación no encontró cambios. La fecha del último respaldo completo y la última verificación se conservan.",
         _ when result.ErrorCode is { } code && (code & 0xffff) is 112 or 39 =>

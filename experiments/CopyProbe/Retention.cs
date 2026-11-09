@@ -68,7 +68,7 @@ internal sealed partial class VersionStore
     private static RetentionPreview BuildRetentionPreview(RetentionInventory inventory, RetentionPolicy policy, DateTimeOffset now)
     {
         string[] active = inventory.Registry.RegistrationOrder.Where(id => !inventory.Registry.Expired.Contains(id)).ToArray();
-        var keep = active.GroupBy(id => inventory.Sources[id], StringComparer.Ordinal)
+        var keep = active.GroupBy(id => (inventory.Sources[id], Partial: IsPartialPoint(id)))
             .SelectMany(group => policy.Select(group.ToArray(), now)).ToHashSet(StringComparer.Ordinal);
         if (inventory.Registry.MirrorGeneration is { } current)
             keep.Add(current);

@@ -47,6 +47,21 @@ public partial class ProductWindow
             var first = await WaitAsync(0);
             window.Close();
             window = null;
+            using (var held = new FileStream(Path.Combine(source, "retire.txt"), FileMode.Open, FileAccess.Write, FileShare.Read))
+            {
+                File.WriteAllText(Path.Combine(source, "keep.txt"), "stable while the other file is occupied");
+                var partial = await WaitAsync(first.Intent.Sequence, ProductRunState.Busy);
+                Check(partial.Generation is { } point && VersionStore.IsPartialPoint(point), "The resident worker did not save a partial point.");
+                window = new ProductWindow(Open, testMonitor: StartMonitor);
+                window.Show();
+                await window.InitializeAsync();
+                await Click(window, window.RecoverJobButton);
+                Check(window.RecoveryDates.SelectedItem is RecoveryDate { Point.Partial: true } row &&
+                    row.Label.Contains("Punto parcial", StringComparison.Ordinal) && !window.RecoveryOnlyChanges.IsEnabled,
+                    "Recovery presented a partial point as a full comparison baseline.");
+                window.Close();
+                window = null;
+            }
             File.Delete(Path.Combine(source, "retire.txt"));
             var second = await WaitAsync(first.Intent.Sequence);
             Check(!File.Exists(Path.Combine(VersionStore.OpenProduct(job).MirrorCurrentPath, "retire.txt")),
@@ -67,14 +82,14 @@ public partial class ProductWindow
                 "The retired file did not recover with the source absent.");
             Console.Error.WriteLine("PASS Ruta wizard consent, automatic first backup, retirement with the window closed, durable pause and offline recovery.");
 
-            async Task<ProductRunView> WaitAsync(long after)
+            async Task<ProductRunView> WaitAsync(long after, ProductRunState expected = ProductRunState.Confirmed)
             {
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                 while (true)
                 {
                     if (monitor is null || monitor.HasExited) throw new InvalidOperationException("The UI did not start its test monitor.");
                     if (registry.RunHistory(job.Id).Runs.FirstOrDefault(run => !run.Running &&
-                        run.Intent.Sequence > after && run.Result?.State == ProductRunState.Confirmed) is { } completed)
+                        run.Intent.Sequence > after && run.Result?.State == expected) is { } completed)
                         return completed;
                     await Task.Delay(100, timeout.Token);
                 }

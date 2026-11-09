@@ -45,6 +45,8 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-watch
       - name: Verify unattended mirror retirement, recovery and mass change limits
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-auto-mirror
+      - name: Verify recoverable partial points and offline resumption in all modes
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-auto-partial
       - name: Verify reviewed restoration workers, cancellation, interruption and route exclusion
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-restore
       - name: Verify durable controllable mirror analysis and bound approvals

@@ -8,6 +8,8 @@ En una compilación que incluya esta función, el asistente recomienda **Automá
 
 En Ruta, consulta el estado del monitor, la última comparación automática, el último respaldo completo y la última verificación. Si falta el monitor, abre **Editar trabajo y automatización → Iniciar monitor**. Desde los mismos ajustes puedes pausar o reanudar la vigilancia de ese trabajo o desmarcarla y guardar. La pausa de vigilancia se aplica a los próximos intentos automáticos. Un intento en marcha tiene sus propios controles.
 
+Si un archivo sigue ocupado por un escritor, FolderTwin puede guardar los archivos legibles en un **Punto parcial**. El trabajo sigue pendiente hasta que termine una copia completa. Puedes verificar y restaurar ese punto desde **Recuperar**, incluso con el origen desconectado. La carpeta actual del espejo o de la copia acumulativa permanece en su estado anterior durante ese intento.
+
 La vigilancia puede continuar al cerrar la ventana con Windows despierto y tu sesión iniciada. En **Aplicación**, usa **Iniciar la vigilancia al entrar en Windows** y **Guardar e iniciar monitor** para configurar el arranque. **Detener vigilancia** retira la tarea del monitor y conserva los horarios diarios y los respaldos. Esta función se está verificando por separado del [paquete experimental RC2](README.md#paquete-portable-de-windows).
 
 ## Primer inicio

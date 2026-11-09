@@ -55,7 +55,7 @@ internal static class FolderBatch
 
     internal static BatchPlan AnalyzeSource(string fixtureRoot, string source, string destination,
         DestinationBinding binding, byte[] sourceIdentity, int maximumEntries = FolderInventory.DefaultMaximumEntries,
-        Action<WorkProgress>? observe = null)
+        Action<WorkProgress>? observe = null, List<string>? occupied = null)
     {
         observe?.Invoke(new(WorkPhase.Analyzing, 0, 0));
         using var origin = new DirectoryFence(source);
@@ -82,16 +82,25 @@ internal static class FolderBatch
             foreach (var entry in group)
             {
                 observe?.Invoke(new(WorkPhase.Analyzing, files.Count, totalFiles, entry.RelativePath));
-                using var file = WindowsProbeNative.OpenPlainFile(parent, entry.RelativePath, FileAccess.Read, FileShare.Read);
-                WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath);
-                if (file.Length != entry.Length)
-                    throw new InvalidDataException("El origen cambió durante el análisis.");
-                var metadata = FileMetadata.Read(file.SafeFileHandle);
-                byte[] hash = SHA256.HashData(file);
-                if (!metadata.IsValid())
-                    throw new InvalidDataException($"Las fechas de «{entry.RelativePath}» están fuera del alcance.");
-                metadata.RequireMatch(file.SafeFileHandle);
-                files.Add(new(entry.RelativePath, entry.Length, hash, metadata));
+                FileStream file;
+                try { file = WindowsProbeNative.OpenPlainFile(parent, entry.RelativePath, FileAccess.Read, FileShare.Read); }
+                catch (Exception error) when (occupied is not null && VersionJob.SharingViolation(error))
+                {
+                    occupied.Add(entry.RelativePath);
+                    continue;
+                }
+                using (file)
+                {
+                    WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath);
+                    if (file.Length != entry.Length)
+                        throw new InvalidDataException("El origen cambió durante el análisis.");
+                    var metadata = FileMetadata.Read(file.SafeFileHandle);
+                    byte[] hash = SHA256.HashData(file);
+                    if (!metadata.IsValid())
+                        throw new InvalidDataException($"Las fechas de «{entry.RelativePath}» están fuera del alcance.");
+                    metadata.RequireMatch(file.SafeFileHandle);
+                    files.Add(new(entry.RelativePath, entry.Length, hash, metadata));
+                }
             }
         }
         return new(fixtureRoot, source, destination, sourceIdentity, binding,

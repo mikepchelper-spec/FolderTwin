@@ -4,7 +4,10 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Win32.SafeHandles;
 
-internal sealed record VersionPoint(string Id, DateTimeOffset CreatedUtc, int FileCount, bool Degraded, string? Problem = null, bool Expired = false);
+internal sealed record VersionPoint(string Id, DateTimeOffset CreatedUtc, int FileCount, bool Degraded, string? Problem = null, bool Expired = false)
+{
+    internal bool Partial => VersionStore.IsPartialPoint(Id);
+}
 internal sealed record PendingVersion(string Id, string Source, int FileCount);
 
 internal sealed partial class VersionStore
@@ -89,7 +92,7 @@ internal sealed partial class VersionStore
         Action<PendingStep>? pendingCheckpoint = null, Action<CopyStep, string>? objectCheckpoint = null,
         Action<RegistryStep>? registryCheckpoint = null, Action? beforeAutomaticPublication = null)
     {
-        if (workspace.IsAccumulative)
+        if (workspace.IsAccumulative || IsPartialPoint(generation))
             throw new InvalidDataException("La copia acumulativa se publica mediante su actualización de carpeta actual.");
         _ = GenerationTime(generation);
         using var scope = workspace.OpenRegisteredRoot();
@@ -111,7 +114,7 @@ internal sealed partial class VersionStore
         if (beforeAutomaticPublication is not null)
         {
             var ledger = GenerationRegistry.Read(store.Root, binding);
-            string? previous = ledger.RegistrationOrder.LastOrDefault(id => !ledger.Expired.Contains(id));
+            string? previous = ledger.RegistrationOrder.LastOrDefault(id => !IsPartialPoint(id) && !ledger.Expired.Contains(id));
             if (previous is not null)
             {
                 var catalog = ReadPoint(store.Root, previous, requireBoth: true);
@@ -161,7 +164,7 @@ internal sealed partial class VersionStore
             .Where(entry => entry.Name.EndsWith(LocationSuffix, StringComparison.Ordinal))
             .Select(entry => entry.Name[..^LocationSuffix.Length])
             .OrderDescending(StringComparer.Ordinal)
-            .Where(id => !IsCommitted(store.Root, id) && !abandoned.Contains(id))
+            .Where(id => !IsPartialPoint(id) && !IsCommitted(store.Root, id) && !abandoned.Contains(id))
             .Select(id =>
             {
                 var plan = ReadIntent(scope.Root, store.Root, pending, id);
@@ -171,7 +174,7 @@ internal sealed partial class VersionStore
 
     internal void ResumePoint(string generation, Action<CatalogStep>? checkpoint = null, byte[]? expectedSourceIdentity = null)
     {
-        if (workspace.IsAccumulative)
+        if (workspace.IsAccumulative || IsPartialPoint(generation))
             throw new InvalidDataException("Reanuda la actualización de la copia acumulativa.");
         _ = GenerationTime(generation);
         using var scope = workspace.OpenRegisteredRoot();
@@ -228,13 +231,14 @@ internal sealed partial class VersionStore
     }
 
     private void CopyAndConfirm(SafeFileHandle store, BatchPlan plan, string generation, Action<CatalogStep>? checkpoint,
-        Action<CopyStep, string>? objectCheckpoint, BatchPlan? sourceInventory = null)
+        Action<CopyStep, string>? objectCheckpoint, BatchPlan? sourceInventory = null, bool prepareOnly = false)
     {
         var inventory = sourceInventory ?? plan;
         DirectoryFence? origin = null;
         try
         {
             CopyObjects();
+            if (prepareOnly) return;
             if (origin is not null)
                 FolderBatch.RequireSameInventory(inventory);
             observe?.Invoke(new(WorkPhase.Publishing, 0, 1));
@@ -273,12 +277,14 @@ internal sealed partial class VersionStore
                     }
                     if (recovered == RecoveryResult.NoReceipt)
                     {
+                        if (IsPartialPoint(generation) && !prepareOnly)
+                            throw new InvalidDataException("Falta un objeto preparado del punto parcial.");
                         if (origin is null)
                         {
                             origin = new DirectoryFence(plan.Source);
                             if (!WindowsProbeNative.DirectoryIdentity(origin.Root).AsSpan().SequenceEqual(plan.SourceIdentity))
                                 throw new InvalidDataException("La carpeta de origen cambió desde el análisis.");
-                            FolderBatch.RequireSameInventory(inventory);
+                            if (!prepareOnly) FolderBatch.RequireSameInventory(inventory);
                         }
                         string input = Path.Combine(plan.Source, file.RelativePath);
                         using var parent = new DirectoryFence(plan.Source, input);
@@ -427,6 +433,7 @@ internal sealed partial class VersionStore
     internal static DateTimeOffset GenerationTime(string id)
     {
         const int timeLength = 23;
+        if (IsPartialPoint(id)) id = id[..^PartialPointSuffix.Length];
         if (id.Length != timeLength + 1 + 32 || id[timeLength] != '-' ||
             !DateTimeOffset.TryParseExact(id.AsSpan(0, timeLength), TimeFormat, CultureInfo.InvariantCulture,
                 DateTimeStyles.AssumeUniversal, out var date) ||
@@ -435,6 +442,9 @@ internal sealed partial class VersionStore
             throw new InvalidDataException("Identificador de generación no válido.");
         return date;
     }
+
+    private const string PartialPointSuffix = "-partial";
+    internal static bool IsPartialPoint(string id) => id.EndsWith(PartialPointSuffix, StringComparison.Ordinal);
 
     private static IEnumerable<BatchFile> DistinctObjects(IEnumerable<BatchFile> files) =>
         files.GroupBy(Digest, StringComparer.Ordinal).Select(group =>
