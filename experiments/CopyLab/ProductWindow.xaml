@@ -287,6 +287,7 @@
                         <TextBlock x:Name="RuntimeStatusText" TextWrapping="Wrap" Margin="0,4,0,0" />
                         <TextBlock x:Name="ScheduleStatusText" TextWrapping="Wrap" Margin="0,4,0,0" />
                         <TextBlock x:Name="WatchStatusText" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" Margin="0,4,0,0" />
+                        <TextBlock x:Name="LastReconciliationText" TextWrapping="Wrap" />
                         <TextBlock x:Name="NextProtectionStep" TextWrapping="Wrap" Margin="0,8,0,0" />
                         <Button x:Name="OpenRestoredFolderButton" Content="Abrir carpeta _recuperada" Click="OpenRestoredFolderClick"
                                 HorizontalAlignment="Left" IsEnabled="False" Margin="0,8,0,0" />
@@ -373,6 +374,15 @@
                 <StackPanel>
                     <Button x:Name="LegacyRecoveryButton" Content="Respaldos de _alfa" Click="LegacyRecoveryClick"
                             HorizontalAlignment="Left" Margin="0,0,0,12" />
+                    <TextBlock Text="Vigilancia en segundo plano" FontSize="18" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
+                    <TextBlock x:Name="MonitorApplicationText" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" Margin="0,4,0,8" />
+                    <CheckBox x:Name="MonitorAtLogon" Content="Iniciar la vigilancia al entrar en Windows" Margin="0,0,0,8" />
+                    <WrapPanel Margin="0,0,0,12">
+                        <Button x:Name="ApplyMonitorStartupButton" Content="Guardar e iniciar _monitor" Click="ApplyMonitorStartupClick" Margin="0,0,8,4" />
+                        <Button x:Name="StopMonitorButton" Content="_Detener vigilancia" Click="StopMonitorClick" Margin="0,0,8,4" />
+                    </WrapPanel>
+                    <TextBlock Text="Detener la vigilancia retira su arranque automático. Los respaldos, los horarios diarios y la configuración de cada trabajo se conservan. Una copia ya iniciada puede terminar."
+                               TextWrapping="Wrap" Margin="0,0,0,12" />
                     <TextBlock Text="Puedes usar la carpeta portable o preparar una copia estable para los horarios. Al actualizar, los trabajos habilitados usarán el nuevo ejecutor. Espera a que terminen los trabajadores y reintentos activos." TextWrapping="Wrap" Margin="0,8,0,12" />
                     <TextBlock x:Name="ApplicationReviewText" TextWrapping="Wrap" />
                     <CheckBox x:Name="AcceptApplicationUpdate" Content="He revisado los trabajos y quiero actualizar sus horarios propios" Checked="ApplicationChoiceChanged" Unchecked="ApplicationChoiceChanged" Margin="0,12,0,8" />
@@ -380,7 +390,7 @@
                     <TextBlock x:Name="InstalledApplicationText" TextWrapping="Wrap" Margin="0,8,0,12" />
                     <TextBlock Text="Para retirar la aplicación, quita primero sus horarios. Los trabajos quedarán deshabilitados y podrás seguir recuperando sus respaldos. Se conservan la configuración, el historial y los datos." TextWrapping="Wrap" />
                     <CheckBox x:Name="AcceptRemoveSchedules" Content="Deshabilitar todos los trabajos y retirar sus horarios propios" Checked="ApplicationChoiceChanged" Unchecked="ApplicationChoiceChanged" Margin="0,12,0,8" />
-                    <Button x:Name="RemoveApplicationSchedulesButton" Content="Retirar todos los _horarios" Click="RemoveApplicationSchedulesClick" IsEnabled="False" HorizontalAlignment="Left" />
+                    <Button x:Name="RemoveApplicationSchedulesButton" Content="Retirar toda la _automatización" Click="RemoveApplicationSchedulesClick" IsEnabled="False" HorizontalAlignment="Left" />
                     <Separator Margin="0,16,0,12" />
                     <TextBlock Text="Versiones instaladas" FontSize="18" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
                     <TextBlock Text="Después de retirar los horarios y deshabilitar los trabajos puedes eliminar una versión instalada. Los respaldos y su configuración permanecen. Para borrar la versión abierta, usa otra copia portable de FolderTwin." TextWrapping="Wrap" Margin="0,8,0,8" />

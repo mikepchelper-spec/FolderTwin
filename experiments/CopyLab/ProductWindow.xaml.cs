@@ -54,6 +54,7 @@ public partial class ProductWindow : Window
     private Choice? selection;
     private int step;
     private bool busy;
+    private bool explainWatchOnClose;
     private Task activeTask = Task.CompletedTask;
 
     internal ProductWindow(Func<ProductJobRegistry>? openRegistry = null, Func<string, string?>? testPicker = null,
@@ -447,6 +448,14 @@ public partial class ProductWindow : Window
         {
             e.Cancel = true;
             SetStatus("Espera a que termine la operación para cerrar la ventana.");
+        }
+        else if (explainWatchOnClose)
+        {
+            explainWatchOnClose = false;
+            MessageBox.Show(this,
+                "La vigilancia puede seguir con la ventana cerrada mientras tu sesión de Windows siga iniciada y el equipo esté despierto. " +
+                "Para detenerla, abre Aplicación y elige Detener vigilancia.",
+                "Vigilancia de FolderTwin", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         base.OnClosing(e);
     }

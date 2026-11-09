@@ -48,6 +48,10 @@ if (args is ["--product-watch"])
     return await ProductWatchProbe.RunAsync();
 if (args is ["--product-auto-mirror"])
     return AutomaticMirrorProbe.Run();
+if (args is ["--product-auto-scale", var scaleCount, var scaleMode] &&
+    int.TryParse(scaleCount, out int scaleFiles) && scaleFiles is >= 2 and <= 329_000 &&
+    Enum.TryParse<ProductBackupMode>(scaleMode, out var scaleBackup) && Enum.IsDefined(scaleBackup))
+    return AutomaticScaleProbe.Run(scaleFiles, scaleBackup);
 if (args is ["--product-restore"])
     return ProductRestoreProbe.Run();
 if (args is ["--product-mirror-review"])

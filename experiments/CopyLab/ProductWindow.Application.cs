@@ -5,6 +5,7 @@ namespace CopyLab;
 public partial class ProductWindow
 {
     private ProductMaintenanceReview? applicationReview;
+    private bool hasMonitorTask;
 
     private void ManageApplicationClick(object sender, RoutedEventArgs e)
     {
@@ -15,13 +16,14 @@ public partial class ProductWindow
             AcceptApplicationUpdate.IsChecked = AcceptRemoveSchedules.IsChecked = false;
             ApplicationReviewText.Text = applicationReview.Jobs.Length == 0 ? "Todavía no hay trabajos guardados." :
                 string.Join("\n", applicationReview.Jobs.Select(job => job.Options.Name + " · " + ModeName(job.Options.Mode) +
-                    (job.Retired ? " · Retirado" : !job.Enabled ? " · Deshabilitado" : job.Options.DailyAt is { } hour ? $" · Diario {hour:HH:mm}" : " · A demanda")));
+                    (job.Retired ? " · Retirado" : !job.Enabled ? " · Deshabilitado" : " · " + TriggerLabel(job.Options, job.WatchMode))));
             JobListPanel.Visibility = Visibility.Collapsed;
             ApplicationPanel.Visibility = Visibility.Visible;
             InstalledApplicationText.Text = "";
             InstalledVersionChoice.ItemsSource = null;
             InstalledVersionDetail.Text = "";
             AcceptInstalledVersionRemoval.IsChecked = false;
+            await RefreshApplicationMonitorAsync();
             SetStatus("Revisa los trabajos antes de instalar, actualizar o retirar la aplicación.");
         });
     }
@@ -33,6 +35,65 @@ public partial class ProductWindow
         RemoveApplicationSchedulesButton.IsEnabled = !busy && applicationReview is not null && AcceptRemoveSchedules.IsChecked == true;
         RemoveInstalledVersionButton.IsEnabled = !busy && applicationReview is { } review && review.Jobs.All(job => !job.Enabled) &&
             InstalledVersionChoice.SelectedItem is InstallRemovalChoice { Current: false } && AcceptInstalledVersionRemoval.IsChecked == true;
+        ApplyMonitorStartupButton.IsEnabled = !busy &&
+            applicationReview?.Jobs.Any(job => job.Enabled && job.WatchMode == ProductWatchMode.Watching) == true;
+        StopMonitorButton.IsEnabled = !busy && hasMonitorTask;
+    }
+
+    private async Task RefreshApplicationMonitorAsync()
+    {
+        hasMonitorTask = false;
+        MonitorAtLogon.IsChecked = true;
+        MonitorApplicationText.Text = "Monitor sin configurar. Elige la vigilancia en un trabajo para iniciarlo.";
+        if (testSchedule is not null || testFolderWorkspace is not null || testPicker is not null || testMonitor is not null)
+            return;
+        try
+        {
+            var (task, alive) = await Task.Run(() =>
+            {
+                using var registry = openRegistry();
+                using var scheduler = new WindowsSchedule();
+                return (scheduler.ReadMonitor(registry), registry.ReadMonitorProcess() is not null);
+            });
+            hasMonitorTask = task is not null;
+            MonitorAtLogon.IsChecked = task?.AtLogon ?? true;
+            if (task is { Enabled: true, MeetsPolicy: true })
+                MonitorApplicationText.Text = alive ? "Monitor activo." :
+                    $"Monitor detenido o iniciándose · Resultado de Windows 0x{task.LastResult:X8}.";
+            else if (task is not null) MonitorApplicationText.Text = "La tarea del monitor requiere revisión.";
+        }
+        catch (Exception error) when (ProductAutomation.Expected(error))
+        {
+            MonitorApplicationText.Text = "No se pudo comprobar la tarea del monitor. " + error.Message;
+        }
+    }
+
+    private void ApplyMonitorStartupClick(object sender, RoutedEventArgs e)
+    {
+        if (busy) return;
+        bool atLogon = MonitorAtLogon.IsChecked == true;
+        Start(async () =>
+        {
+            await StartWatchAsync(atLogon);
+            await RefreshApplicationMonitorAsync();
+        });
+    }
+
+    private void StopMonitorClick(object sender, RoutedEventArgs e)
+    {
+        if (busy || !hasMonitorTask) return;
+        Start(async () =>
+        {
+            await Task.Run(() =>
+            {
+                using var registry = openRegistry();
+                using var scheduler = new WindowsSchedule();
+                scheduler.RemoveMonitor(registry);
+            });
+            await RefreshApplicationMonitorAsync();
+            explainWatchOnClose = false;
+            SetStatus("Vigilancia detenida. Una copia ya iniciada puede terminar.");
+        });
     }
 
     private Action<ProductJob, string?>? TestDeploymentSchedule(string location) => testSchedule is null ? null :
@@ -65,8 +126,10 @@ public partial class ProductWindow
                 ProductDeployment.RemoveSchedules(registry, review, TestDeploymentSchedule(registry.Location));
             });
             applicationReview = null;
+            explainWatchOnClose = false;
             AcceptRemoveSchedules.IsChecked = AcceptApplicationUpdate.IsChecked = false;
-            SetStatus("Horarios retirados y trabajos deshabilitados. La configuración y los respaldos permanecen disponibles para recuperar.");
+            await RefreshApplicationMonitorAsync();
+            SetStatus("Automatización retirada y trabajos deshabilitados. La configuración y los respaldos permanecen disponibles para recuperar.");
             await LoadListAsync();
         });
     }

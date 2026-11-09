@@ -58,6 +58,9 @@ internal static class FolderBatch
         Action<WorkProgress>? observe = null)
     {
         observe?.Invoke(new(WorkPhase.Analyzing, 0, 0));
+        using var origin = new DirectoryFence(source);
+        if (!WindowsProbeNative.DirectoryIdentity(origin.Root).AsSpan().SequenceEqual(sourceIdentity))
+            throw new InvalidDataException("La carpeta de origen cambió antes del análisis.");
         var inventory = FolderInventory.Scan(source, maximumEntries: maximumEntries);
         if (!inventory.Complete)
             throw new InvalidDataException(DescribeIncompleteSource(inventory.Issues));
@@ -68,24 +71,31 @@ internal static class FolderBatch
         CheckDirectoryData(source, directories);
         var files = new List<BatchFile>();
         int totalFiles = inventory.Entries.Count(entry => !entry.IsDirectory);
-        foreach (var entry in inventory.Entries.Where(entry => !entry.IsDirectory).OrderBy(entry => entry.RelativePath, StringComparer.Ordinal))
+        var orderedFiles = inventory.Entries.Where(entry => !entry.IsDirectory).OrderBy(entry => entry.RelativePath, StringComparer.Ordinal);
+        foreach (var group in orderedFiles.GroupBy(entry => Path.GetDirectoryName(entry.RelativePath), StringComparer.Ordinal))
         {
-            observe?.Invoke(new(WorkPhase.Analyzing, files.Count, totalFiles, entry.RelativePath));
-            string path = Path.Combine(source, entry.RelativePath);
-            using var fence = new DirectoryFence(source, path);
-            using var file = WindowsProbeNative.OpenPlainFile(fence.Parent(path), path, FileAccess.Read, FileShare.Read);
-            WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath);
-            if (file.Length != entry.Length)
-                throw new InvalidDataException("El origen cambió durante el análisis.");
-            var metadata = FileMetadata.Read(file.SafeFileHandle);
-            byte[] hash = SHA256.HashData(file);
-            if (!metadata.IsValid())
-                throw new InvalidDataException($"Las fechas de «{entry.RelativePath}» están fuera del alcance.");
-            metadata.RequireMatch(file.SafeFileHandle);
-            files.Add(new(entry.RelativePath, entry.Length, hash, metadata));
+            // Keep one checked ancestor chain per directory. Each file still
+            // opens relative to its pinned parent and excludes writers.
+            string representative = Path.Combine(source, group.First().RelativePath);
+            using var fence = new DirectoryFence(source, representative);
+            var parent = fence.Parent(representative);
+            foreach (var entry in group)
+            {
+                observe?.Invoke(new(WorkPhase.Analyzing, files.Count, totalFiles, entry.RelativePath));
+                using var file = WindowsProbeNative.OpenPlainFile(parent, entry.RelativePath, FileAccess.Read, FileShare.Read);
+                WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath);
+                if (file.Length != entry.Length)
+                    throw new InvalidDataException("El origen cambió durante el análisis.");
+                var metadata = FileMetadata.Read(file.SafeFileHandle);
+                byte[] hash = SHA256.HashData(file);
+                if (!metadata.IsValid())
+                    throw new InvalidDataException($"Las fechas de «{entry.RelativePath}» están fuera del alcance.");
+                metadata.RequireMatch(file.SafeFileHandle);
+                files.Add(new(entry.RelativePath, entry.Length, hash, metadata));
+            }
         }
         return new(fixtureRoot, source, destination, sourceIdentity, binding,
-            directories, files.ToArray());
+            directories, files.OrderBy(file => file.RelativePath, StringComparer.Ordinal).ToArray());
     }
 
     internal static BatchResult Run(BatchPlan plan, CancellationToken cancellationToken = default,

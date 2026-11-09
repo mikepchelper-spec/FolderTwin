@@ -2,6 +2,14 @@
 
 La distribución actual es una vista previa de la v1 para Windows 11 x64. Usa únicamente archivos sintéticos y carpetas desechables mientras siga abierta la [matriz de aceptación](V1.md). El paquete incluye .NET y se usa sin consola. Consulta [Instalación y actualización](INSTALACION.md) para preparar el ejecutor o retirar la aplicación.
 
+## Vigilancia en la candidata en desarrollo
+
+En una compilación que incluya esta función, el asistente recomienda **Automático al detectar cambios** para trabajos nuevos. Puedes elegir también una hora diaria. Al guardar el trabajo automático, FolderTwin solicita iniciar el monitor y preparar la primera copia. En **Espejo protegido**, puedes permitir por separado las retiradas ordinarias recuperables. El origen vacío, los cambios de gran alcance y los conflictos requieren revisión.
+
+En Ruta, consulta el estado del monitor, la última comparación automática, el último respaldo completo y la última verificación. Si falta el monitor, abre **Editar trabajo y automatización → Iniciar monitor**. Desde los mismos ajustes puedes pausar o reanudar la vigilancia de ese trabajo o desmarcarla y guardar. La pausa de vigilancia se aplica a los próximos intentos automáticos. Un intento en marcha tiene sus propios controles.
+
+La vigilancia puede continuar al cerrar la ventana con Windows despierto y tu sesión iniciada. En **Aplicación**, usa **Iniciar la vigilancia al entrar en Windows** y **Guardar e iniciar monitor** para configurar el arranque. **Detener vigilancia** retira la tarea del monitor y conserva los horarios diarios y los respaldos. Esta función se está verificando por separado del [paquete experimental RC2](README.md#paquete-portable-de-windows).
+
 ## Primer inicio
 
 Descarga el artefacto del commit elegido desde [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml), extrae **todo** su contenido en una carpeta nueva y abre **FolderTwin.exe**. Conserva los archivos que lo acompañan. La pantalla **Trabajos** estará vacía si esa cuenta todavía no tiene configuración de producto. Las herramientas de **Respaldos de alfa** son para formatos anteriores; no hacen falta para crear trabajos nuevos.

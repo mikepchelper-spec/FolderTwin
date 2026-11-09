@@ -6,6 +6,11 @@ internal sealed class ProductWatchSignal(TimeProvider clock)
     private bool reconcile = true;
     private bool watcherFailed;
 
+    internal bool Pending
+    {
+        get { lock (gate) return reconcile || first is not null; }
+    }
+
     internal void Changed()
     {
         lock (gate)

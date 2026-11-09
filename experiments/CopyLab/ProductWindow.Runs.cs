@@ -93,6 +93,9 @@ public partial class ProductWindow
         var active = history.Runs.FirstOrDefault(run => run.Running);
         var correct = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Backup && run.Result?.State == ProductRunState.Confirmed);
         var verified = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Verify && run.Result?.State == ProductRunState.Confirmed);
+        var reconciled = history.Runs.FirstOrDefault(run => run.Intent.Automatic && run.Result?.State is ProductRunState.Confirmed or ProductRunState.Unchanged);
+        LastReconciliationText.Text = job?.WatchMode == ProductWatchMode.Off || job is null ? "" :
+            "Última comparación automática · " + RouteDate(reconciled?.Result?.FinishedUtc);
         var restored = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Restore &&
             run.Result?.State == ProductRunState.Confirmed && run.Restore is not null);
         OpenRestoredFolderButton.IsEnabled = OpenRecoveryOutputButton.IsEnabled = !busy && restored is not null;

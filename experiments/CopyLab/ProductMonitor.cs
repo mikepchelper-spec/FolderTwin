@@ -50,7 +50,6 @@ internal static class ProductMonitor
             {
                 while (true)
                 {
-                    ProductJobRegistry.WriteMonitorHeartbeat(lease);
                     long now = Stopwatch.GetTimestamp();
                     if (scheduled && Stopwatch.GetElapsedTime(checkedOwnerAt, now) >= TimeSpan.FromSeconds(5))
                     {
@@ -103,6 +102,8 @@ internal static class ProductMonitor
                             break;
                         }
                     }
+                    ProductJobRegistry.WriteMonitorHeartbeat(lease,
+                        jobs.Select(entry => (entry.Key, entry.Value.Activity(active == entry.Value))));
                     await Task.Delay(Poll).ConfigureAwait(false);
                 }
             }
@@ -141,6 +142,9 @@ internal static class ProductMonitor
         }
 
         internal bool TakeDue(long now) => now >= retryAt && signal.TakeDue(Quiet, MaximumWait);
+        internal ProductWatchActivity Activity(bool running) => running ? ProductWatchActivity.Running :
+            watcher is null ? ProductWatchActivity.SourceUnavailable :
+            signal.Pending ? ProductWatchActivity.Pending : ProductWatchActivity.Watching;
 
         internal void Complete(int exitCode, long now)
         {

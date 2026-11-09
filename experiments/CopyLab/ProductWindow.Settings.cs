@@ -105,6 +105,8 @@ public partial class ProductWindow
                     throw new InvalidDataException("Este ensayo no instala tareas de Windows.");
                 else ProductAutomation.StartMonitor(registry, atLogon);
             });
+            if (testMonitor is null && testPicker is null && testFolderWorkspace is null)
+                explainWatchOnClose = true;
             SetStatus("Inicio del monitor solicitado. La vigilancia continúa al cerrar la ventana con tu sesión iniciada. Consulta su estado en Ruta.");
         }
         catch (Exception error) when (ProductAutomation.Expected(error))
@@ -189,8 +191,16 @@ public partial class ProductWindow
             try
             {
                 using var registry = openRegistry();
-                return registry.ReadMonitorProcess() is not null ? "Vigilando cambios con la sesión iniciada" :
-                    "Monitor detenido o iniciándose · Usa Iniciar monitor si el estado persiste";
+                if (registry.ReadMonitorProcess(job.Id, out var activity) is null)
+                    return "Monitor detenido o iniciándose · Usa Iniciar monitor si el estado persiste";
+                return activity switch
+                {
+                    ProductWatchActivity.Running => "Monitor activo · Respaldando o comparando",
+                    ProductWatchActivity.Pending => "Monitor activo · Cambios o comparación pendientes",
+                    ProductWatchActivity.SourceUnavailable => "Monitor activo · Origen pendiente de comprobar",
+                    ProductWatchActivity.Watching => "Vigilando cambios con la sesión iniciada",
+                    _ => "Monitor activo · Preparando vigilancia de este trabajo"
+                };
             }
             catch (Exception error) when (ProductAutomation.Expected(error)) { return "Monitor requiere atención · " + error.Message; }
         }

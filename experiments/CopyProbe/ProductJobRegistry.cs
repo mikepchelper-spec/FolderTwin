@@ -6,6 +6,7 @@ using Microsoft.Win32.SafeHandles;
 
 internal enum ProductBackupMode { Accumulative, Versions, ProtectedMirror }
 internal enum ProductWatchMode { Off, Watching, Paused }
+internal enum ProductWatchActivity : byte { Watching = 1, Pending, Running, SourceUnavailable }
 internal enum ProductRegistrationStep { Prepared, DestinationRecorded, MarkerWritten, Confirmed }
 internal sealed record ProductJobOptions(string Name, ProductBackupMode Mode, TimeOnly? DailyAt)
 {
@@ -114,24 +115,48 @@ internal sealed partial class ProductJobRegistry : IDisposable
         catch (Exception error) when (VersionJob.SharingViolation(error)) { return true; }
     }
 
-    internal int? ReadMonitorProcess()
+    internal int? ReadMonitorProcess() => ReadMonitorProcess(null, out _);
+
+    internal int? ReadMonitorProcess(Guid? job, out ProductWatchActivity? activity)
     {
+        activity = null;
         if (!MonitorOwnsRegistry()) return null;
         using var heartbeat = WindowsProbeNative.OpenPlainFile(directory.Root, ".foldertwin-monitor.lock", FileAccess.Read, FileShare.ReadWrite);
         Span<byte> bytes = stackalloc byte[12];
         if (heartbeat.ReadAtLeast(bytes, bytes.Length, false) != bytes.Length) return null;
         int process = BinaryPrimitives.ReadInt32LittleEndian(bytes);
         long age = Environment.TickCount64 - BinaryPrimitives.ReadInt64LittleEndian(bytes[4..]);
-        return process > 0 && age is >= 0 and < 15_000 ? process : null;
+        if (process <= 0 || age is < 0 or >= 15_000) return null;
+        if (job is not null)
+        {
+            Span<byte> entry = stackalloc byte[17];
+            for (int i = 0; i < 4096 && heartbeat.ReadAtLeast(entry, entry.Length, false) == entry.Length; i++)
+            {
+                if (new Guid(entry[..16]) != job.Value) continue;
+                var observed = (ProductWatchActivity)entry[16];
+                if (Enum.IsDefined(observed)) activity = observed;
+                break;
+            }
+        }
+        return process;
     }
 
-    internal static void WriteMonitorHeartbeat(FileStream lease)
+    internal static void WriteMonitorHeartbeat(FileStream lease, IEnumerable<(Guid Job, ProductWatchActivity Activity)> activities)
     {
-        Span<byte> bytes = stackalloc byte[12];
+        using var snapshot = new MemoryStream();
+        Span<byte> bytes = stackalloc byte[17];
         BinaryPrimitives.WriteInt32LittleEndian(bytes, Environment.ProcessId);
         BinaryPrimitives.WriteInt64LittleEndian(bytes[4..], Environment.TickCount64);
+        snapshot.Write(bytes[..12]);
+        foreach (var (job, activity) in activities.Take(4096))
+        {
+            job.TryWriteBytes(bytes[..16]);
+            bytes[16] = (byte)activity;
+            snapshot.Write(bytes);
+        }
         lease.Position = 0;
-        lease.Write(bytes);
+        lease.Write(snapshot.GetBuffer().AsSpan(0, (int)snapshot.Length));
+        if (lease.Length != snapshot.Length) lease.SetLength(snapshot.Length);
         lease.Flush(); // Volatile health indication, not an execution record.
     }
 

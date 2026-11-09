@@ -34,7 +34,8 @@ internal sealed class LabTray : IDisposable
         : this(() => TraySnapshot.Read(workspace), id => LabWorker.Start(workspace, id), openMain, exit, notifications,
             "FolderTwin · espacio de pruebas") { }
 
-    internal LabTray(Func<ProductJobRegistry> openRegistry, Action openMain, Action exit, bool notifications = true)
+    internal LabTray(Func<ProductJobRegistry> openRegistry, Action openMain, Action exit, bool notifications = true,
+        Action<Guid>? openIssue = null)
         : this(() => { using var registry = openRegistry(); return TraySnapshot.ReadProduct(registry); },
             id =>
             {
@@ -42,9 +43,10 @@ internal sealed class LabTray : IDisposable
                 var job = registry.Get(id);
                 if (!job.Enabled || job.Retired || registry.RunHistory(id).Runs.Any(run => run.Running)) return;
                 using var worker = ProductWorker.Start(registry.Location, id);
-            }, openMain, exit, notifications, "FolderTwin") { }
+            }, openMain, exit, notifications, "FolderTwin", openIssue) { }
 
-    private LabTray(Func<TraySnapshot> read, Action<Guid> start, Action openMain, Action exit, bool notifications, string iconText)
+    private LabTray(Func<TraySnapshot> read, Action<Guid> start, Action openMain, Action exit, bool notifications, string iconText,
+        Action<Guid>? openIssue = null)
     {
         this.read = read;
         this.start = start;
@@ -55,7 +57,7 @@ internal sealed class LabTray : IDisposable
         panel.Children.Add(age);
         var buttons = new WrapPanel();
         var open = new Button { Content = "Abrir aplicación" };
-        open.Click += (_, _) => { flyout!.Hide(); openMain(); };
+        open.Click += (_, _) => { flyout!.Hide(); OpenAttention(); };
         run.Click += (_, _) => RunNow();
         buttons.Children.Add(run);
         buttons.Children.Add(open);
@@ -82,9 +84,23 @@ internal sealed class LabTray : IDisposable
             ContextMenuStrip = menu, Visible = true
         };
         icon.MouseClick += async (_, e) => { if (e.Button == Forms.MouseButtons.Left) await ShowAsync(); };
-        icon.BalloonTipClicked += (_, _) => openMain();
+        icon.BalloonTipClicked += (_, _) => OpenAttention();
         timer.Tick += async (_, _) => await RefreshAsync();
         timer.Start();
+
+        void OpenAttention()
+        {
+            if (openIssue is not null && snapshot is { } current)
+            {
+                foreach (string key in current.Attention)
+                {
+                    if (key.Length <= 32 || key[32] != '-' || !Guid.TryParseExact(key.AsSpan(0, 32), "N", out Guid id)) continue;
+                    openIssue(id);
+                    return;
+                }
+            }
+            openMain();
+        }
     }
 
     internal async Task ShowAsync()
