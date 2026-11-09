@@ -1,6 +1,6 @@
 # Plan de trabajo — FolderTwin
 
-> RC2 experimental publicada y verificada en el commit `d902f4c`. La auditoría corrigió la frontera de escritura del caché SQLite, dos carreras de coordinación y fallos de disponibilidad y presentación. RC1 permanece retirada. El siguiente hito es ejecutar el piloto y sus comprobaciones externas cuando exista entorno. [Auditoría](AUDITORIA.md) · [Aceptación de RC2](ENTREGA-RC2.md)
+> RC2 experimental publicada y verificada en `d902f4c`. RC1 permanece retirada. La candidata local añade vigilancia continua y tiene su propia aceptación. El piloto externo sigue pendiente. [Aceptación de RC2](ENTREGA-RC2.md) · [Automatización continua](AUTOMATIZACION.md)
 
 *Copias locales. Versiones recuperables.*
 
@@ -68,7 +68,7 @@ Primera pantalla: **¿Qué quieres proteger? → ¿Dónde guardarlo? → ¿Cómo
 | Versionado, recomendado | Conserva estados recuperables por fecha, incluidos archivos luego borrados del origen, hasta que expire la retención. | «Poder volver a una versión anterior» |
 | Espejo protegido | La carpeta actual refleja el origen. Antes de retirar o reemplazar contenido, conserva lo anterior en un área de recuperación separada. | «Mantener una copia igual; guardar lo retirado durante un tiempo» |
 
-**Bajo demanda, horario y al conectar un disco son disparadores, no modos de almacenamiento.** «Casi en tiempo real» es una opción posterior: agrupa cambios y mantiene reconciliaciones periódicas. No llamarla protección instantánea.
+**Bajo demanda, horario y detección de cambios son disparadores que se eligen aparte del modo.** La vigilancia de la candidata local agrupa cambios, reintenta al volver un destino registrado y realiza reconciliaciones periódicas. Activar el respaldo solo al conectar un disco queda como opción posterior.
 
 Pantalla habitual: nombre de la tarea, origen → destino, último respaldo correcto, última verificación, próxima ejecución, espacio disponible y dos acciones: **Respaldar ahora** / **Recuperar archivos**. Detalles y exclusiones en un panel secundario. Estado separado: esperando disco, analizando, copiando, verificando, completo, parcial, interrumpido, requiere atención. Un archivo fallido u omitido por error impide mostrar «Todo protegido».
 
@@ -186,7 +186,7 @@ Para exploraciones rápidas, la igualdad de tamaño y fecha puede permitir reuti
 
 **Primera beta:** elegir carpetas; copia manual; versión por fecha; recuperar; previsualizar; progreso real; pausa segura entre archivos; cancelación; verificación manual completa; historial de incidencias; horario; avisos de disco ausente; retención revisable cuando la limpieza haya superado sus pruebas; exportar/importar configuración sin secretos; modo oscuro y accesibilidad. Hasta entonces, conservar todo y avisar sobre el espacio.
 
-**Después de estabilizar:** espejo protegido, conexión USB automática, agrupación de cambios con reconciliación, perfiles de exclusión opcionales para dependencias de proyectos, verificación completa programada, presupuesto de E/S, pruebas periódicas de recuperación y VSS para escenarios documentados. Evaluar prioridad de fondo del ejecutor y medir respuesta del sistema: el modo de fondo por hilo solo afecta al hilo que lo establece y no garantiza ausencia de saturación, especialmente con trabajo asíncrono. No cambiar la prioridad de la interfaz ni prometer cesión inmediata de E/S. Las exclusiones nunca se activan silenciosamente ni omiten `.git`, documentación o código por considerarlos recreables.
+**Después de estabilizar:** pruebas físicas de reconexión USB, perfiles de exclusión opcionales para dependencias de proyectos, verificación completa programada, mediciones de respuesta del sistema y VSS para escenarios documentados. La candidata local ya agrupa cambios y reconcilia el inventario en los tres modos. Evalúa la prioridad de fondo del ejecutor a partir de mediciones y mantén la prioridad de la interfaz. Las exclusiones requieren consentimiento explícito e incluyen la revisión de `.git`, documentación y código.
 
 Para el modo de bajo impacto, comparar primero concurrencia limitada y buffers acotados; después, EcoQoS mediante `SetProcessInformation(ProcessPowerThrottling)` y prioridad por handle con `SetFileInformationByHandle(FileIoPriorityHintInfo)`. EcoQoS afecta eficiencia/planificación de CPU, no limita el disco ni garantiza núcleos E en cualquier equipo. Las prioridades de E/S son sugerencias dependientes del controlador. Preferir estas APIs documentadas a `NtSetInformationProcess` y medir frente a `PROCESS_MODE_BACKGROUND_BEGIN`, sin acumular ajustes sin evidencia. Probar equipos híbridos y no híbridos, HDD/SSD y carga interactiva; considerar latencia de la UI, consumo, memoria y tiempo hasta completar el respaldo.
 

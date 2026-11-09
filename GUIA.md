@@ -1,6 +1,6 @@
 # Guía de uso de FolderTwin
 
-La distribución actual es una vista previa de la v1 para Windows 11 x64. Usa únicamente archivos sintéticos y carpetas desechables mientras siga abierta la [matriz de aceptación](V1.md). El paquete incluye .NET y se usa sin consola. Consulta [Instalación y actualización](INSTALACION.md) para preparar el ejecutor o retirar la aplicación.
+Esta distribución es una vista previa de la v1 para Windows 11 x64. Usa únicamente archivos sintéticos y carpetas desechables. El paquete incluye .NET y se usa sin consola. Consulta [Instalación y actualización](INSTALACION.md) para preparar el ejecutor o retirar la aplicación.
 
 ## Vigilancia en la candidata en desarrollo
 
@@ -10,7 +10,7 @@ En Ruta, consulta el estado del monitor, la última comparación automática, el
 
 Si un archivo sigue ocupado por un escritor, FolderTwin puede guardar los archivos legibles en un **Punto parcial**. El trabajo sigue pendiente hasta que termine una copia completa. Puedes verificar y restaurar ese punto desde **Recuperar**, incluso con el origen desconectado. La carpeta actual del espejo o de la copia acumulativa permanece en su estado anterior durante ese intento.
 
-La vigilancia puede continuar al cerrar la ventana con Windows despierto y tu sesión iniciada. En **Aplicación**, usa **Iniciar la vigilancia al entrar en Windows** y **Guardar e iniciar monitor** para configurar el arranque. **Detener vigilancia** retira la tarea del monitor y conserva los horarios diarios y los respaldos. Esta función se está verificando por separado del [paquete experimental RC2](README.md#paquete-portable-de-windows).
+La vigilancia puede continuar al cerrar la ventana con Windows despierto y tu sesión iniciada. En **Aplicación**, usa **Iniciar la vigilancia al entrar en Windows** y **Guardar e iniciar monitor** para configurar el arranque. **Detener vigilancia** retira la tarea del monitor y conserva los horarios diarios y los respaldos. La vigilancia pertenece a esta candidata local. [Paquete experimental público RC2](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.2).
 
 ## Primer inicio
 
@@ -103,4 +103,4 @@ Los formatos anteriores se abren desde **Aplicación → Respaldos de alfa**, se
 
 El alcance es carpetas y discos locales NTFS en Windows 11 x64. VSS, las instantáneas coherentes de bases de datos abiertas, NAS, la nube propia y la sincronización bidireccional quedan fuera. Los enlaces, EFS, flujos y archivos de nube que todavía necesitan descargarse pueden generar incidencias. Se respaldan el contenido y los metadatos admitidos de los archivos.
 
-Las pruebas sintéticas y las compilaciones reproducibles no demuestran durabilidad frente a todos los fallos de hardware. La [matriz de v1](V1.md) distingue software, observaciones de escritorio y validaciones externas. El [piloto](PILOTO.md) registra 7–14 días y los ensayos de entorno sin utilizar respaldos personales.
+La matriz `V1.md` en las fuentes distingue las pruebas de software, las observaciones de escritorio y las validaciones externas. El [procedimiento del piloto](PILOTO.md) describe cómo registrar 7–14 días de ensayos de entorno con datos sintéticos.

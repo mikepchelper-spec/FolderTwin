@@ -25,7 +25,7 @@ public partial class App : Application
         bool productScheduled = e.Args is ["--run-scheduled-product-job", _, _];
         bool productMonitor = e.Args is ["--watch-product-jobs" or "--watch-scheduled-product-jobs" or "--supervise-product-monitor", _];
         bool automaticWorker = e.Args is ["--run-automatic-product-job", _, _];
-        bool monitorSmoke = e.Args is ["--product-monitor-smoke" or "--product-monitor-soak" or "--product-monitor-schedule-smoke" or
+        bool monitorSmoke = e.Args is ["--product-monitor-smoke" or "--product-monitor-soak" or "--product-monitor-schedule-smoke" or "--product-monitor-schedule-soak" or
             "--product-monitor-reconciliation-smoke" or "--product-automation-ui-smoke"] or
             ["--product-monitor-update-smoke" or "--product-monitor-cross-volume-smoke", _];
         bool productWorker = productScheduled || e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _] or ["--restore-product-job", _, _, _] or ["--review-product-mirror", _, _] or ["--review-product-pending", _, _] or ["--abandon-product-version", _, _, _];
@@ -40,7 +40,8 @@ public partial class App : Application
         {
             if (monitorSmoke)
             {
-                if (e.Args[0] == "--product-monitor-schedule-smoke") await ProductMonitorProbe.RunScheduledAsync();
+                if (e.Args[0] is "--product-monitor-schedule-smoke" or "--product-monitor-schedule-soak")
+                    await ProductMonitorProbe.RunScheduledAsync(soak: e.Args[0] == "--product-monitor-schedule-soak");
                 else if (e.Args[0] == "--product-monitor-update-smoke") await ProductMonitorProbe.RunScheduledAsync(e.Args[1]);
                 else if (e.Args[0] == "--product-monitor-reconciliation-smoke") await ProductMonitorProbe.RunReconciliationAsync();
                 else if (e.Args[0] == "--product-automation-ui-smoke") await ProductWindow.RunAutomationSmokeAsync();

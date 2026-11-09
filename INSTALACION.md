@@ -1,6 +1,6 @@
 # Instalación y ciclo de la aplicación
 
-La distribución es portable y sigue siendo una candidata de software de v1. No necesita instalar .NET por separado. Esta guía describe el procedimiento; el informe de aceptación de cada paquete se entrega aparte en [Releases](https://github.com/mikepchelper-spec/FolderTwin/releases).
+La distribución portable es una candidata de software de v1 e incluye .NET. El informe de aceptación se entrega por separado e identifica el paquete probado.
 
 Extrae todo el paquete en una carpeta nueva y abre `FolderTwin.exe`. Conserva juntos ejecutables, bibliotecas, runtime, licencias, guías y `SHA256SUMS.txt`. No mezcles dos distribuciones copiando archivos encima de una carpeta anterior. La aplicación abre los trabajos de producto sin argumentos. **Respaldos de alfa** mantiene el acceso a las herramientas anteriores.
 
@@ -24,7 +24,7 @@ La versión abierta no se puede elegir para borrar. Abre otra copia portable par
 
 ## Resultados por paquete
 
-El informe de aceptación se publica por separado en [Releases](https://github.com/mikepchelper-spec/FolderTwin/releases), después de probar el ZIP. Comprueba su commit y manifiesto contra COMPILACION.json y SHA256SUMS.txt antes de usar sus resultados. Esta guía no atribuye a un paquete nuevo las pruebas de otro.
+El informe de aceptación se prepara después de probar el paquete. Comprueba su commit y manifiesto contra `COMPILACION.json` y `SHA256SUMS.txt` antes de usar sus resultados. [Historial público de entregas](https://github.com/mikepchelper-spec/FolderTwin/releases).
 
 ## Motor de retirada de versiones en prueba
 
@@ -34,4 +34,4 @@ El diario de esquema 1 vive en `app/.removals/<hash>/plan` y se publica antes de
 
 La reinstalación del mismo paquete conserva el diario completo en un directorio de historial antes de crear la versión otra vez. El cambio de nombre no reemplaza otro directorio; todos los handles de los documentos del diario se cierran antes de archivarlo. Se siguen las restricciones de [FILE_RENAME_INFORMATION](https://learn.microsoft.com/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information). Una revisión de la raíz anterior no puede retirar la reinstalación, aunque tenga el mismo hash. La versión desde la que se está ejecutando la aplicación se rechaza expresamente: deberá retirarse desde otra copia portable.
 
-El arnés sintético pasó los siete límites: plan parcial, plan publicado, archivos retirados, carpetas retiradas, raíz retirada, recibo parcial y terminación. Reabre y repite cada retirada, conserva un archivo de respaldo externo, reinstala y rechaza una revisión de la identidad anterior. También conserva por completo una instalación ocupada, con datos ajenos o con un archivo cambiado. Estas pruebas y el ensayo nativo no aprueban las validaciones externas de [V1.md](V1.md).
+El arnés sintético interrumpe la retirada en siete fases, desde el plan parcial hasta el recibo final. Reabre cada retirada, conserva un archivo de respaldo externo, reinstala y rechaza una revisión de la identidad anterior. También conserva una instalación ocupada, con datos ajenos o con un archivo cambiado. Los resultados de cada paquete y las validaciones externas se registran por separado.

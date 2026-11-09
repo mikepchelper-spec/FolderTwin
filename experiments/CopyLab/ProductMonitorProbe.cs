@@ -5,7 +5,7 @@ namespace CopyLab;
 
 internal static class ProductMonitorProbe
 {
-    internal static async Task RunScheduledAsync(string? previousPackage = null)
+    internal static async Task RunScheduledAsync(string? previousPackage = null, bool soak = false)
     {
         var fixture = LabWorkspace.Create();
         string source = Directory.CreateDirectory(Path.Combine(fixture.Root, "source")).FullName;
@@ -38,6 +38,12 @@ internal static class ProductMonitorProbe
                     if (!string.Equals(process.MainModule?.FileName, installed, StringComparison.OrdinalIgnoreCase) ||
                         scheduler.ReadMonitor(registry) is not { Running: true })
                         throw new InvalidOperationException("The observed process is not the installed synthetic monitor.");
+                    if (soak)
+                    {
+                        await ReportIdleAsync(process, seconds: 120, label: "Native monitor");
+                        if (registry.RunHistory(job.Id).Runs.Any(run => run.Intent.Sequence > previous))
+                            throw new InvalidOperationException("The native monitor ran a backup while idle.");
+                    }
                     process.Kill();
                     using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                     await process.WaitForExitAsync(timeout.Token);
@@ -118,6 +124,18 @@ internal static class ProductMonitorProbe
         }
         while (timer.Elapsed < (timeout ?? TimeSpan.FromSeconds(20)));
         throw new InvalidOperationException(failure);
+    }
+
+    private static async Task ReportIdleAsync(Process monitor, int seconds, string label)
+    {
+        var before = VersionScaleProbe.ReadCounters(monitor);
+        TimeSpan cpu = monitor.TotalProcessorTime;
+        var idle = Stopwatch.StartNew();
+        await Task.Delay(TimeSpan.FromSeconds(seconds));
+        monitor.Refresh();
+        var after = VersionScaleProbe.ReadCounters(monitor);
+        Console.Error.WriteLine(FormattableString.Invariant(
+            $"{label} idle: seconds={idle.Elapsed.TotalSeconds:F2}; one_core_pct={(monitor.TotalProcessorTime - cpu).TotalSeconds * 100 / idle.Elapsed.TotalSeconds:F2}; working_set_bytes={monitor.WorkingSet64}; read_bytes={after.ReadBytes - before.ReadBytes}; write_bytes={after.WriteBytes - before.WriteBytes}."));
     }
 
     internal static async Task RunAsync(bool soak = false, string? destinationVolume = null)
@@ -248,14 +266,7 @@ internal static class ProductMonitorProbe
                 }
                 if (mode == ProductBackupMode.Versions)
                 {
-                    var before = VersionScaleProbe.ReadCounters(monitor);
-                    TimeSpan cpu = monitor.TotalProcessorTime;
-                    var idle = Stopwatch.StartNew();
-                    await Task.Delay(TimeSpan.FromSeconds(soak ? 120 : 15));
-                    monitor.Refresh();
-                    var after = VersionScaleProbe.ReadCounters(monitor);
-                    Console.Error.WriteLine(FormattableString.Invariant(
-                        $"Monitor idle: seconds={idle.Elapsed.TotalSeconds:F2}; one_core_pct={(monitor.TotalProcessorTime - cpu).TotalSeconds * 100 / idle.Elapsed.TotalSeconds:F2}; working_set_bytes={monitor.WorkingSet64}; read_bytes={after.ReadBytes - before.ReadBytes}; write_bytes={after.WriteBytes - before.WriteBytes}."));
+                    await ReportIdleAsync(monitor, soak ? 120 : 15, "Monitor");
                     if (registry.RunHistory(job.Id).Runs.Length != 1)
                         throw new InvalidOperationException("The idle monitor dispatched a backup without a change.");
                 }

@@ -35,7 +35,7 @@ foreach ($report in @('ENTREGA.md', 'V1.md', 'PLAN.md', 'ALFA.md', 'ACEPTACION.m
     if (Test-Path -LiteralPath (Join-Path $root $report)) { throw "Informe de desarrollo mezclado con las guías: $report" }
 }
 $readme = Get-Content -LiteralPath (Join-Path $root 'README.md') -Raw
-if (-not $readme.Contains('COMPILACION.json') -or -not $readme.Contains('después') -or -not $readme.Contains('/releases')) {
+if (-not $readme.Contains('COMPILACION.json') -or -not $readme.Contains('después') -or -not $readme.Contains('por separado')) {
     throw 'El paquete no separa su identidad de la aceptación posterior.'
 }
 foreach ($document in Get-ChildItem -LiteralPath $root -File -Recurse -Filter '*.md') {

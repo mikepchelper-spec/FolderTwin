@@ -1,10 +1,12 @@
 # Notas del candidato de FolderTwin 1.0
 
-Serie candidata de FolderTwin 1.0, sin declaración de v1 definitiva. La identidad exacta de cada paquete está en **COMPILACION.json**. El informe posterior de aceptación y el hash del ZIP se distribuyen por separado en [Releases](https://github.com/mikepchelper-spec/FolderTwin/releases); deben identificar el mismo commit y manifiesto. Estas notas describen funciones y cambios, sin anticipar el resultado de una compilación. Consulta [GUIA.md](GUIA.md) y [PILOTO.md](PILOTO.md).
+Serie candidata de FolderTwin 1.0 para ensayos sintéticos. **COMPILACION.json** identifica el paquete. El informe de aceptación y el hash del ZIP se entregan por separado y deben identificar el mismo commit y manifiesto. Consulta [la guía de uso](GUIA.md) y [el protocolo del piloto](PILOTO.md).
 
 ## Cambios de esta entrega
 
 - Primer inicio con **Crear mi primer respaldo**, ejemplos de los tres modos y pasos para verificar y recuperar una muestra.
+- **Automático al detectar cambios** inicia la primera copia al guardar un trabajo nuevo y agrupa los cambios siguientes. El monitor permanece activo con la ventana cerrada y puede arrancar al iniciar sesión.
+- El espejo admite retiradas ordinarias recuperables cuando el usuario las autoriza por trabajo. La vigilancia reanuda el análisis al volver un destino registrado. Un archivo ocupado puede dejar un punto parcial con los datos legibles.
 - **ⓘ Ayuda y versión** y F1 ofrecen explicaciones por control, requisitos de acciones deshabilitadas, guía local y soporte. El diagnóstico permite revisar y copiar un resumen mínimo de versión y estados.
 - Las acciones habituales permanecen sobre los detalles desplazables. Una recuperación confirmada habilita **Abrir carpeta recuperada**.
 - El espejo habilita Aplicar después de aceptar las revisiones adicionales que requiere el inventario.
@@ -20,12 +22,12 @@ Serie candidata de FolderTwin 1.0, sin declaración de v1 definitiva. La identid
 
 ## Funciones disponibles
 
-- Entrada **FolderTwin.exe** sin argumentos y asistente de origen, destino dedicado, modo, horario y revisión.
+- Entrada **FolderTwin.exe** sin argumentos y asistente de origen, destino dedicado, modo, disparadores y revisión.
 - Icono propio en el ejecutable, la ventana de producto y la bandeja, con recursos para varios tamaños.
 - Copia acumulativa, versionado y espejo protegido sobre raíces locales NTFS, con identidades y bloqueo compartidos.
 - Trabajadores independientes para respaldo, verificación, restauración y revisión del espejo, con progreso, controles e historial persistido.
 - Navegación y búsqueda por fecha y carpeta, comparación de cambios y restauración en una salida nueva, incluso sin origen.
-- Horarios diarios con sesión iniciada, reintentos acotados, bandeja opcional y conservación de incidencias por trabajo.
+- Vigilancia y horarios diarios con sesión iniciada, reintentos acotados, bandeja opcional y conservación de incidencias por trabajo.
 - Retención manual con revisión, cuarentena, deshacer y purga posterior a la gracia.
 - Exportación e importación de configuración con revisión y activación expresa; acceso compatible a formatos anteriores mediante **Respaldos de alfa**.
 - Revisión, instalación y actualización del ejecutor y retirada de horarios y versiones conservando respaldos y configuración.
@@ -34,7 +36,7 @@ Serie candidata de FolderTwin 1.0, sin declaración de v1 definitiva. La identid
 
 El paquete incluye el runtime, hashes, licencias y documentación. El artefacto `FolderTwin-win-x64-<commit>` incluye el código fuente del commit. Dos compilaciones desde árboles limpios deben producir los mismos hashes antes de aceptar una entrega. CI conserva el artefacto 30 días. Guarda una copia local para todo el piloto.
 
-Extrae una actualización en otra carpeta y conserva la anterior hasta verificar reapertura y restauración. **Aplicación** prepara una versión estable distinta y actualiza los horarios propios habilitados. No sobrescribe otra instalación para resolver un conflicto. La retirada comprueba los archivos, identidades y referencias directas de tareas consultables, mantiene un diario y permite reanudarla. No retira la versión que está abierta. [Procedimiento](INSTALACION.md).
+Extrae una actualización en otra carpeta y conserva la anterior hasta verificar reapertura y restauración. **Aplicación** prepara el ejecutor de la nueva versión, traspasa los horarios propios habilitados y actualiza el monitor registrado. La retirada comprueba archivos, identidades y referencias directas de tareas consultables y mantiene un diario para reanudarla. Abre otra copia portable si necesitas retirar una versión que está abierta. [Procedimiento](INSTALACION.md).
 
 Los almacenes nuevos y anteriores conservan lectores explícitos. No se permite usar un escritor antiguo para modificar un almacén después de adoptar eventos de registro que ese escritor no admite. No hay conversión automática de los espacios de alfa. [Compatibilidad](COMPATIBILIDAD.md).
 
@@ -49,4 +51,4 @@ Los borradores y diarios conservados no se descartan dentro del almacén anterio
 
 ## Límites del alcance
 
-Windows 11 x64 y NTFS local. Retención manual. VSS, vigilancia continua, NAS, nube propia y sincronización bidireccional quedan fuera de 1.0. Mientras la matriz esté abierta, usa solo datos sintéticos y carpetas desechables; conserva aparte respaldos personales y FreeFileSync. No se promete pérdida cero ni recuperación frente a cualquier fallo físico.
+Windows 11 x64 y NTFS local. Retención manual. VSS, NAS, nube propia y sincronización bidireccional quedan fuera. La vigilancia requiere una sesión iniciada y el equipo despierto. Los respaldos pueden agrupar varios guardados en un mismo punto. Usa solo datos sintéticos y carpetas desechables. Conserva aparte los respaldos personales y FreeFileSync.
