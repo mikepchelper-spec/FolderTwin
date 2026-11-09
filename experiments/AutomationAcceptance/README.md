@@ -18,3 +18,15 @@ dotnet $harness --waiting-controls "$package\FolderTwin.exe"
 El mismo ensayo traslada al origen un árbol preparado fuera del alcance del vigilante con 256 archivos y renombra después su carpeta raíz. Recupera todos los descendientes con el origen apartado. Acumulativo debe conservar las dos rutas, versionado debe guardar el cambio de ruta y espejo debe conservar el árbol previo y pedir revisión ante el renombrado masivo.
 
 `Test-IsolatedStartup.ps1 -PackageDirectory <extracción> -SourceRevision <commit-completo>` verifica el paquete y abre su `FolderTwin.exe` sin argumentos. Antes comprueba en un proceso aparte que Windows devuelve la carpeta temporal al consultar `LocalAppData` con el entorno aislado. Exige que Ruta aparezca, que el registro se cree en esa carpeta y que la ventana cierre con el registro vacío. Conserva el resultado en el espacio desechable. Este ensayo usa la cuenta interactiva actual y un perfil de aplicación aislado por proceso. El arnés del runner hospedado permite comprobar por separado una cuenta Windows desechable completa.
+
+`Test-VolumeCandidate.ps1` ejecuta el laboratorio de capacidad y cambio de letra sobre un ZIP existente. Comprueba el SHA-256 del ZIP, el manifiesto, el inventario, las fuentes y el commit. Extrae de las fuentes verificadas el guion del laboratorio. En un runner Windows hospedado desechable exige que `%RUNNER_TEMP%\FolderTwin-volume-package` todavía no exista. `-VerifyOnly` prepara y comprueba la extracción local sin montar discos.
+
+```powershell
+./experiments/AutomationAcceptance/Test-VolumeCandidate.ps1 `
+  -PackageZip 'C:\FolderTwin-Distribucion\FolderTwin-win-x64-598fbc7.zip' `
+  -ZipSha256 '05c58508b888f05b041875614821f42c68de0c5a0f967ab0d00b145fd696a084' `
+  -ManifestSha256 '700bfb6c647d621849963f35534e8eb5abb6d339e0e9554cf842f981f2eefe6e' `
+  -SourceRevision '598fbc710e4b29ecd52b76185eda76911da969eb' -VerifyOnly
+```
+
+Para la prueba nativa, ejecuta el mismo comando sin `-VerifyOnly` en el runner y usa la ruta del ZIP disponible allí. Conserva la salida junto al informe posterior de la candidata.
