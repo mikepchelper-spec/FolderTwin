@@ -40,7 +40,16 @@ El arnés del motor confirma la edición de igual tamaño y fecha y restaura una
 
 La rama local conserva la candidata sin subir a GitHub. La validación pública de Windows `42212336681` terminó correctamente para RC2 (`d902f4c`). La evidencia de `3cb9c6a` procede de este paquete local. [Validación pública de RC2](https://github.com/mikepchelper-spec/FolderTwin/actions/runs/42212336681).
 
-La auditoría XML `--schedule-policy-audit` incluida en `3cb9c6a` falla al construir su fixture sintético porque usaba la firma anterior de un constructor privado. Se corrigió en el código de pruebas y una compilación de desarrollo rechazó las siete alteraciones esperadas de disparador, batería, inicio bajo demanda, inactividad y red. Esta corrección afecta solo al arnés de auditoría. Las pruebas con tareas reales de `3cb9c6a` figuran en la tabla anterior.
+### Paquete con el arnés de auditoría corregido
+
+La auditoría XML `--schedule-policy-audit` incluida en `3cb9c6a` falla al construir su fixture sintético porque usaba la firma anterior de un constructor privado. La revisión `598fbc7` corrige esa llamada en el código de pruebas. Dos compilaciones independientes produjeron ZIP idénticos. La extracción aprobó los 500 hashes, la auditoría XML de siete alteraciones y el recorrido automático de Ruta en los tres modos. `CopyProbe.dll` conserva exactamente el hash de `3cb9c6a`. Los cambios de manifiesto se limitan a `CopyLab.dll`, la identidad del paquete, las fuentes archivadas y cinco guías cuyos enlaces llevan la revisión de origen. Las pruebas nativas de la tabla anterior corresponden a `3cb9c6a`.
+
+El ZIP de `598fbc7` se conserva en `C:\FolderTwin-Distribucion` con su manifiesto aparte. El acceso del Escritorio sigue en la candidata `3cb9c6a`, cuyo paquete completó los ensayos nativos locales.
+
+| Archivo | SHA-256 |
+|---|---|
+| `FolderTwin-win-x64-598fbc7.zip` | `05c58508b888f05b041875614821f42c68de0c5a0f967ab0d00b145fd696a084` |
+| `SHA256SUMS.txt` | `700bfb6c647d621849963f35534e8eb5abb6d339e0e9554cf842f981f2eefe6e` |
 
 Los ensayos de alias y controles durante la espera se pueden repetir contra el mismo motor y ejecutable empaquetados. [Arneses complementarios](experiments/AutomationAcceptance/README.md).
 
