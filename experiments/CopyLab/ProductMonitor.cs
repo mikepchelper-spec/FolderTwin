@@ -6,9 +6,6 @@ namespace CopyLab;
 
 internal static class ProductMonitor
 {
-    private static readonly TimeSpan Quiet = TimeSpan.FromSeconds(2);
-    private static readonly TimeSpan MaximumWait = TimeSpan.FromSeconds(20);
-    private static readonly TimeSpan ReconcileInterval = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan Poll = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan ConfigurationPoll = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(5);
@@ -29,7 +26,8 @@ internal static class ProductMonitor
         }
     }
 
-    internal static async Task<int> RunAsync(string location, bool scheduled = false)
+    internal static async Task<int> RunAsync(string location, bool scheduled = false,
+        Func<ProductWatchSignal, LocalJobRoot, FileSystemWatcher>? observe = null)
     {
         using var registry = new ProductJobRegistry(location);
         if (scheduled && !ProductAutomation.CanMonitor(registry)) return 0;
@@ -44,6 +42,7 @@ internal static class ProductMonitor
         }
         using (lease)
         {
+            var timing = registry.ReadWatchTiming();
             var wake = Channel.CreateBounded<bool>(new BoundedChannelOptions(1)
             {
                 SingleReader = true,
@@ -121,7 +120,7 @@ internal static class ProductMonitor
                     foreach (var job in configured.Values)
                     {
                         if (!jobs.TryGetValue(job.Id, out var watch))
-                            jobs.Add(job.Id, watch = new Watch(now, Wake));
+                            jobs.Add(job.Id, watch = new Watch(now, Wake, timing, observe));
                         watch.Observe(job.Source, now);
                     }
                     if (worker is null)
@@ -167,7 +166,8 @@ internal static class ProductMonitor
         }
     }
 
-    private sealed class Watch(long now, Action wake) : IDisposable
+    private sealed class Watch(long now, Action wake, ProductWatchTiming timing,
+        Func<ProductWatchSignal, LocalJobRoot, FileSystemWatcher>? observe) : IDisposable
     {
         private readonly ProductWatchSignal signal = new(TimeProvider.System, wake);
         private FileSystemWatcher? watcher;
@@ -175,6 +175,9 @@ internal static class ProductMonitor
         private long observeAt = now;
         private long retryAt = now;
         private int failures;
+        private readonly TimeSpan quiet = TimeSpan.FromSeconds(timing.QuietSeconds);
+        private readonly TimeSpan maximumWait = TimeSpan.FromSeconds(timing.MaximumWaitSeconds);
+        private readonly TimeSpan reconcileInterval = TimeSpan.FromSeconds(timing.ReconcileSeconds);
         internal long LastDispatch { get; set; }
         internal bool NeedsPolling => watcher is null || signal.Pending;
 
@@ -184,17 +187,17 @@ internal static class ProductMonitor
             {
                 Dispose();
                 signal.RequireReconciliation();
-                reconcileAt = After(now, ReconcileInterval);
+                reconcileAt = After(now, reconcileInterval);
             }
             if (watcher is not null || now < observeAt) return;
-            try { watcher = signal.Observe(source); }
+            try { watcher = observe is null ? signal.Observe(source) : observe(signal, source); }
             catch (Exception error) when (VersionJob.Expected(error))
             {
                 observeAt = After(now, TimeSpan.FromSeconds(5));
             }
         }
 
-        internal bool TakeDue(long now) => now >= retryAt && signal.TakeDue(Quiet, MaximumWait);
+        internal bool TakeDue(long now) => now >= retryAt && signal.TakeDue(quiet, maximumWait);
         internal ProductWatchActivity Activity(bool running) => running ? ProductWatchActivity.Running :
             watcher is null ? ProductWatchActivity.SourceUnavailable :
             signal.Pending ? ProductWatchActivity.Pending : ProductWatchActivity.Watching;
@@ -208,7 +211,7 @@ internal static class ProductMonitor
             }
             if (exitCode == 3) Dispose();
             failures = Math.Min(failures + 1, 5);
-            retryAt = After(now, exitCode == 1 ? ReconcileInterval : TimeSpan.FromSeconds(5 << (failures - 1)));
+            retryAt = After(now, exitCode == 1 ? reconcileInterval : TimeSpan.FromSeconds(5 << (failures - 1)));
             signal.RequireReconciliation();
         }
 

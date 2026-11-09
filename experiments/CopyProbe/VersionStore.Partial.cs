@@ -15,7 +15,7 @@ internal sealed partial class VersionStore
         var ledger = GenerationRegistry.Read(store.Root, binding);
         var occupied = new List<string>();
         var plan = FolderBatch.AnalyzeSource(workspace.Root, source, Destination, binding,
-            WindowsProbeNative.DirectoryIdentity(origin.Root), BatchCatalog.VersionMaximumEntries, observe, occupied);
+            WindowsProbeNative.DirectoryIdentity(origin.Root), BatchCatalog.VersionMaximumEntries, observe, occupied, parallelAnalysis);
         if (occupied.Count == 0 || plan.Files.Length == 0) return (null, occupied.FirstOrDefault());
         workspace.ValidatePlan(plan);
         string? last = ledger.RegistrationOrder.LastOrDefault(id => !ledger.Expired.Contains(id));

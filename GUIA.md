@@ -18,7 +18,7 @@ Descarga el artefacto del commit elegido desde [GitHub Actions](https://github.c
 
 Prepara una carpeta de origen con datos de prueba y otra ubicación local NTFS donde guardar los respaldos. Cada trabajo crea su propia subcarpeta dedicada en el destino. Evita rutas anidadas, enlaces y carpetas que otro programa use como respaldo. Las copias en el mismo disco físico sirven para ensayar, pero no protegen frente al fallo de ese disco.
 
-Si todavía no hay trabajos, **Crear mi primer respaldo** abre el asistente. Guardar crea la configuración y la carpeta dedicada. Después pulsa **Respaldar ahora**. Al terminar, el trabajo indica cómo verificar el punto y recuperar una muestra.
+Si todavía no hay trabajos, **Crear mi primer respaldo** abre el asistente. Guardar crea la configuración y la carpeta dedicada. Un trabajo automático prepara su primera copia. Para probar de inmediato un trabajo manual o con horario, pulsa **Respaldar ahora**. Al terminar, el trabajo indica cómo verificar el punto y recuperar una muestra.
 
 En **Aplicación**, **Importar un trabajo** y **Recuperar archivos**, usa **Volver a trabajos** en la cabecera para regresar a la lista conservando tu selección. En el asistente, **Atrás** vuelve al paso anterior y **Cancelar** regresa a la lista.
 
@@ -32,14 +32,14 @@ La ventana de ayuda incluye esta guía, soporte y el commit exacto del paquete. 
 
 1. Pulsa **Nuevo trabajo** y **Elegir origen**. Selecciona la carpeta con los archivos y pulsa **Siguiente**.
 2. Pulsa **Elegir destino**, selecciona la ubicación donde se creará la carpeta dedicada y continúa.
-3. Escribe un nombre, elige el modo y, si quieres un horario diario, introduce una hora local como `20:30`. Dejarla vacía permite ejecutar a demanda.
-4. Revisa origen, destino nuevo, modo, horario y espacio observado. **Atrás** permite corregirlos. **Guardar trabajo** registra la configuración; después usa **Respaldar ahora** para hacer la primera copia.
+3. Escribe un nombre y elige el modo. Selecciona **Automático al detectar cambios** para vigilar el origen. Puedes añadir un horario diario en hora local, por ejemplo `20:30`. Si dejas ambas opciones desactivadas, el trabajo se ejecuta a demanda.
+4. Revisa origen, destino nuevo, modo, disparadores y espacio observado. **Atrás** permite corregirlos. Pulsa **Guardar trabajo** y comprueba el estado en Ruta.
 
 | Modo | Qué conserva y qué revisar |
 |---|---|
 | Copia acumulativa | Agrega y actualiza archivos y conserva los exclusivos del destino. Detiene los conflictos con ediciones externas; no los sobrescribe para terminar. Usa versionado si necesitas elegir fechas como función principal. |
 | Versionado | Guarda puntos por fecha y permite recuperar archivos que después se modificaron o desaparecieron del origen. Los contenidos sin cambios se comparten internamente. Usa la recuperación de la aplicación para extraerlos. |
-| Espejo protegido | Mantiene una carpeta actual y conserva el contenido anterior. Las retiradas, el origen vacío y los cambios masivos requieren revisión antes de aplicarlos. |
+| Espejo protegido | Mantiene una carpeta actual y conserva el contenido anterior. Si autorizas las retiradas ordinarias automáticas, los archivos retirados se pueden recuperar desde el punto anterior. El origen vacío, los conflictos y los cambios masivos requieren revisión. |
 
 El horario funciona con tu sesión iniciada. Si su preparación falla después de guardar, el trabajo permanece registrado: revisa el aviso y usa **Editar trabajo y horario → Reparar horario**. No se anuncia un horario correcto solo por haber guardado la hora.
 
@@ -53,7 +53,7 @@ Selecciona un trabajo para consultar el último respaldo completo, la última ve
 
 En el espejo, **Respaldar ahora** prepara una revisión. Comprueba altas, modificaciones, retiradas, conflictos y espacio antes de **Aplicar espejo revisado**. Cuando aparezcan, revisa y acepta por separado el origen vacío y el alcance de los cambios. Si ya existe una actualización autorizada pendiente, **Reanudar actualización** continúa su diario; no empieza otra con datos diferentes.
 
-**Minimizar a bandeja** mantiene el monitor opcional. Su panel muestra el estado conjunto, antigüedad e incidencias y permite **Respaldar ahora** o **Abrir aplicación**. Cerrar la interfaz y mantenerla en bandeja son acciones distintas. El monitor no sustituye al trabajador ni al horario.
+**Minimizar a bandeja** deja la interfaz accesible desde el área de notificaciones. Su panel muestra la salud de la vigilancia, la antigüedad del respaldo y las incidencias. Desde ahí puedes pulsar **Respaldar ahora** o **Abrir aplicación**. El monitor residente y los horarios siguen su propia configuración aunque cierres la interfaz.
 
 ## Verificar y recuperar
 
@@ -101,6 +101,6 @@ Los formatos anteriores se abren desde **Aplicación → Respaldos de alfa**, se
 
 ## Alcance y comprobaciones pendientes
 
-La primera versión se limita a carpetas y discos locales NTFS en Windows 11 x64. No incluye VSS, instantáneas coherentes de bases de datos abiertas, vigilancia continua, NAS, nube propia ni sincronización bidireccional. Enlaces, EFS, flujos y archivos de nube no descargados detectados pueden dejar incidencias. Se respalda el contenido y los metadatos admitidos; no equivale a una imagen del sistema ni a conservar todos los permisos o formatos físicos del original.
+El alcance es carpetas y discos locales NTFS en Windows 11 x64. VSS, las instantáneas coherentes de bases de datos abiertas, NAS, la nube propia y la sincronización bidireccional quedan fuera. Los enlaces, EFS, flujos y archivos de nube que todavía necesitan descargarse pueden generar incidencias. Se respaldan el contenido y los metadatos admitidos de los archivos.
 
 Las pruebas sintéticas y las compilaciones reproducibles no demuestran durabilidad frente a todos los fallos de hardware. La [matriz de v1](V1.md) distingue software, observaciones de escritorio y validaciones externas. El [piloto](PILOTO.md) registra 7–14 días y los ensayos de entorno sin utilizar respaldos personales.

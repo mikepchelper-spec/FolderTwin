@@ -92,7 +92,7 @@ internal static class BatchCatalog
             if (WindowsProbeNative.PlainFileExists(replica.Parent, replica.Name))
             {
                 using var existing = WindowsProbeNative.OpenPlainFile(replica.Parent, replica.Name, FileAccess.Read, FileShare.Read);
-                if (!Parse(existing, generation).DocumentHash.AsSpan().SequenceEqual(expected))
+                if (!MatchesDocument(existing, generation, expected))
                     throw new InvalidDataException("Ya existe un catálogo diferente.");
             }
             else
@@ -106,7 +106,7 @@ internal static class BatchCatalog
                     output.Flush(flushToDisk: true);
                 }
                 using var verified = WindowsProbeNative.OpenPlainFile(replica.Parent, draft, FileAccess.Read, FileShare.Read, rename: true);
-                if (!Parse(verified, generation).DocumentHash.AsSpan().SequenceEqual(expected))
+                if (!MatchesDocument(verified, generation, expected))
                     throw new InvalidDataException("El catálogo pendiente no corresponde al lote.");
                 checkpoint?.Invoke(flushed);
                 WindowsProbeNative.RenameNew(verified.SafeFileHandle, replica.Parent, replica.Name);
@@ -114,6 +114,12 @@ internal static class BatchCatalog
             checkpoint?.Invoke(published);
         }
     }
+
+    // The expected digest is produced by the canonical serializer after plan
+    // validation. Re-read the bytes without allocating a second parsed tree.
+    internal static bool MatchesDocument(Stream input, string generation, byte[] expected) =>
+        input.Length is > 0 && input.Length <= ByteLimit(generation) &&
+        SHA256.HashData(input).AsSpan().SequenceEqual(expected);
 
     internal static CatalogSnapshot Read(string backup)
     {
@@ -276,6 +282,8 @@ internal static class BatchCatalog
         using var body = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using var document = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         byte[] buffer = new byte[MaximumLineBytes - 1];
+        byte[] readBuffer = new byte[64 * 1024];
+        int position = 0, available = 0;
         byte[] headerLine = Line() ?? throw new InvalidDataException("Falta la cabecera.");
         var header = Decode<Header>(headerLine);
         if (header.Kind != "header" || header.Version is not (1 or 2 or 3) || header.GenerationId != generation || header.JobId == Guid.Empty ||
@@ -345,26 +353,43 @@ internal static class BatchCatalog
         byte[]? Line()
         {
             int length = 0;
-            int value;
-            while ((value = input.ReadByte()) != -1)
+            while (true)
             {
-                if (value == 10)
+                if (position == available)
                 {
-                    if (length == 0)
-                        throw new InvalidDataException("Línea vacía en el catálogo.");
-                    var bytes = buffer.AsSpan(0, length).ToArray();
+                    available = input.Read(readBuffer);
+                    position = 0;
+                    if (available == 0)
+                    {
+                        if (length != 0) throw new InvalidDataException("Línea truncada en el catálogo.");
+                        return null;
+                    }
+                }
+                var remaining = readBuffer.AsSpan(position, available - position);
+                int newline = remaining.IndexOf((byte)10);
+                var part = newline < 0 ? remaining : remaining[..newline];
+                if (part.Length > buffer.Length - length || part.Contains((byte)13))
+                    throw new InvalidDataException("Separador o tamaño de registro no válido.");
+                position += part.Length;
+                if (newline >= 0)
+                {
+                    position++;
+                    if (length + part.Length == 0) throw new InvalidDataException("Línea vacía en el catálogo.");
+                    byte[] bytes;
+                    if (length == 0) bytes = part.ToArray();
+                    else
+                    {
+                        part.CopyTo(buffer.AsSpan(length));
+                        bytes = buffer.AsSpan(0, length + part.Length).ToArray();
+                    }
                     _ = Utf8.GetCharCount(bytes);
                     document.AppendData(bytes);
                     document.AppendData([10]);
                     return bytes;
                 }
-                if (length == buffer.Length || value == 13)
-                    throw new InvalidDataException("Separador o tamaño de registro no válido.");
-                buffer[length++] = (byte)value;
+                part.CopyTo(buffer.AsSpan(length));
+                length += part.Length;
             }
-            if (length != 0)
-                throw new InvalidDataException("Línea truncada en el catálogo.");
-            return null;
         }
         void HashBody(ReadOnlySpan<byte> bytes)
         {

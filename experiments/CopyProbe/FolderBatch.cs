@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
@@ -55,7 +56,7 @@ internal static class FolderBatch
 
     internal static BatchPlan AnalyzeSource(string fixtureRoot, string source, string destination,
         DestinationBinding binding, byte[] sourceIdentity, int maximumEntries = FolderInventory.DefaultMaximumEntries,
-        Action<WorkProgress>? observe = null, List<string>? occupied = null)
+        Action<WorkProgress>? observe = null, List<string>? occupied = null, bool parallel = false)
     {
         observe?.Invoke(new(WorkPhase.Analyzing, 0, 0));
         using var origin = new DirectoryFence(source);
@@ -71,6 +72,9 @@ internal static class FolderBatch
         CheckDirectoryData(source, directories);
         var files = new List<BatchFile>();
         int totalFiles = inventory.Entries.Count(entry => !entry.IsDirectory);
+        int workers = parallel && totalFiles >= 8192 ? Math.Min(4, Environment.ProcessorCount) : 1;
+        var options = new ParallelOptions { MaxDegreeOfParallelism = workers };
+        int processed = 0;
         var orderedFiles = inventory.Entries.Where(entry => !entry.IsDirectory).OrderBy(entry => entry.RelativePath, StringComparer.Ordinal);
         foreach (var group in orderedFiles.GroupBy(entry => Path.GetDirectoryName(entry.RelativePath), StringComparer.Ordinal))
         {
@@ -79,32 +83,71 @@ internal static class FolderBatch
             string representative = Path.Combine(source, group.First().RelativePath);
             using var fence = new DirectoryFence(source, representative);
             var parent = fence.Parent(representative);
-            foreach (var entry in group)
+            if (workers == 1)
             {
-                observe?.Invoke(new(WorkPhase.Analyzing, files.Count, totalFiles, entry.RelativePath));
-                FileStream file;
-                try { file = WindowsProbeNative.OpenPlainFile(parent, entry.RelativePath, FileAccess.Read, FileShare.Read); }
-                catch (Exception error) when (occupied is not null && VersionJob.SharingViolation(error))
+                foreach (var entry in group) ReadSerial(parent, entry);
+                continue;
+            }
+            foreach (var chunk in group.Chunk(64))
+            {
+                if (chunk.Length > 1 && chunk.All(entry => entry.Length <= 1024 * 1024))
                 {
-                    occupied.Add(entry.RelativePath);
-                    continue;
+                    // Progress and cancellation remain on the coordinator.
+                    // The checked parent stays open until all readers leave.
+                    observe?.Invoke(new(WorkPhase.Analyzing, processed, totalFiles, chunk[0].RelativePath));
+                    var observations = new BatchFile?[chunk.Length];
+                    var failures = new Exception?[chunk.Length];
+                    Parallel.For(0, chunk.Length, options, index =>
+                    {
+                        try { observations[index] = Read(parent, chunk[index]); }
+                        catch (Exception error) when (VersionJob.Expected(error)) { failures[index] = error; }
+                    });
+                    for (int index = 0; index < chunk.Length; index++)
+                    {
+                        if (failures[index] is { } failure)
+                            HandleFailure(chunk[index], failure, report: true);
+                        else files.Add(observations[index]!);
+                        processed++;
+                    }
                 }
-                using (file)
-                {
-                    WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath);
-                    if (file.Length != entry.Length)
-                        throw new InvalidDataException("El origen cambió durante el análisis.");
-                    var metadata = FileMetadata.Read(file.SafeFileHandle);
-                    byte[] hash = SHA256.HashData(file);
-                    if (!metadata.IsValid())
-                        throw new InvalidDataException($"Las fechas de «{entry.RelativePath}» están fuera del alcance.");
-                    metadata.RequireMatch(file.SafeFileHandle);
-                    files.Add(new(entry.RelativePath, entry.Length, hash, metadata));
-                }
+                else foreach (var entry in chunk) ReadSerial(parent, entry);
             }
         }
         return new(fixtureRoot, source, destination, sourceIdentity, binding,
             directories, files.OrderBy(file => file.RelativePath, StringComparer.Ordinal).ToArray());
+
+        void ReadSerial(SafeFileHandle parent, InventoryEntry entry)
+        {
+            observe?.Invoke(new(WorkPhase.Analyzing, processed, totalFiles, entry.RelativePath));
+            try { files.Add(Read(parent, entry)); }
+            catch (Exception error) when (VersionJob.Expected(error)) { HandleFailure(entry, error, report: false); }
+            processed++;
+        }
+
+        void HandleFailure(InventoryEntry entry, Exception failure, bool report)
+        {
+            if (occupied is not null && VersionJob.SharingViolation(failure))
+            {
+                occupied.Add(entry.RelativePath);
+                return;
+            }
+            if (report) observe?.Invoke(new(WorkPhase.Analyzing, processed, totalFiles, entry.RelativePath));
+            ExceptionDispatchInfo.Throw(failure);
+        }
+
+        static BatchFile Read(SafeFileHandle parent, InventoryEntry entry)
+        {
+            using var file = WindowsProbeNative.OpenPlainFile(parent, entry.RelativePath, FileAccess.Read, FileShare.Read);
+            WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath);
+            if (file.Length != entry.Length)
+                throw new InvalidDataException("El origen cambió durante el análisis.");
+            var metadata = FileMetadata.Read(file.SafeFileHandle);
+            byte[] hash = SHA256.HashData(file);
+            if (!metadata.IsValid())
+                throw new InvalidDataException($"Las fechas de «{entry.RelativePath}» están fuera del alcance.");
+            metadata.RequireMatch(file.SafeFileHandle);
+            return new(entry.RelativePath, entry.Length, hash, metadata);
+        }
     }
 
     internal static BatchResult Run(BatchPlan plan, CancellationToken cancellationToken = default,

@@ -91,7 +91,7 @@ internal static partial class ProductRunner
             if (approvalId is not null && (job.Options.Mode != ProductBackupMode.ProtectedMirror || automatic))
                 throw new InvalidDataException("La aprobación no corresponde al modo de este trabajo.");
             control.Observe(new(WorkPhase.Analyzing, 0, 0));
-            store = VersionStore.OpenProduct(job, initialize: true, observe: control.Observe);
+            store = VersionStore.OpenProduct(job, initialize: true, observe: control.Observe, parallelAnalysis: automatic);
             if (automatic && store.ResumePartialPoint(job.Source.VolumePath, job.Source.Identity) is { } resumed)
             {
                 run.SetGeneration(resumed);

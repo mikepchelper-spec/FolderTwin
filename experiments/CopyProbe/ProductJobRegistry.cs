@@ -7,6 +7,17 @@ using Microsoft.Win32.SafeHandles;
 internal enum ProductBackupMode { Accumulative, Versions, ProtectedMirror }
 internal enum ProductWatchMode { Off, Watching, Paused }
 internal enum ProductWatchActivity : byte { Watching = 1, Pending, Running, SourceUnavailable }
+internal sealed record ProductWatchTiming(int QuietSeconds, int MaximumWaitSeconds, int ReconcileSeconds)
+{
+    internal static readonly ProductWatchTiming Default = new(2, 20, 900);
+
+    internal void Validate()
+    {
+        if (QuietSeconds is < 1 or > 10 || MaximumWaitSeconds is < 5 or > 60 || MaximumWaitSeconds <= QuietSeconds ||
+            ReconcileSeconds is < 10 or > 3600 || ReconcileSeconds <= MaximumWaitSeconds)
+            throw new InvalidDataException("Los intervalos del monitor no son válidos. Revisa monitor-timing.json o retíralo para usar los valores iniciales.");
+    }
+}
 internal enum ProductRegistrationStep { Prepared, DestinationRecorded, MarkerWritten, Confirmed }
 internal sealed record ProductJobOptions(string Name, ProductBackupMode Mode, TimeOnly? DailyAt)
 {
@@ -102,6 +113,18 @@ internal sealed partial class ProductJobRegistry : IDisposable
     internal FileStream AcquireMonitorLock() =>
         WindowsProbeNative.OpenPlainFile(directory.Root, ".foldertwin-monitor.lock",
             FileAccess.ReadWrite, FileShare.Read, FileMode.OpenOrCreate);
+
+    internal ProductWatchTiming ReadWatchTiming()
+    {
+        const string name = "monitor-timing.json";
+        if (!WindowsProbeNative.PlainFileExists(directory.Root, name)) return ProductWatchTiming.Default;
+        using var file = WindowsProbeNative.OpenPlainFile(directory.Root, name, FileAccess.Read, FileShare.Read, FileMode.Open);
+        if (file.Length is < 1 or > 1024) throw new InvalidDataException("El archivo de intervalos del monitor tiene un tamaño inválido.");
+        var timing = JsonSerializer.Deserialize<ProductWatchTiming>(file, Json) ??
+            throw new InvalidDataException("El archivo de intervalos del monitor está vacío.");
+        timing.Validate();
+        return timing;
+    }
 
     internal bool MonitorOwnsRegistry()
     {

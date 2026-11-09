@@ -18,7 +18,7 @@ internal sealed partial class VersionStore
     }
 
     internal static VersionStore OpenProduct(ProductJob job, bool initialize = false,
-        Action<ProductStoreStep>? checkpoint = null, Action<WorkProgress>? observe = null)
+        Action<ProductStoreStep>? checkpoint = null, Action<WorkProgress>? observe = null, bool parallelAnalysis = false)
     {
         job.Options.Validate();
         var scope = new VersionScope(job);
@@ -69,6 +69,6 @@ internal sealed partial class VersionStore
         if (record.ReadAtLeast(observed, observed.Length, false) != observed.Length || record.ReadByte() != -1 ||
             !observed.SequenceEqual(expected))
             throw new InvalidDataException("El almacén de producto está dañado o pertenece a otro trabajo.");
-        return new(scope, job.Destination.LastVolumePath, job.Destination, registeredGenerations: true, observe);
+        return new(scope, job.Destination.LastVolumePath, job.Destination, registeredGenerations: true, observe, parallelAnalysis);
     }
 }

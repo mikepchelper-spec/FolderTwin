@@ -33,6 +33,18 @@ internal sealed class LabWorkspace
         return Register(root);
     }
 
+    internal static LabWorkspace CreateOnFixedVolume(string volume)
+    {
+        string root = Path.GetFullPath(volume);
+        if (root.Length != 3 || root != Path.GetPathRoot(root) || new DriveInfo(root).DriveType != DriveType.Fixed)
+            throw new InvalidDataException("La prueba entre volúmenes necesita la raíz de un disco local fijo.");
+        using var parent = new DirectoryFence(root);
+        WindowsProbeNative.RequireNtfsVolume(parent.Root, writable: true);
+        string name = Prefix + Guid.NewGuid().ToString("N");
+        using (WindowsProbeNative.CreatePlainDirectory(parent.Root, name)) { }
+        return Register(Path.Combine(root, name));
+    }
+
     internal static LabWorkspace CreatePersistent()
     {
         string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);

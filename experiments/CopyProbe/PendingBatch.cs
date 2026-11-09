@@ -102,7 +102,7 @@ internal static class PendingBatch
 
         void RequireMetadata(Stream file)
         {
-            if (!BatchCatalog.Parse(file, files.Generation).DocumentHash.AsSpan().SequenceEqual(metadataHash))
+            if (!BatchCatalog.MatchesDocument(file, files.Generation, metadataHash))
                 throw new InvalidDataException("Ya existe un plan pendiente diferente o dañado.");
         }
         void RequireLocation(Stream file)

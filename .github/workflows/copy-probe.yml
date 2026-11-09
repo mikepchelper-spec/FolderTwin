@@ -131,7 +131,7 @@ jobs:
           $product = Start-Process -FilePath (Join-Path $outputA 'FolderTwin.exe') -WorkingDirectory $outputA -ArgumentList '--product-smoke' -WindowStyle Hidden -RedirectStandardError $productLog -PassThru -Wait
           Get-Content -LiteralPath $productLog
           if ($product.ExitCode -ne 0) { throw "The packaged product wizard exited with $($product.ExitCode)." }
-          foreach ($audit in @('--index-audit', '--tray-audit', '--schedule-policy-audit', '--history-audit', '--product-monitor-smoke', '--product-monitor-schedule-smoke', '--product-automation-ui-smoke')) {
+          foreach ($audit in @('--index-audit', '--tray-audit', '--schedule-policy-audit', '--history-audit', '--product-monitor-smoke', '--product-monitor-schedule-smoke', '--product-monitor-reconciliation-smoke', '--product-automation-ui-smoke')) {
             $auditLog = Join-Path $env:RUNNER_TEMP ("FolderTwin" + $audit + '.err')
             $auditProcess = Start-Process -FilePath (Join-Path $outputA 'FolderTwin.exe') -WorkingDirectory $outputA -ArgumentList $audit -WindowStyle Hidden -RedirectStandardError $auditLog -PassThru -Wait
             Get-Content -LiteralPath $auditLog

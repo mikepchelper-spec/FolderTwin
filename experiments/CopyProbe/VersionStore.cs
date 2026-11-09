@@ -27,18 +27,20 @@ internal sealed partial class VersionStore
     private readonly DestinationBinding binding;
     private readonly bool registeredGenerations;
     private readonly Action<WorkProgress>? observe;
+    private readonly bool parallelAnalysis;
     internal string Destination { get; }
     internal DestinationBinding Binding => binding;
     internal bool SupportsRetention => registeredGenerations;
 
     private VersionStore(VersionScope workspace, string destination, DestinationBinding binding, bool registeredGenerations,
-        Action<WorkProgress>? observe = null)
+        Action<WorkProgress>? observe = null, bool parallelAnalysis = false)
     {
         this.workspace = workspace;
         Destination = destination;
         this.binding = binding;
         this.registeredGenerations = registeredGenerations;
         this.observe = observe;
+        this.parallelAnalysis = parallelAnalysis;
     }
 
     internal static VersionStore Initialize(LabWorkspace workspace, string destination)
@@ -120,7 +122,10 @@ internal sealed partial class VersionStore
                 var catalog = ReadPoint(store.Root, previous, requireBoth: true);
                 if (!catalog.DocumentHash.AsSpan().SequenceEqual(ledger.Generations[previous]))
                     throw new InvalidDataException("El último punto no coincide con el registro de generaciones.");
-                if (BatchCatalog.WriteMetadata(Stream.Null, plan, previous).AsSpan().SequenceEqual(catalog.DocumentHash))
+                if (plan.Directories.SequenceEqual(catalog.Directories, StringComparer.Ordinal) &&
+                    plan.Files.Length == catalog.Files.Length &&
+                    plan.Files.Zip(catalog.Files).All(pair => pair.First.RelativePath == pair.Second.RelativePath &&
+                        SameMirrorFile(pair.First, pair.Second)))
                     return false;
             }
             beforeAutomaticPublication();
@@ -476,7 +481,7 @@ internal sealed partial class VersionStore
 
     private BatchPlan AnalyzeSource(string source, byte[] identity, WorkPhase phase = WorkPhase.Analyzing) =>
         FolderBatch.AnalyzeSource(workspace.Root, source, Destination, binding, identity, BatchCatalog.VersionMaximumEntries,
-            observe is null ? null : progress => observe(progress with { Phase = phase }));
+            observe is null ? null : progress => observe(progress with { Phase = phase }), parallel: parallelAnalysis);
 
     private static void VerifyObject(SafeFileHandle directory, string digest, BatchFile file)
     {
