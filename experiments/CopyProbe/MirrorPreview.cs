@@ -3,7 +3,8 @@ using Microsoft.Win32.SafeHandles;
 internal sealed record MirrorPreview(string Generation, BatchPlan SourcePlan, byte[] DocumentHash, string? Previous, byte[] PreviousHash,
     byte[] RegistryHash, byte[] CurrentIdentity, int Added, int Replaced, int Removed, int AddedDirectories, int RemovedDirectories,
     string[] Conflicts, long StageBytes, long EstimatedBytes, ulong AvailableBytes, int MaximumChangePercent,
-    bool RequiresEmptyReview, bool RequiresMassReview, BatchPlan? Baseline = null);
+    bool RequiresEmptyReview, bool RequiresMassReview, BatchPlan? Baseline = null,
+    int PreviousEntries = 0, string[]? AffectedPaths = null);
 
 internal sealed partial class VersionStore
 {
@@ -36,7 +37,7 @@ internal sealed partial class VersionStore
     }
 
     private MirrorPreview BuildMirrorPreview(SafeFileHandle scope, SafeFileHandle root, string source, int maximumChangePercent,
-        string? generation = null)
+        string? generation = null, bool captureAffectedPaths = false)
     {
         using var mirror = MirrorJournal.Open(root, binding, out var currentIdentity);
         RequireNoPendingMirror(root);
@@ -70,12 +71,17 @@ internal sealed partial class VersionStore
         long previousEntries = previous.Count + baselineDirectories.Length;
         bool mass = !workspace.IsAccumulative && previousEntries > 0 &&
             (replaced + removed + removedDirectories) * 100L >= previousEntries * maximumChangePercent;
+        string[]? affected = captureAffectedPaths
+            ? previous.Values.Where(file => !desired.TryGetValue(file.RelativePath, out var next) || !SameMirrorFile(file, next))
+                .Select(file => file.RelativePath).Concat(baselineDirectories.Except(desiredPlan.Directories, StringComparer.Ordinal))
+                .Take(AutomaticMirrorRules.MaximumBatch + 1).ToArray()
+            : null;
         return new(generation, sourcePlan, hash, registry.MirrorGeneration, before?.DocumentHash ?? new byte[32], registry.LastHash,
             currentIdentity, added, replaced, removed, addedDirectories, removedDirectories, conflicts, stageBytes,
             checked(desiredPlan.Bytes + stageBytes + (workspace.IsAccumulative ? 5L : 3L) * catalogBytes),
             LabWorkspace.AvailableSpace(root), maximumChangePercent,
             !workspace.IsAccumulative && sourcePlan.Files.Length == 0 && sourcePlan.Directories.Length == 0, mass,
-            workspace.IsAccumulative ? observed : null);
+            workspace.IsAccumulative ? observed : null, checked((int)previousEntries), affected);
     }
 
     private CatalogSnapshot? MirrorPrevious(SafeFileHandle scope, SafeFileHandle root, string? generation, byte[]? sourceIdentity = null)

@@ -6,7 +6,7 @@ internal sealed partial class VersionStore
 {
     internal string BeginMirror(MirrorPreview review, bool emptyReviewed = false, bool massReviewed = false,
         Action<MirrorStep>? checkpoint = null, Action<RegistryStep>? registryCheckpoint = null,
-        Action<RegistryStep>? beginRegistryCheckpoint = null)
+        Action<RegistryStep>? beginRegistryCheckpoint = null, Action<MirrorPreview>? authorizeAutomatic = null)
     {
         _ = GenerationTime(review.Generation);
         using var scope = workspace.OpenRegisteredRoot();
@@ -15,7 +15,8 @@ internal sealed partial class VersionStore
         using var marker = binding.OpenVerifiedMarker(root.Root);
         using var operation = OpenLock(root.Root, FileAccess.ReadWrite);
         RequireNoAbandonInProgress(root.Root);
-        var fresh = BuildMirrorPreview(scope.Root, root.Root, review.SourcePlan.Source, review.MaximumChangePercent, review.Generation);
+        var fresh = BuildMirrorPreview(scope.Root, root.Root, review.SourcePlan.Source, review.MaximumChangePercent, review.Generation,
+            captureAffectedPaths: authorizeAutomatic is not null);
         if (!fresh.RegistryHash.AsSpan().SequenceEqual(review.RegistryHash) || fresh.Previous != review.Previous ||
             !fresh.CurrentIdentity.AsSpan().SequenceEqual(review.CurrentIdentity) || fresh.Conflicts.Length != 0 ||
             !fresh.SourcePlan.SourceIdentity.AsSpan().SequenceEqual(review.SourcePlan.SourceIdentity) ||
@@ -23,16 +24,19 @@ internal sealed partial class VersionStore
             workspace.IsAccumulative && !BatchCatalog.WriteMetadata(Stream.Null, fresh.SourcePlan, review.Generation).AsSpan()
                 .SequenceEqual(BatchCatalog.WriteMetadata(Stream.Null, review.SourcePlan, review.Generation)))
             throw new InvalidDataException("El origen, el espejo o su registro cambiaron desde la revisión. Repite el análisis.");
-        if (fresh.RequiresEmptyReview && !emptyReviewed || fresh.RequiresMassReview && !massReviewed)
+        if (fresh.RequiresEmptyReview && (!emptyReviewed || authorizeAutomatic is not null) ||
+            fresh.RequiresMassReview && !massReviewed && authorizeAutomatic is null)
             throw new InvalidDataException("Revisa expresamente el origen vacío o el alcance de los cambios antes de actualizar el espejo.");
         LabWorkspace.RequireSpace(fresh.EstimatedBytes, fresh.AvailableBytes);
+        authorizeAutomatic?.Invoke(fresh);
         using var mirror = MirrorJournal.Open(root.Root, binding, out var currentIdentity);
         using var operations = WindowsProbeNative.OpenPlainDirectory(mirror, MirrorJournal.OperationsName);
         using var directory = WindowsProbeNative.OpenOrCreatePlainDirectory(operations, review.Generation);
         LabWorkspace.RequireEmpty(directory);
         var plan = new MirrorPlan(workspace.IsAccumulative ? 3 : 2, review.Generation, fresh.DocumentHash, fresh.Previous, fresh.PreviousHash,
             Path.GetFileName(fresh.SourcePlan.Source), fresh.SourcePlan.SourceIdentity, currentIdentity,
-            binding.Marker, binding.Identity, fresh.MaximumChangePercent, emptyReviewed, massReviewed,
+            binding.Marker, binding.Identity, fresh.MaximumChangePercent, emptyReviewed,
+            massReviewed || authorizeAutomatic is not null && fresh.RequiresMassReview,
             workspace.IsAccumulative ? BatchCatalog.WriteMetadata(Stream.Null, fresh.SourcePlan, review.Generation) : null,
             workspace.IsAccumulative ? BatchCatalog.WriteMetadata(Stream.Null, fresh.Baseline!, review.Generation) : null);
         RetentionJournal.WriteFile(directory, "plan", MirrorJournal.Encode(plan));

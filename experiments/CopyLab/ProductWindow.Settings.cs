@@ -16,10 +16,17 @@ public partial class ProductWindow
         EditDailyTime.Text = job?.Options.DailyAt?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "";
         EditEnabled.IsChecked = job?.Enabled == true;
         EditRetired.IsChecked = job?.Retired == true;
+        EditWatch.IsChecked = job?.WatchMode is ProductWatchMode.Watching or ProductWatchMode.Paused;
+        EditAllowMirrorRetire.Visibility = job?.Options.Mode == ProductBackupMode.ProtectedMirror ? Visibility.Visible : Visibility.Collapsed;
+        EditAllowMirrorRetire.IsChecked = job?.AutomaticMirrorPolicy == AutomaticMirrorRules.Version;
+        ToggleJobWatchButton.Content = job?.WatchMode == ProductWatchMode.Paused ? "Reanudar vigilancia" : "Pausar vigilancia";
+        ToggleJobWatchButton.IsEnabled = job?.WatchMode is ProductWatchMode.Watching or ProductWatchMode.Paused;
+        RepairWatchButton.IsEnabled = job?.WatchMode == ProductWatchMode.Watching;
         SetRouteEndpoint(RouteSource, RouteSourceVolume, job?.Source.VolumePath, "Carpeta de origen");
         SetRouteEndpoint(RouteDestination, RouteDestinationVolume, job?.Destination.LastVolumePath, "Volumen local");
         scheduleObserved = 0;
         ScheduleStatusText.Text = "";
+        WatchStatusText.Text = "";
         SpaceStatusText.Text = "";
         ResetProductRetention();
     }
@@ -51,6 +58,11 @@ public partial class ProductWindow
         if (busy || (JobList.SelectedItem as JobRow)?.Job is not { } job || IsJobRunning(job.Id)) return;
         string name = EditJobName.Text.Trim(), time = EditDailyTime.Text.Trim();
         bool retired = EditRetired.IsChecked == true, enabled = EditEnabled.IsChecked == true && !retired;
+        var watch = enabled && EditWatch.IsChecked == true
+            ? job.WatchMode == ProductWatchMode.Paused ? ProductWatchMode.Paused : ProductWatchMode.Watching
+            : ProductWatchMode.Off;
+        bool allowRetire = watch != ProductWatchMode.Off && job.Options.Mode == ProductBackupMode.ProtectedMirror &&
+            EditAllowMirrorRetire.IsChecked == true;
         Start(async () =>
         {
             TimeOnly? hour = null;
@@ -66,15 +78,67 @@ public partial class ProductWindow
                 using var registry = openRegistry();
                 // Retire the owned native task before recording a disabled revision.
                 if (!enabled || retired || hour is null) ConfigureSchedule(registry.Location, job.Id, remove: true);
-                registry.UpdateSettings(job.Id, name, hour, enabled, retired);
+                registry.UpdateSettings(job.Id, name, hour, enabled, retired, watch,
+                    allowRetire == (job.AutomaticMirrorPolicy != 0) ? null : allowRetire);
                 return registry.Location;
             });
             await LoadListAsync();
             SelectJob(job.Id);
             ResetProductActions();
             if (enabled && hour is not null) await ApplyScheduleAsync(location, job.Id);
-            else SetStatus(retired ? "Trabajo retirado. Sus respaldos se conservan para recuperar." :
+            if (watch == ProductWatchMode.Watching) await StartWatchAsync();
+            else if (watch == ProductWatchMode.Paused) SetStatus("Cambios guardados. La vigilancia permanece pausada.");
+            else if (hour is null || !enabled) SetStatus(retired ? "Trabajo retirado. Sus respaldos se conservan para recuperar." :
                 enabled ? "Cambios guardados. El trabajo se ejecuta a demanda." : "Trabajo deshabilitado. Sus respaldos se conservan.");
+        });
+    }
+
+    private async Task StartWatchAsync(bool? atLogon = null)
+    {
+        try
+        {
+            await Task.Run(() =>
+            {
+                using var registry = openRegistry();
+                if (testMonitor is not null) testMonitor(registry, atLogon);
+                else if (testFolderWorkspace is not null || testPicker is not null)
+                    throw new InvalidDataException("Este ensayo no instala tareas de Windows.");
+                else ProductAutomation.StartMonitor(registry, atLogon);
+            });
+            SetStatus("Inicio del monitor solicitado. La vigilancia continúa al cerrar la ventana con tu sesión iniciada. Consulta su estado en Ruta.");
+        }
+        catch (Exception error) when (ProductAutomation.Expected(error))
+        {
+            SetStatus("Configuración guardada. El monitor requiere atención. Usa Iniciar monitor. " + error.Message);
+        }
+        scheduleObserved = 0;
+        await RefreshScheduleAsync();
+    }
+
+    private void RepairWatchClick(object sender, RoutedEventArgs e)
+    {
+        if (!busy && (JobList.SelectedItem as JobRow)?.Job is { WatchMode: ProductWatchMode.Watching })
+            Start(() => StartWatchAsync());
+    }
+
+    private void ToggleJobWatchClick(object sender, RoutedEventArgs e)
+    {
+        if (busy || (JobList.SelectedItem as JobRow)?.Job is not { Enabled: true, Retired: false } job ||
+            job.WatchMode == ProductWatchMode.Off || IsJobRunning(job.Id)) return;
+        Start(async () =>
+        {
+            var next = job.WatchMode == ProductWatchMode.Watching ? ProductWatchMode.Paused : ProductWatchMode.Watching;
+            await Task.Run(() =>
+            {
+                using var registry = openRegistry();
+                var current = registry.Get(job.Id);
+                if (current.WatchMode != job.WatchMode) throw new InvalidDataException("La vigilancia cambió. Actualiza los trabajos antes de continuar.");
+                registry.UpdateSettings(current.Id, current.Options.Name, current.Options.DailyAt, current.Enabled, current.Retired, next);
+            });
+            await LoadListAsync();
+            SelectJob(job.Id);
+            if (next == ProductWatchMode.Watching) await StartWatchAsync();
+            else SetStatus("Vigilancia pausada. Puedes continuar desde los ajustes del trabajo.");
         });
     }
 
@@ -105,22 +169,36 @@ public partial class ProductWindow
                 space = $"Espacio disponible en el destino comprobado · {LabWorkspace.AvailableSpace(target.Root) / (1024d * 1024 * 1024):N1} GiB";
             }
             catch (Exception error) when (VersionJob.Expected(error)) { space = "Destino no consultable · " + error.Message; }
-            return (Space: space, Schedule: ReadSchedule(),
+            return (Space: space, Schedule: ReadSchedule(), Watch: ReadWatch(),
                 Source: DisplayRoutePath(job.Source.VolumePath), Destination: DisplayRoutePath(job.Destination.LastVolumePath));
         });
         if (!closed && (JobList.SelectedItem as JobRow)?.Id == job.Id)
         {
             ScheduleStatusText.Text = observed.Schedule;
+            WatchStatusText.Text = observed.Watch;
             SpaceStatusText.Text = observed.Space;
             SetRouteEndpoint(RouteSource, RouteSourceVolume, observed.Source, "Carpeta de origen");
             SetRouteEndpoint(RouteDestination, RouteDestinationVolume, observed.Destination, "Volumen local");
             RefreshRouteNextAttempt();
         }
 
+        string ReadWatch()
+        {
+            if (job.WatchMode == ProductWatchMode.Off) return "";
+            if (job.WatchMode == ProductWatchMode.Paused) return "Vigilancia pausada";
+            try
+            {
+                using var registry = openRegistry();
+                return registry.ReadMonitorProcess() is not null ? "Vigilando cambios con la sesión iniciada" :
+                    "Monitor detenido o iniciándose · Usa Iniciar monitor si el estado persiste";
+            }
+            catch (Exception error) when (ProductAutomation.Expected(error)) { return "Monitor requiere atención · " + error.Message; }
+        }
+
         string ReadSchedule()
         {
             if (!job.Enabled || job.Retired) return "Horario desactivado · Respaldos conservados";
-            if (job.Options.DailyAt is null) return "Ejecución a demanda";
+            if (job.Options.DailyAt is null) return job.WatchMode == ProductWatchMode.Off ? "Ejecución a demanda" : "";
             if (testSchedule is not null) return "Horario simulado por el arnés; sin tarea en este equipo";
             try
             {

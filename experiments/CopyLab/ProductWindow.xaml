@@ -286,6 +286,7 @@
                         </Border>
                         <TextBlock x:Name="RuntimeStatusText" TextWrapping="Wrap" Margin="0,4,0,0" />
                         <TextBlock x:Name="ScheduleStatusText" TextWrapping="Wrap" Margin="0,4,0,0" />
+                        <TextBlock x:Name="WatchStatusText" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" Margin="0,4,0,0" />
                         <TextBlock x:Name="NextProtectionStep" TextWrapping="Wrap" Margin="0,8,0,0" />
                         <Button x:Name="OpenRestoredFolderButton" Content="Abrir carpeta _recuperada" Click="OpenRestoredFolderClick"
                                 HorizontalAlignment="Left" IsEnabled="False" Margin="0,8,0,0" />
@@ -309,11 +310,14 @@
                                 <Button x:Name="ApplyPendingButton" Content="Conservar plan anterior" Click="ApplyPendingClick" HorizontalAlignment="Left" IsEnabled="False" Margin="0,8,0,0" />
                             </StackPanel>
                         </Expander>
-                        <Expander x:Name="JobSettingsPanel" Header="Editar trabajo y horario" Margin="0,4,0,4" IsEnabled="False">
+                        <Expander x:Name="JobSettingsPanel" Header="Editar trabajo y automatización" Margin="0,4,0,4" IsEnabled="False">
                             <StackPanel>
                                 <Label Content="_Nombre" Target="{Binding ElementName=EditJobName}" />
                                 <TextBox x:Name="EditJobName" MaxLength="100" AutomationProperties.Name="Nuevo nombre del trabajo" />
-                                <Label Content="Hora _diaria (vacía para ejecutar a demanda)" Target="{Binding ElementName=EditDailyTime}" />
+                                <CheckBox x:Name="EditWatch" Content="Respaldar automáticamente al detectar cambios" Margin="0,8,0,4" />
+                                <CheckBox x:Name="EditAllowMirrorRetire" Content="Permitir retiradas recuperables dentro de los límites del espejo"
+                                          Margin="0,4,0,4" />
+                                <Label Content="Hora _diaria (opcional)" Target="{Binding ElementName=EditDailyTime}" />
                                 <TextBox x:Name="EditDailyTime" MaxLength="5" Width="92" HorizontalAlignment="Left" AutomationProperties.Name="Nueva hora diaria en formato HH:mm" />
                                 <CheckBox x:Name="EditEnabled" Content="Trabajo _habilitado" Margin="0,8,0,4" />
                                 <CheckBox x:Name="EditRetired" Content="Retirar trabajo; conservar datos y recuperación" Margin="0,0,0,8" />
@@ -324,6 +328,8 @@
                                     <Button x:Name="SaveSettingsButton" Content="Guardar _cambios" Click="SaveSettingsClick" Margin="0,0,8,4" />
                                     <Button x:Name="ExportConfigurationButton" Content="_Exportar configuración" Click="ExportConfigurationClick" IsEnabled="False" Margin="0,0,8,4" />
                                     <Button x:Name="ApplyScheduleButton" Content="Reparar _horario" Click="ApplyScheduleClick" Margin="0,0,8,4" />
+                                    <Button x:Name="ToggleJobWatchButton" Content="Pausar vigilancia" Click="ToggleJobWatchClick" Margin="0,0,8,4" />
+                                    <Button x:Name="RepairWatchButton" Content="Iniciar monitor" Click="RepairWatchClick" Margin="0,0,8,4" />
                                 </WrapPanel>
                             </StackPanel>
                         </Expander>
@@ -502,10 +508,16 @@
                                 <ComboBoxItem Content="Espejo protegido" />
                             </ComboBox>
                             <TextBlock x:Name="ModeDetail" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <CheckBox x:Name="WatchChanges" Content="Automático al detectar cambios (recomendado)"
+                                      Checked="ModeChanged" Unchecked="ModeChanged" TabIndex="2" Margin="0,0,0,4" />
+                            <TextBlock Text="La vigilancia continúa con la ventana cerrada mientras tu sesión de Windows esté iniciada y el equipo despierto."
+                                       TextWrapping="Wrap" Margin="0,0,0,4" />
+                            <CheckBox x:Name="AllowWizardMirrorRetire" Content="Permitir retiradas recuperables dentro de los límites del espejo"
+                                      TabIndex="2" Margin="0,4,0,4" Visibility="Collapsed" />
                             <Label Content="_Hora diaria (opcional)" Target="{Binding ElementName=DailyTime}" />
                             <TextBox x:Name="DailyTime" MaxLength="5" Width="92" TabIndex="2" HorizontalAlignment="Left"
                                      AutomationProperties.Name="Hora diaria en formato HH:mm" />
-                            <TextBlock Text="Usa HH:mm o deja este campo vacío para ejecutar a demanda."
+                            <TextBlock Text="Usa HH:mm si también quieres un respaldo diario. Con la vigilancia desmarcada y sin hora, el respaldo es a demanda."
                                        TextWrapping="Wrap" Margin="0,4,0,0" />
                         </StackPanel>
                         <StackPanel x:Name="ReviewStep">

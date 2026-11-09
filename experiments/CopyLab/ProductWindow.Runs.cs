@@ -100,7 +100,8 @@ public partial class ProductWindow
             "Siguiente paso · Espera el resultado de la operación o usa Pausar y Cancelar ejecución." :
             !job.Enabled || job.Retired ? "Trabajo deshabilitado. Puedes recuperar sus puntos y revisar la configuración para habilitar futuras copias." :
             correct is null ?
-            "Siguiente paso · Pulsa Respaldar ahora para crear la primera copia." : verified is null || verified.Generation != correct.Generation ?
+            (job.WatchMode == ProductWatchMode.Watching ? "Siguiente paso · Consulta el monitor mientras se prepara la primera copia." :
+                "Siguiente paso · Pulsa Respaldar ahora para crear la primera copia.") : verified is null || verified.Generation != correct.Generation ?
             "Siguiente paso · Abre Recuperar archivos y verifica este respaldo. Después recupera una muestra en una carpeta nueva." :
             restored is null ? "Siguiente paso · Recupera una muestra en una carpeta nueva y abre los archivos para comprobarlos." :
             "Copia verificada. Puedes abrir la última carpeta recuperada de este trabajo.";
@@ -158,6 +159,8 @@ public partial class ProductWindow
             runSnapshots.TryGetValue(job.Id, out var history) &&
                 history.Runs.FirstOrDefault(run => run.RetryRunning)?.Retry is { } retry ? RouteDate(retry.NextUtc) :
             schedule.StartsWith(next, StringComparison.Ordinal) ? schedule[next.Length..].Replace(" · Requiere sesión iniciada", "", StringComparison.Ordinal) :
+            job.WatchMode == ProductWatchMode.Watching ? "Al detectar cambios" :
+            job.WatchMode == ProductWatchMode.Paused ? "Vigilancia pausada" :
             job.Options.DailyAt is null ? "A demanda" : "Consulta el horario";
     }
 

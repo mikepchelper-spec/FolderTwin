@@ -12,7 +12,7 @@ namespace CopyLab;
 
 public partial class ProductWindow : Window
 {
-    private sealed record Choice(ProductJobOptions Options, DedicatedDestinationReview Destination);
+    private sealed record Choice(ProductJobOptions Options, DedicatedDestinationReview Destination, bool Watch, bool AllowRetire);
     private sealed class JobRow(Guid id, string label, string detail, bool pending, ProductJob? job = null) : INotifyPropertyChanged
     {
         public Guid Id => id;
@@ -47,6 +47,7 @@ public partial class ProductWindow : Window
     private readonly Func<string>? testPackageInstall;
     private readonly string? testInstallations;
     private readonly LabWorkspace? testFolderWorkspace;
+    private readonly Action<ProductJobRegistry, bool?>? testMonitor;
     private readonly VersionIndex productIndex;
     private string? origin;
     private string? parent;
@@ -62,7 +63,8 @@ public partial class ProductWindow : Window
         Func<bool, string?>? testConfigurationPicker = null,
         Func<string, Guid, System.Diagnostics.Process>? testMirrorReviewWorker = null,
         Func<string, Guid, Guid, System.Diagnostics.Process>? testAbandonWorker = null,
-        Func<string>? testPackageInstall = null, string? testInstallations = null, LabWorkspace? testFolderWorkspace = null)
+        Func<string>? testPackageInstall = null, string? testInstallations = null, LabWorkspace? testFolderWorkspace = null,
+        Action<ProductJobRegistry, bool?>? testMonitor = null)
     {
         this.openRegistry = openRegistry ?? ProductJobRegistry.OpenLocal;
         this.testPicker = testPicker;
@@ -75,6 +77,7 @@ public partial class ProductWindow : Window
         this.testPackageInstall = testPackageInstall;
         this.testInstallations = testInstallations;
         this.testFolderWorkspace = testFolderWorkspace;
+        this.testMonitor = testMonitor;
         productIndex = new(() =>
         {
             using var registry = this.openRegistry();
@@ -146,6 +149,8 @@ public partial class ProductWindow : Window
         OriginText.Text = ParentText.Text = "";
         JobName.Text = DailyTime.Text = "";
         BackupMode.SelectedIndex = 1;
+        WatchChanges.IsChecked = testMonitor is not null || testSchedule is null && testFolderWorkspace is null && testPicker is null;
+        AllowWizardMirrorRetire.IsChecked = false;
         JobListPanel.Visibility = Visibility.Collapsed;
         Wizard.Visibility = Visibility.Visible;
         SetStatus("");
@@ -197,9 +202,15 @@ public partial class ProductWindow : Window
             {
                 var options = ReadOptions();
                 var reviewed = await Task.Run(() => LocalJobRoots.ReviewDedicatedDestination(source, destinationParent));
-                selection = new(options, reviewed);
+                bool watch = WatchChanges.IsChecked == true;
+                bool retire = watch && options.Mode == ProductBackupMode.ProtectedMirror && AllowWizardMirrorRetire.IsChecked == true;
+                selection = new(options, reviewed, watch, retire);
                 ReviewText.Text = $"{options.Name}\n\nOrigen\n{source}\n\nDestino nuevo\n" +
-                    $"{Path.Combine(destinationParent, reviewed.FolderName)}\n\n{ModeName(options.Mode)} · {Schedule(options)}\n\n" +
+                    $"{Path.Combine(destinationParent, reviewed.FolderName)}\n\n{ModeName(options.Mode)} · " +
+                    $"{TriggerLabel(options, watch ? ProductWatchMode.Watching : ProductWatchMode.Off)}\n\n" +
+                    (options.Mode == ProductBackupMode.ProtectedMirror && watch ?
+                        (retire ? "Retiradas ordinarias autorizadas. Podrás recuperarlas desde un punto anterior.\n\n" :
+                            "Las retiradas requieren tu revisión.\n\n") : "") +
                     $"Espacio disponible: {reviewed.AvailableBytes / (1024d * 1024 * 1024):N1} GiB. " +
                     "Guardar crea la carpeta dedicada y conserva la configuración.";
                 ShowStep(3);
@@ -231,7 +242,10 @@ public partial class ProductWindow : Window
                 string location = await Task.Run(() =>
                 {
                     using var registry = openRegistry();
-                    registry.Create(current.Options, current.Destination);
+                    var job = registry.Create(current.Options, current.Destination);
+                    if (current.Watch)
+                        registry.UpdateSettings(job.Id, job.Options.Name, job.Options.DailyAt, true, false,
+                            ProductWatchMode.Watching, current.AllowRetire);
                     return registry.Location;
                 });
                 ShowJobs();
@@ -239,7 +253,8 @@ public partial class ProductWindow : Window
                 SelectJob(current.Destination.FolderId);
                 if (current.Options.DailyAt is not null)
                     await ApplyScheduleAsync(location, current.Destination.FolderId);
-                else SetStatus("Trabajo guardado. Pulsa Respaldar ahora para crear la primera copia.");
+                if (current.Watch) await StartWatchAsync();
+                else if (current.Options.DailyAt is null) SetStatus("Trabajo guardado. Pulsa Respaldar ahora para crear la primera copia.");
             }
             catch (Exception error) when (VersionJob.Expected(error))
             {
@@ -311,7 +326,7 @@ public partial class ProductWindow : Window
             return registry.List();
         });
         JobRow[] rows = [.. list.Jobs.Select(job => new JobRow(job.Id, job.Options.Name,
-            $"{ModeName(job.Options.Mode)} · {Schedule(job.Options)}" +
+            $"{ModeName(job.Options.Mode)} · {TriggerLabel(job.Options, job.WatchMode)}" +
             (job.Retired ? " · Retirado" : !job.Enabled ? " · Deshabilitado" : ""), false, job)),
             .. list.Pending.Select(id => new JobRow(id, "Registro pendiente",
                 $"Selecciona Reanudar registro para continuar · {id.ToString("N")[..8]}", true))];
@@ -367,6 +382,9 @@ public partial class ProductWindow : Window
     private void ModeChanged(object sender, RoutedEventArgs e)
     {
         if (ModeDetail is null) return;
+        if (AllowWizardMirrorRetire is not null)
+            AllowWizardMirrorRetire.Visibility = WatchChanges.IsChecked == true && BackupMode.SelectedIndex == (int)ProductBackupMode.ProtectedMirror
+                ? Visibility.Visible : Visibility.Collapsed;
         ModeDetail.Text = (ProductBackupMode)BackupMode.SelectedIndex switch
         {
             ProductBackupMode.Accumulative => "Añade y actualiza archivos y conserva los exclusivos del destino. Por ejemplo, si borras una foto del origen, la copia en destino permanece. Una edición externa en conflicto requiere revisión.",
@@ -442,4 +460,9 @@ public partial class ProductWindow : Window
 
     private static string Schedule(ProductJobOptions options) =>
         options.DailyAt is { } time ? "Hora diaria " + time.ToString("HH:mm", CultureInfo.InvariantCulture) : "A demanda";
+
+    private static string TriggerLabel(ProductJobOptions options, ProductWatchMode watch) =>
+        watch == ProductWatchMode.Off ? Schedule(options) :
+        (watch == ProductWatchMode.Watching ? "Automático al detectar cambios" : "Vigilancia pausada") +
+        (options.DailyAt is null ? "" : $" · {Schedule(options)}");
 }

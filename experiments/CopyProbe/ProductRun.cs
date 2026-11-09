@@ -10,7 +10,8 @@ internal enum WorkPhase { Analyzing, Copying, Verifying, Publishing, Restoring, 
 internal sealed record WorkProgress(WorkPhase Phase, int Processed, int Total, string? RelativePath = null);
 internal sealed record ProductRunIntent(int Version, Guid Job, Guid Id, long Sequence, byte[] JobStamp, DateTimeOffset StartedUtc,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] ProductRunOperation Operation = ProductRunOperation.Backup,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? RestoreRequest = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? RestoreRequest = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Automatic = false);
 internal sealed record ProductRunResult(int Version, byte[] IntentHash, ProductRunState State, DateTimeOffset FinishedUtc,
     string? Generation, string? RelativePath, int? ErrorCode, string? Detail = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Degraded = false);
@@ -18,7 +19,9 @@ internal sealed record ProductRunProgress(int Version, byte[] IntentHash, long R
 internal sealed record ProductRunCommand(int Version, byte[] IntentHash, long Number, ProductRunAction Action);
 internal sealed record ProductRunView(ProductRunIntent Intent, ProductRunResult? Result, string? Generation,
     ProductRunProgress? Progress, bool Running, ProductRetry? Retry = null, bool RetryRunning = false,
-    ProductRestoreRequest? Restore = null, ProductMirrorReview? Mirror = null, ProductAbandonReview? Abandon = null);
+    ProductRestoreRequest? Restore = null, ProductMirrorReview? Mirror = null, ProductAbandonReview? Abandon = null,
+    ProductMirrorCharge? MirrorCharge = null);
+internal sealed record ProductMirrorCharge(int Version, byte[] IntentHash, string Generation, string[] Paths);
 internal sealed record ProductRetry(int Version, byte[] IntentHash, int Number, DateTimeOffset NextUtc);
 internal sealed record ProductRunHistory(ProductRunView[] Runs, int Unreadable);
 
@@ -56,7 +59,8 @@ internal sealed partial class ProductJobRegistry
                 throw new InvalidDataException("El historial alcanzó el límite de secuencia. Conserva los registros para revisión.");
             long sequence = previousSequence + 1;
             Guid runId = Guid.NewGuid();
-            var intent = new ProductRunIntent(1, id, runId, sequence, JobStamp(job), (clock?.Invoke() ?? DateTimeOffset.UtcNow).ToUniversalTime(), operation, restoreRequest);
+            var intent = new ProductRunIntent(1, id, runId, sequence, JobStamp(job), (clock?.Invoke() ?? DateTimeOffset.UtcNow).ToUniversalTime(),
+                operation, restoreRequest, automatic);
             var directory = WindowsProbeNative.CreatePlainDirectory(runs, RunName(intent));
             try
             {
@@ -110,7 +114,8 @@ internal sealed partial class ProductJobRegistry
                 if (intent.Version != 1 || intent.Job != id || intent.Id == Guid.Empty || intent.Sequence < 1 ||
                     entry.Name != RunName(intent) || !intent.JobStamp.AsSpan().SequenceEqual(JobStamp(job)) ||
                     intent.StartedUtc.Offset != TimeSpan.Zero || !Enum.IsDefined(intent.Operation) ||
-                    !ValidRestoreReference(intent.Operation, intent.RestoreRequest) || !sequences.Add(intent.Sequence))
+                    !ValidRestoreReference(intent.Operation, intent.RestoreRequest) ||
+                    intent.Automatic && intent.Operation != ProductRunOperation.Backup || !sequences.Add(intent.Sequence))
                     throw new InvalidDataException("El intento pertenece a otro trabajo o tiene una secuencia inválida.");
                 string? generation = ReadGeneration(run, intent);
                 ProductRunResult? result = ReadResult(run, intent, generation);
@@ -173,7 +178,13 @@ internal sealed partial class ProductJobRegistry
                         throw new InvalidDataException("El reintento no corresponde al resultado registrado.");
                     retryRunning = IsLocked(run, "retry.active");
                 }
-                found.Add(new(intent, result, generation, progress, running, retry, retryRunning, restore, mirror, abandon));
+                ProductMirrorCharge? charge = null;
+                if (WindowsProbeNative.PlainFileExists(run, "mirror-charge"))
+                {
+                    charge = Decode<ProductMirrorCharge>(run, "mirror-charge");
+                    ValidateMirrorCharge(charge, intent, generation ?? ReadGeneration(run, intent));
+                }
+                found.Add(new(intent, result, generation, progress, running, retry, retryRunning, restore, mirror, abandon, charge));
             }
             catch (Exception error) when (VersionJob.Expected(error)) { unreadable++; }
         }
@@ -181,6 +192,15 @@ internal sealed partial class ProductJobRegistry
     }
 
     private sealed record RunGeneration(byte[] IntentHash, string Generation);
+    private static void ValidateMirrorCharge(ProductMirrorCharge charge, ProductRunIntent intent, string? generation)
+    {
+        if (charge.Version != AutomaticMirrorRules.Version || !intent.Automatic || generation is null || charge.Generation != generation ||
+            !charge.IntentHash.AsSpan().SequenceEqual(IntentHash(intent)) || charge.Paths.Length is < 1 or > AutomaticMirrorRules.MaximumBatch ||
+            charge.Paths.Any(path => path is null || path.Length != 64 || path.AsSpan().ContainsAnyExcept("0123456789abcdef")) ||
+            charge.Paths.Distinct(StringComparer.Ordinal).Count() != charge.Paths.Length)
+            throw new InvalidDataException("El presupuesto de cambios no corresponde al intento automático.");
+    }
+
     private static bool ValidRestoreReference(ProductRunOperation operation, Guid? request) =>
         operation == ProductRunOperation.Restore ? request is { } id && id != Guid.Empty : request is null;
     private static bool IsLocked(SafeFileHandle directory, string name)
@@ -311,6 +331,17 @@ internal sealed partial class ProductJobRegistry
         {
             ValidateMirrorReview(review, Intent, Generation);
             RetentionJournal.WriteFile(run, "mirror-review", Encode(review));
+        }
+        internal void AuthorizeAutomaticMirror(MirrorPreview preview)
+        {
+            string[] paths = AutomaticMirrorRules.Check(preview, Intent, Previous);
+            SetGeneration(preview.Generation);
+            if (paths.Length == 0) return;
+            var charge = new ProductMirrorCharge(AutomaticMirrorRules.Version, IntentHash(Intent), preview.Generation, paths);
+            ValidateMirrorCharge(charge, Intent, Generation);
+            // Reserve before the mirror can publish a plan. A terminated attempt
+            // still consumes the same paths, and resumption does not reserve them twice.
+            RetentionJournal.WriteFile(run, "mirror-charge", Encode(charge));
         }
         internal void SaveAbandonReview(ProductAbandonReview review)
         {

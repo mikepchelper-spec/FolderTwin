@@ -87,7 +87,7 @@ internal static partial class ProductRunner
         var job = run.Job;
         try
         {
-            if (approvalId is not null && job.Options.Mode != ProductBackupMode.ProtectedMirror)
+            if (approvalId is not null && (job.Options.Mode != ProductBackupMode.ProtectedMirror || automatic))
                 throw new InvalidDataException("La aprobación no corresponde al modo de este trabajo.");
             control.Observe(new(WorkPhase.Analyzing, 0, 0));
             var store = VersionStore.OpenProduct(job, initialize: true, observe: control.Observe);
@@ -136,12 +136,15 @@ internal static partial class ProductRunner
                     if (automatic && review.Previous is not null && !review.RequiresEmptyReview &&
                         review is { Added: 0, Replaced: 0, Removed: 0, AddedDirectories: 0, RemovedDirectories: 0 })
                         return run.Finish(ProductRunState.Unchanged, clock: clock);
-                    if (job.Options.Mode == ProductBackupMode.ProtectedMirror && approval is null &&
+                    bool useAutomaticPolicy = automatic && job.Options.Mode == ProductBackupMode.ProtectedMirror &&
+                        job.AutomaticMirrorPolicy == AutomaticMirrorRules.Version;
+                    if (job.Options.Mode == ProductBackupMode.ProtectedMirror && approval is null && !useAutomaticPolicy &&
                         (review.Removed > 0 || review.RemovedDirectories > 0 || review.RequiresEmptyReview || review.RequiresMassReview))
                         return run.Finish(ProductRunState.Review, clock: clock,
                             detail: "Revisa las retiradas, el origen vacío o el alcance de los cambios antes de actualizar el espejo.");
-                    run.SetGeneration(review.Generation);
-                    store.BeginMirror(review, approval?.EmptyReviewed ?? false, approval?.MassReviewed ?? false);
+                    if (!useAutomaticPolicy) run.SetGeneration(review.Generation);
+                    store.BeginMirror(review, approval?.EmptyReviewed ?? false, approval?.MassReviewed ?? false,
+                        authorizeAutomatic: useAutomaticPolicy ? run.AuthorizeAutomaticMirror : null);
                 }
             }
             return run.Finish(ProductRunState.Confirmed, clock: clock);

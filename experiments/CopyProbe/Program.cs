@@ -46,6 +46,8 @@ if (args is ["--product-runs"])
     return ProductRunProbe.Run();
 if (args is ["--product-watch"])
     return await ProductWatchProbe.RunAsync();
+if (args is ["--product-auto-mirror"])
+    return AutomaticMirrorProbe.Run();
 if (args is ["--product-restore"])
     return ProductRestoreProbe.Run();
 if (args is ["--product-mirror-review"])

@@ -81,17 +81,26 @@ internal static class ProductMonitorProbe
 
     internal static async Task RunAsync()
     {
+        foreach (var mode in Enum.GetValues<ProductBackupMode>())
+            await RunModeAsync(mode);
+        Console.Error.WriteLine("PASS headless monitor and workers, single monitor, automatic change, destination return, durable pause and offline recovery for all modes.");
+    }
+
+    private static async Task RunModeAsync(ProductBackupMode mode)
+    {
         var workspace = LabWorkspace.Create();
         string source = Directory.CreateDirectory(Path.Combine(workspace.Root, "source")).FullName;
         string parent = Directory.CreateDirectory(Path.Combine(workspace.Root, "destinations")).FullName;
         string settings = Directory.CreateDirectory(Path.Combine(workspace.Root, "settings")).FullName;
         string file = Path.Combine(source, "synthetic.txt");
         File.WriteAllText(file, "first");
+        File.WriteAllText(Path.Combine(source, "retired.txt"), "keep this point recoverable");
         using (var registry = new ProductJobRegistry(settings))
         {
-            var job = registry.Create(new("Synthetic monitor", ProductBackupMode.Versions, null),
+            var job = registry.Create(new("Synthetic monitor", mode, null),
                 LocalJobRoots.ReviewDedicatedDestination(source, parent));
-            registry.UpdateSettings(job.Id, job.Options.Name, null, true, false, ProductWatchMode.Watching);
+            registry.UpdateSettings(job.Id, job.Options.Name, null, true, false, ProductWatchMode.Watching,
+                authorizeMirror: mode == ProductBackupMode.ProtectedMirror);
             using var monitor = ProductWorker.StartMonitor(settings);
             try
             {
@@ -108,6 +117,7 @@ internal static class ProductMonitorProbe
                 string detached = Path.Combine(Path.GetDirectoryName(job.Destination.LastVolumePath)!, "detached");
                 Directory.Move(job.Destination.LastVolumePath, detached);
                 File.WriteAllText(file, "after reconnection");
+                File.Delete(Path.Combine(source, "retired.txt"));
                 var absent = await WaitForRunAsync(second.Intent.Sequence, ProductRunState.WaitingForDestination);
                 Directory.Move(detached, job.Destination.LastVolumePath);
                 var returned = await WaitForRunAsync(absent.Intent.Sequence, ProductRunState.Confirmed);
@@ -122,6 +132,12 @@ internal static class ProductMonitorProbe
                 store.Restore(returned.Generation!, output);
                 if (File.ReadAllText(Path.Combine(output, "synthetic.txt")) != "after reconnection")
                     throw new InvalidOperationException("The automatic point did not restore the expected bytes without its source.");
+                if (File.Exists(Path.Combine(output, "retired.txt")) != (mode == ProductBackupMode.Accumulative))
+                    throw new InvalidOperationException("The automatic point handled retirement differently from its selected mode.");
+                string earlier = Directory.CreateDirectory(Path.Combine(workspace.Root, "restore-earlier")).FullName;
+                store.Restore(first.Generation!, earlier);
+                if (File.ReadAllText(Path.Combine(earlier, "retired.txt")) != "keep this point recoverable")
+                    throw new InvalidOperationException("The old automatic point did not retain the removed file.");
             }
             finally
             {
@@ -147,6 +163,5 @@ internal static class ProductMonitorProbe
         }
         using (workspace.OpenRegisteredRoot()) { }
         Directory.Delete(workspace.Root, recursive: true);
-        Console.WriteLine("PASS headless monitor and workers, single monitor, automatic change, destination return, durable pause and restore without origin.");
     }
 }

@@ -43,6 +43,8 @@ public partial class ProductWindow
         ExportConfigurationButton.IsEnabled = available;
         ReviewImportedSourceButton.IsEnabled = available && job is { Imported: true, Enabled: false };
         ApplyScheduleButton.IsEnabled = available && job is { Enabled: true, Retired: false, Options.DailyAt: not null };
+        ToggleJobWatchButton.IsEnabled = available && job?.WatchMode is ProductWatchMode.Watching or ProductWatchMode.Paused;
+        RepairWatchButton.IsEnabled = available && job?.WatchMode == ProductWatchMode.Watching;
         SelectedJobText.Text = job is null ? "" : $"Origen\n{job.Source.VolumePath}\nDestino\n{job.Destination.LastVolumePath}";
         if (mirrorJobId != job?.Id) ResetProductActions();
         RefreshMirrorReviewDisplay(job, executing);

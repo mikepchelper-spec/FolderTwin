@@ -17,7 +17,7 @@ internal sealed record ProductJobOptions(string Name, ProductBackupMode Mode, Ti
 }
 internal sealed record ProductJob(Guid Id, ProductJobOptions Options, LocalJobRoot Source, DestinationBinding Destination,
     bool Enabled = true, bool Retired = false, bool Imported = false, bool SourceReviewed = true, string[]? SourceAliases = null,
-    ProductWatchMode WatchMode = ProductWatchMode.Off);
+    ProductWatchMode WatchMode = ProductWatchMode.Off, int AutomaticMirrorPolicy = 0);
 internal sealed record ProductJobList(ProductJob[] Jobs, Guid[] Pending, int Unreadable);
 
 internal sealed partial class ProductJobRegistry : IDisposable
