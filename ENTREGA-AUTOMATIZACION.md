@@ -2,7 +2,7 @@
 
 ## Candidata `3cb9c6a` en aceptación
 
-El código `3cb9c6a22146c8928f2ac1ed9449090e9a366e80` conserva el reemplazo acotado acumulativo cuando quedan archivos exclusivos del destino. Dos compilaciones independientes, a partir de árboles extraídos del mismo archivo de fuentes, produjeron los mismos 500 hashes y ZIP idénticos. La extracción pasó `Test-Portable.ps1`. Siguen abiertas la medición con 329.000 archivos y un exclusivo y la comprobación nativa del Programador con esta compilación.
+El código `3cb9c6a22146c8928f2ac1ed9449090e9a366e80` conserva el reemplazo acotado acumulativo cuando quedan archivos exclusivos del destino. Dos compilaciones independientes, a partir de árboles extraídos del mismo archivo de fuentes, produjeron los mismos 500 hashes y ZIP idénticos. La extracción pasó `Test-Portable.ps1`. La comprobación nativa del Programador con esta compilación sigue abierta.
 
 | Archivo | SHA-256 |
 |---|---|
@@ -22,6 +22,7 @@ La copia local está en `C:\FolderTwin-Distribucion\FolderTwin-3cb9c6a`. El ZIP 
 | Trabajadores reales y fallos sintéticos | `--product-runs` terminó trabajadores manuales y automáticos y recuperó los tres modos. Comprobó pausa, cancelación, concurrencia de disparadores y secuencia ante cambios de reloj. `--product-auto-partial` comprobó recuperación parcial y disco lleno inyectado. `--product-auto-mirror` comprobó recuperación sin origen, límites de retiradas, conflictos, guardados mediante temporal y alternativas de comparación. `--tray-audit` mantuvo separadas las incidencias de respaldo y verificación. |
 | Compatibilidad desde el ZIP público de RC2 | El arnés creó trabajos, puntos, exportaciones e historial con el motor `d88d3b9d4f35b07aa80c1dbc7d90c41f0aa462f3d27f6fce75b92e7168cb2a05`. El motor de `3cb9c6a`, `77791939f6b719c1c9b3d9880cfe4113b979eda78fce74be0e64d867a4f77c5b`, abrió y verificó los tres modos y restauró el árbol y los bytes con el origen apartado. El hash del binario anterior coincide con su entrada en el ZIP público. |
 | Letras temporales en dos volúmenes NTFS | Se registraron los tres modos desde un alias de la carpeta desechable de D:. Se trasladó el alias legítimo a otra letra y se reutilizó la primera para un sustituto en C: con un marcador copiado. El motor del paquete informó la ausencia del destino registrado mientras su carpeta estaba apartada, dejó intacto el sustituto y restauró el cambio al volver el destino legítimo. Los alias se retiraron. El ensayo usa alias de sesión y deja pendiente la reasignación de una partición y el remontaje VHDX. |
+| Escala acumulativa desde el ZIP extraído | Confirmó en 20,076 s una edición de igual tamaño y fecha entre 329.000 archivos con un exclusivo en el destino. Restauró ambos archivos con el origen apartado. La comparación sin cambios mantuvo el catálogo anterior y la edición añadió una sola generación. [Contadores y escala](AUTOMATIZACION.md#medición-del-reemplazo-acotado). |
 
 ## Paquete anterior `c8a413a`
 

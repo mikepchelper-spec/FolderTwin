@@ -12,7 +12,7 @@ La revisión local **Ruta** muestra las carpetas del trabajo como un trayecto de
 
 ## Leer primero
 
-La candidata local incorpora la vigilancia continua. El código comprueba ediciones puntuales en acumulativo y espejo y mantiene la comparación completa periódica. En un árbol de referencia de 329.000 archivos, el espejo confirmó una edición en 27,4 s y el acumulativo en 17,9 s. La aceptación desde el paquete nuevo, incluida la medición con un exclusivo del destino acumulativo, sigue abierta. [Matriz de automatización](AUTOMATIZACION.md) · [Evidencia de paquetes locales](ENTREGA-AUTOMATIZACION.md).
+La candidata local incorpora la vigilancia continua. El código comprueba ediciones puntuales en acumulativo y espejo y mantiene la comparación completa periódica. A 329.000 archivos, el espejo confirmó una edición en 27,4 s y el acumulativo empaquetado en 20,1 s con un exclusivo del destino. Sigue abierta la comprobación nativa del Programador con el paquete nuevo. [Matriz de automatización](AUTOMATIZACION.md) · [Evidencia de paquetes locales](ENTREGA-AUTOMATIZACION.md).
 
 Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 
