@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 
 internal sealed record KopiaPoint(string ManifestId, string RootId, DateTimeOffset Finished, long Bytes, int Files, int Directories);
+internal sealed record CloudRecoveryPoint(Guid Job, string Generation, KopiaPoint Point);
 internal sealed class KopiaS3Credentials(string accessKey, string secretKey, string? sessionToken = null)
 {
     internal string AccessKey { get; } = accessKey;
@@ -31,19 +32,41 @@ internal sealed class KopiaRepository(string executable, string config, string p
         {
             if (found is not null || entry.GetProperty("tags").GetProperty("tag:foldertwin").GetString() != operation.ToString("N"))
                 throw new InvalidDataException("El repositorio devolvió puntos ambiguos o de otra operación.");
-            var root = entry.GetProperty("rootEntry");
-            var summary = root.GetProperty("summ");
-            var stats = entry.GetProperty("stats");
-            if (root.GetProperty("type").GetString() != "d" || summary.GetProperty("numFailed").GetInt32() != 0 ||
-                summary.GetProperty("symlinks").GetInt32() != 0 || stats.GetProperty("errorCount").GetInt32() != 0 ||
-                stats.GetProperty("ignoredErrorCount").GetInt32() != 0 || stats.GetProperty("excludedFileCount").GetInt32() != 0 ||
-                stats.GetProperty("excludedDirCount").GetInt32() != 0)
-                throw new InvalidDataException($"Kopia devolvió un punto incompleto o con exclusiones ({stats.GetProperty("excludedFileCount").GetInt32()} archivos, {stats.GetProperty("excludedDirCount").GetInt32()} carpetas).");
-            found = new(Identifier(entry.GetProperty("id").GetString(), ""), Identifier(root.GetProperty("obj").GetString(), "k"),
-                entry.GetProperty("endTime").GetDateTimeOffset(), summary.GetProperty("size").GetInt64(),
-                summary.GetProperty("files").GetInt32(), summary.GetProperty("dirs").GetInt32());
+            found = ReadPoint(entry);
         }
         return found;
+    }
+
+    internal async Task<CloudRecoveryPoint[]> ListAsync(CancellationToken token)
+    {
+        using var result = JsonDocument.Parse(await RunAsync(token, "snapshot", "list", "--all", "--show-identical", "--json"));
+        var points = new Dictionary<(Guid, string), CloudRecoveryPoint>();
+        foreach (var entry in result.RootElement.EnumerateArray())
+        {
+            if (!entry.TryGetProperty("tags", out var tags) || !tags.TryGetProperty("tag:ft-job", out var jobTag)) continue;
+            if (!Guid.TryParseExact(jobTag.GetString(), "N", out var job) || job == Guid.Empty ||
+                !tags.TryGetProperty("tag:ft-generation", out var generationTag) || generationTag.GetString() is not { } generation)
+                throw new InvalidDataException("El repositorio contiene una fecha de FolderTwin no válida.");
+            _ = VersionStore.GenerationTime(generation);
+            if (!points.TryAdd((job, generation), new(job, generation, ReadPoint(entry))))
+                throw new InvalidDataException("El repositorio contiene dos instantáneas para la misma fecha.");
+        }
+        return points.Values.OrderByDescending(point => point.Generation, StringComparer.Ordinal).ToArray();
+    }
+
+    private static KopiaPoint ReadPoint(JsonElement entry)
+    {
+        var root = entry.GetProperty("rootEntry");
+        var summary = root.GetProperty("summ");
+        var stats = entry.GetProperty("stats");
+        if (root.GetProperty("type").GetString() != "d" || summary.GetProperty("numFailed").GetInt32() != 0 ||
+            summary.GetProperty("symlinks").GetInt32() != 0 || stats.GetProperty("errorCount").GetInt32() != 0 ||
+            stats.GetProperty("ignoredErrorCount").GetInt32() != 0 || stats.GetProperty("excludedFileCount").GetInt32() != 0 ||
+            stats.GetProperty("excludedDirCount").GetInt32() != 0)
+            throw new InvalidDataException("Kopia devolvió un punto incompleto o con exclusiones.");
+        return new(Identifier(entry.GetProperty("id").GetString(), ""), Identifier(root.GetProperty("obj").GetString(), "k"),
+            entry.GetProperty("endTime").GetDateTimeOffset(), summary.GetProperty("size").GetInt64(),
+            summary.GetProperty("files").GetInt32(), summary.GetProperty("dirs").GetInt32());
     }
 
     internal async Task<KopiaPoint> PublishAsync(Guid operation, CloudPoint point, string payload, CancellationToken token,
@@ -53,7 +76,8 @@ internal sealed class KopiaRepository(string executable, string config, string p
         if (existing is null)
         {
             await RunAsync(token, "snapshot", "create", "--json", "--pin", "foldertwin", "--force-hash", "100", "--fail-fast",
-                "--force-disable-actions", "--no-send-snapshot-report", "--tags", Tag(operation), Path.GetFullPath(payload));
+                "--force-disable-actions", "--no-send-snapshot-report", "--tags", Tag(operation),
+                "--tags", $"ft-job:{point.Job:N}", "--tags", $"ft-generation:{point.Generation}", Path.GetFullPath(payload));
             afterUpload?.Invoke();
             existing = await FindAsync(operation, token) ?? throw new IOException("El punto enviado aún no aparece en el repositorio.");
         }
@@ -74,6 +98,11 @@ internal sealed class KopiaRepository(string executable, string config, string p
         await RunAsync(token, "snapshot", "restore", Identifier(point.RootId, "k"), Path.GetFullPath(emptyOutput),
             "--no-overwrite-files", "--no-overwrite-directories", "--no-overwrite-symlinks",
             "--no-ignore-permission-errors", "--write-files-atomically", "--flush-files");
+        var inventory = FolderInventory.Scan(emptyOutput, BatchCatalog.VersionMaximumEntries, cancellationToken: token);
+        token.ThrowIfCancellationRequested();
+        if (!inventory.Complete || inventory.FileCount != point.Files || inventory.Bytes != point.Bytes ||
+            inventory.Entries.Length - inventory.FileCount + 1 != point.Directories)
+            throw new InvalidDataException("La carpeta recuperada difiere del inventario remoto. Se conserva para revisión.");
     }
 
     internal async Task<string> RunAsync(CancellationToken token, params string[] arguments)
@@ -96,7 +125,7 @@ internal sealed class KopiaRepository(string executable, string config, string p
             if (s3.SessionToken is not null) start.Environment["AWS_SESSION_TOKEN"] = s3.SessionToken;
             start.Environment["AWS_EC2_METADATA_DISABLED"] = "true";
         }
-        foreach (var argument in new[] { "--config-file", Path.GetFullPath(config), "--no-persist-credentials",
+        foreach (var argument in new[] { "--config-file", Path.GetFullPath(config), "--no-persist-credentials", "--no-auto-maintenance",
             "--no-use-credential-manager", "--disable-file-logging", "--disable-content-log", "--no-progress" }.Concat(arguments))
             start.ArgumentList.Add(argument);
         using var process = Process.Start(start) ?? throw new IOException("No se pudo iniciar Kopia.");

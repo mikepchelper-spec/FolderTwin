@@ -5,7 +5,8 @@ param(
     [string]$OutputDirectory,
     [string]$DotNet = 'dotnet',
     [string]$SourceArchive,
-    [string]$SourceRevision
+    [string]$SourceRevision,
+    [string]$CloudKopiaArchive
 )
 
 $ErrorActionPreference = 'Stop'
@@ -55,6 +56,22 @@ try {
     Copy-Item -LiteralPath (Join-Path $core 'LICENSE.TXT') -Destination (Join-Path $output 'LICENSE-dotnet.txt')
     Copy-Item -LiteralPath (Join-Path $core 'THIRD-PARTY-NOTICES.TXT') -Destination (Join-Path $output 'THIRD-PARTY-NOTICES-dotnet.txt')
     Copy-Item -LiteralPath (Join-Path $desktop 'LICENSE') -Destination (Join-Path $output 'LICENSE-dotnet-desktop.txt')
+    if ($CloudKopiaArchive) {
+        $archive = (Resolve-Path -LiteralPath $CloudKopiaArchive).ProviderPath
+        if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne 'F0369D9657DBE47A1B8B6FF4E308C5958A4813B405D4E32AE9D81B3F2B3D8251') {
+            throw 'El ZIP de Kopia no coincide con la versión fijada.'
+        }
+        $extracted = Join-Path $work 'kopia'
+        Expand-Archive -LiteralPath $archive -DestinationPath $extracted
+        $sourceTools = Join-Path $extracted 'kopia-0.23.1-windows-x64'
+        $kopia = Join-Path $sourceTools 'kopia.exe'
+        if ((Get-FileHash -LiteralPath $kopia -Algorithm SHA256).Hash -ne '96C0946314B50DCC7C5AE9D3EC7E3763E742FCEBF7D5CBEBDAAC3CEEE5FB3BD7') {
+            throw 'El ejecutable de Kopia no coincide con la versión fijada.'
+        }
+        $tools = New-Item -ItemType Directory -Path (Join-Path $output 'cloud-tools')
+        Copy-Item -LiteralPath $kopia -Destination $tools.FullName
+        Copy-Item -LiteralPath (Join-Path $sourceTools 'LICENSE') -Destination (Join-Path $tools.FullName 'LICENSE-kopia.txt')
+    }
     foreach ($guide in @('GUIA.md', 'SUPPORT.md', 'NOTAS.md', 'PILOTO.md', 'COMPATIBILIDAD.md', 'INSTALACION.md', 'global.json')) {
         Copy-Item -LiteralPath (Join-Path $repo $guide) -Destination $output
     }

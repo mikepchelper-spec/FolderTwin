@@ -80,6 +80,20 @@ internal sealed partial class ProductJobRegistry
         if (current != next) AppendCloudRevision(entry, next, sequence, hash);
     }
 
+    internal void RecordCloudConnectionFailure(CloudTicket ticket, CloudTransferIssue issue, bool retry)
+    {
+        using var entry = OpenCloudEntry(ticket);
+        using var worker = CloudLock(entry, "worker.lock");
+        using var state = CloudStateLock(entry);
+        var (current, sequence, hash) = ReadCloudTransfer(entry, ticket);
+        if (current.State is not (CloudTransferState.Pending or CloudTransferState.Retry)) return;
+        int attempts = current.Attempts + 1;
+        retry &= attempts < 4;
+        AppendCloudRevision(entry, current with { State = retry ? CloudTransferState.Retry : CloudTransferState.Review,
+            Attempts = attempts, Issue = issue, RetryUtc = retry ? DateTimeOffset.UtcNow.AddSeconds(30 * (1 << (attempts - 1))) : null },
+            sequence, hash);
+    }
+
     internal async Task<CloudTransfer> ProcessCloudTransferAsync(CloudTicket ticket, KopiaRepository repository,
         CancellationToken shutdown, Action? afterUpload = null, TimeProvider? time = null)
     {

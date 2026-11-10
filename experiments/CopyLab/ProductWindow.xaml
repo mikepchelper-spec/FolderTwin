@@ -365,6 +365,7 @@
                     <Button x:Name="ImportConfigurationButton" Content="_Importar configuración" Click="ImportConfigurationClick" Margin="0,0,6,3" />
                     <Button x:Name="ProductTrayButton" Content="Minimizar a _bandeja" Click="ProductTrayClick" Margin="0,0,6,3" />
                     <Button x:Name="ManageApplicationButton" Content="A_plicación" Click="ManageApplicationClick" Margin="0,0,6,3" />
+                    <Button x:Name="CloudBackupButton" Content="Copia en _nube" Click="CloudBackupClick" Margin="0,0,6,3" />
                     <Button x:Name="ResumeRegistrationButton" Content="_Reanudar registro" Click="ResumeRegistrationClick"
                             IsEnabled="False" Visibility="Collapsed" Margin="0,0,6,3" />
                 </WrapPanel>

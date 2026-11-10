@@ -35,7 +35,8 @@ internal static class ProductDeployment
                 // silently ignore a request made during that interval.
                 WaitMonitorStopped(registry, () => scheduler.MonitorHasRunningInstance(registry));
             }
-            if (maintenance.Jobs.Any(job => job.Enabled && job.WatchMode == ProductWatchMode.Watching) &&
+            if (maintenance.Jobs.Any(job => job.Enabled && (job.WatchMode == ProductWatchMode.Watching ||
+                ProductCloudDispatch.HasWork(registry, job))) &&
                 !registry.MonitorOwnsRegistry())
                 scheduler.RunMonitorNow(registry);
         }

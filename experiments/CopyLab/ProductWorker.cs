@@ -14,6 +14,7 @@ internal static class ProductWorker
 
     internal static Process StartMonitor(string registry) => Launch(["--watch-product-jobs", registry]);
     internal static Process StartScheduledMonitor(string registry) => Launch(["--watch-scheduled-product-jobs", registry]);
+    internal static Process StartCloud(string registry) => Launch(["--dispatch-cloud-jobs", registry]);
 
     internal static Process StartVerification(string registry, Guid id, string generation) =>
         Launch(["--verify-product-job", registry, id.ToString("N"), generation]);

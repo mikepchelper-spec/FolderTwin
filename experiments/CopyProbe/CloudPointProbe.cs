@@ -148,6 +148,7 @@ internal static class CloudPointProbe
                     Console.WriteLine($"{mode} restored {expected.ManifestId}, SHA-256 {Convert.ToHexStringLower(restored)}");
                 }
             }
+            if (endpoint is not null) await CheckProductDispatchAsync(fixture, kopia, endpoint, writer, s3!, password, token);
             completed = true;
             Console.WriteLine("PASS all local modes published two complete points and recovered them from a separate Kopia connection.");
             return 0;
@@ -163,6 +164,58 @@ internal static class CloudPointProbe
         }
 
         string Create(string name) => Directory.CreateDirectory(Path.Combine(fixture.Root, name)).FullName;
+    }
+
+    private static async Task CheckProductDispatchAsync(LabWorkspace fixture, string kopia, string endpoint, KopiaRepository writer,
+        KopiaS3Credentials s3, string password, CancellationToken token)
+    {
+        string source = Folder("dispatch-source"), targets = Folder("dispatch-target"), jobs = Folder("dispatch-jobs");
+        File.WriteAllText(Path.Combine(source, "product.txt"), "synthetic dispatch");
+        var target = new CloudDestination(CloudProvider.CompatibleS3, endpoint, "us-east-1", "foldertwin");
+        var connection = new CloudConnection(await writer.IdentityAsync(token), target);
+        var secrets = new CloudCredentials(password, s3.AccessKey, s3.SecretKey);
+        Guid id;
+        string generation;
+        using (var registry = new ProductJobRegistry(jobs))
+        {
+            var job = registry.Create(new("Synthetic cloud dispatcher", ProductBackupMode.Versions, null),
+                LocalJobRoots.ReviewDedicatedDestination(source, targets));
+            id = job.Id;
+            registry.SaveCloudConnection(id, connection, secrets, lab: true);
+            var result = ProductRunner.Run(registry, id);
+            Check(result is { State: ProductRunState.Confirmed, Generation: not null }, result.Detail ?? "Dispatch source failed.");
+            generation = result.Generation!;
+        }
+        foreach (string name in Directory.EnumerateFiles(jobs, "*.connection", SearchOption.AllDirectories))
+        {
+            string encoded = System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(name));
+            Check(!encoded.Contains(password, StringComparison.Ordinal) && !encoded.Contains(s3.SecretKey, StringComparison.Ordinal),
+                "Product connection persisted clear credentials.");
+        }
+        using (var registry = new ProductJobRegistry(jobs))
+        {
+            var saved = registry.OpenCloudConnection(id);
+            Check(saved?.Connection == connection && saved?.Credentials.SecretKey == s3.SecretKey &&
+                saved?.Credentials.Password == password, "The reopened product registry lost its protected connection.");
+            await ProductCloudDispatch.RunPassAsync(registry, kopia, token, lab: true);
+            var item = registry.CloudTransfers(id, connection.Repository).Single();
+            Check(item is { State: CloudTransferState.Available, Point: not null } && item.Ticket.Generation == generation,
+                $"Product dispatch did not discover and publish the point ({item.State}, {item.Issue}).");
+            Check(registry.RunHistory(id).Runs.Single().Result?.State == ProductRunState.Confirmed,
+                "Cloud dispatch altered the local history.");
+        }
+        Directory.Move(source, Path.Combine(fixture.Root, "dispatch-source-aside"));
+        Directory.Move(targets, Path.Combine(fixture.Root, "dispatch-target-aside"));
+        using (var recovery = new CloudRepositorySession(kopia, target, secrets, lab: true))
+        {
+            Check(await recovery.OpenAsync(create: false, readOnly: true, token) == connection, "Read-only reconnect changed the repository.");
+            var selected = (await recovery.Repository.ListAsync(token)).Single(point => point.Job == id && point.Generation == generation);
+            string output = Folder("dispatch-restored");
+            await recovery.Repository.RestoreAsync(selected.Point, output, token);
+            Check(File.ReadAllText(Path.Combine(output, "product.txt")) == "synthetic dispatch", "Fresh-profile listing restored the wrong data.");
+        }
+        Console.WriteLine("PASS product dispatch reopened a protected S3 connection and sent a newly discovered local point.");
+        string Folder(string name) => Directory.CreateDirectory(Path.Combine(fixture.Root, name)).FullName;
     }
 
     internal static async Task<int> HeldChildAsync(string root, CloudTicket ticket, string kopia)

@@ -79,6 +79,9 @@ internal static class ProductMonitor
             configurationWatch.EnableRaisingEvents = true;
             var jobs = new Dictionary<Guid, Watch>();
             Process? worker = null;
+            Process? cloudWorker = null;
+            long? cloudDispatchedAt = null;
+            bool cloudEnabled = false;
             Watch? active = null;
             long dispatch = 0;
             long checkedOwnerAt = Stopwatch.GetTimestamp();
@@ -112,6 +115,7 @@ internal static class ProductMonitor
                         try
                         {
                             listing = registry.List();
+                            cloudEnabled = listing.Jobs.Any(job => ProductCloudDispatch.HasWork(registry, job));
                             loadedAt = now;
                         }
                         catch (Exception error) when (VersionJob.SharingViolation(error))
@@ -128,7 +132,17 @@ internal static class ProductMonitor
                         jobs[id].Dispose();
                         jobs.Remove(id);
                     }
-                    if (configured.Count == 0 && worker is null) return listing.Unreadable == 0 ? 0 : 1;
+                    if (configured.Count == 0 && worker is null && !cloudEnabled) return listing.Unreadable == 0 ? 0 : 1;
+                    if (cloudWorker?.HasExited == true) { cloudWorker.Dispose(); cloudWorker = null; }
+                    if (cloudEnabled && cloudWorker is null && (cloudDispatchedAt is null ||
+                        Stopwatch.GetElapsedTime(cloudDispatchedAt.Value, now) >= ConfigurationPoll))
+                    {
+                        if (scheduler is not null && !scheduler.CanMonitor(registry, ref verifiedDefinition, verifyInstallation: true))
+                            return 0;
+                        cloudDispatchedAt = now;
+                        try { cloudWorker = ProductWorker.StartCloud(registry.Location); }
+                        catch (Exception error) when (VersionJob.Expected(error)) { }
+                    }
                     foreach (var job in configured.Values)
                     {
                         if (!jobs.TryGetValue(job.Id, out var watch))
@@ -174,6 +188,21 @@ internal static class ProductMonitor
             finally
             {
                 worker?.Dispose();
+                if (cloudWorker is not null)
+                {
+                    using (cloudWorker)
+                    {
+                        try
+                        {
+                            if (!cloudWorker.HasExited)
+                            {
+                                cloudWorker.Kill(entireProcessTree: true);
+                                await cloudWorker.WaitForExitAsync().ConfigureAwait(false);
+                            }
+                        }
+                        catch (InvalidOperationException) when (cloudWorker.HasExited) { }
+                    }
+                }
                 foreach (var watch in jobs.Values) watch.Dispose();
             }
         }

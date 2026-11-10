@@ -24,13 +24,14 @@ public partial class App : Application
         bool scheduled = e.Args is ["--run-scheduled-version-job", _, _];
         bool productScheduled = e.Args is ["--run-scheduled-product-job", _, _];
         bool productMonitor = e.Args is ["--watch-product-jobs" or "--watch-scheduled-product-jobs" or "--supervise-product-monitor", _];
+        bool cloudDispatch = e.Args is ["--dispatch-cloud-jobs", _];
         bool automaticWorker = e.Args is ["--run-automatic-product-job", _, _, ..] && e.Args.Length <= 3 + ProductWatchSignal.MaximumEditHints;
         bool monitorSmoke = e.Args is ["--product-monitor-smoke" or "--product-monitor-soak" or "--product-monitor-schedule-smoke" or "--product-monitor-schedule-soak" or
             "--product-monitor-reconciliation-smoke" or "--product-automation-ui-smoke"] or
             ["--product-monitor-update-smoke" or "--product-monitor-cross-volume-smoke", _];
         bool productWorker = productScheduled || e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _] or ["--restore-product-job", _, _, _] or ["--review-product-mirror", _, _] or ["--review-product-pending", _, _] or ["--abandon-product-version", _, _, _];
         bool worker = productWorker || scheduled || e.Args is ["--run-version-job", _, _];
-        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !labPreview && !startupSmoke && !productSyntheticPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !heldMirrorChild && !heldAbandonChild && !productScheduleSmoke && !productMonitor && !automaticWorker && !monitorSmoke)
+        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !labPreview && !startupSmoke && !productSyntheticPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !heldMirrorChild && !heldAbandonChild && !productScheduleSmoke && !productMonitor && !automaticWorker && !monitorSmoke && !cloudDispatch)
         {
             Shutdown(2);
             return;
@@ -38,6 +39,11 @@ public partial class App : Application
 
         try
         {
+            if (cloudDispatch)
+            {
+                Shutdown(await Task.Run(() => ProductCloudWorker.RunAsync(e.Args[1])));
+                return;
+            }
             if (monitorSmoke)
             {
                 if (e.Args[0] is "--product-monitor-schedule-smoke" or "--product-monitor-schedule-soak")
@@ -232,7 +238,7 @@ public partial class App : Application
         }
         catch (Exception error)
         {
-            if (smoke || indexScale || worker || scheduleSmoke || productSmoke || heldProductChild || heldRestoreChild || heldMirrorChild || heldAbandonChild || productScheduleSmoke || startupSmoke || productMonitor || automaticWorker || monitorSmoke)
+            if (smoke || indexScale || worker || scheduleSmoke || productSmoke || heldProductChild || heldRestoreChild || heldMirrorChild || heldAbandonChild || productScheduleSmoke || startupSmoke || productMonitor || automaticWorker || monitorSmoke || cloudDispatch)
                 Console.Error.WriteLine(error);
             else
                 MessageBox.Show(error.Message, "FolderTwin", MessageBoxButton.OK, MessageBoxImage.Error);
