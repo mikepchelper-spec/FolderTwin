@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 
 if (args is ["--drive-aliases"])
     DriveAliasProbe.Run();
+else if (args is ["--first-use-update", _, _] or ["--first-use-update", _, _, "--withdraw-new"])
+    await FirstUseUpdateProbe.RunAsync(args[1], args[2], withdrawNew: args.Length == 4);
 else if (args.Length >= 2 && File.Exists(args[1]) && args[0] is "--waiting-controls" or "--daily-performance" or "--storage-growth" or "--storage-safety")
 {
     string fullPath = Path.GetFullPath(args[1]);
@@ -22,7 +24,7 @@ else if (args.Length >= 2 && File.Exists(args[1]) && args[0] is "--waiting-contr
 }
 else
 {
-    Console.Error.WriteLine("Use --drive-aliases, --waiting-controls <FolderTwin.exe>, --daily-performance <FolderTwin.exe> <4096|329000> <mode> [prepared], --storage-growth <FolderTwin.exe> <4096|329000>, or --storage-safety <FolderTwin.exe>.");
+    Console.Error.WriteLine("Use --drive-aliases, --waiting-controls <FolderTwin.exe>, --daily-performance <FolderTwin.exe> <4096|329000> <mode> [prepared], --storage-growth <FolderTwin.exe> <4096|329000>, --storage-safety <FolderTwin.exe>, or --first-use-update <old-package> <new-package>.");
     return 2;
 }
 return 0;

@@ -32,6 +32,7 @@ Esta entrega es **experimental y solo para datos sintéticos y carpetas desechab
 - [Alcance y aceptación de la v1](V1.md): trabajo de producto, criterios de salida y comprobaciones externas.
 - [Aceptación de RC2](ENTREGA-RC2.md): ZIP, hashes, pruebas del paquete y compatibilidad. La [aceptación histórica de RC1](ENTREGA.md) conserva sus resultados y observaciones de escritorio.
 - [Guía del piloto](PILOTO.md): preparación, observación, recuperación y criterios de detención.
+- [Primera prueba local entre C: y D:](PRIMERA-PRUEBA.md). Guía y resultados del primer uso y actualización sintéticos de `6f782af`.
 - [Recuperar respaldos anteriores](COMPATIBILIDAD.md): acceso desde la interfaz, formatos admitidos y límites.
 - [Instalación y actualización](INSTALACION.md): paquete portable, ejecutor estable, reanudación y trabajo pendiente.
 - [Investigación](INVESTIGACION.md): necesidades observadas, documentación técnica y fuentes.
@@ -41,7 +42,7 @@ La v1 registra y ejecuta los tres modos desde WPF, verifica el contenido y lo re
 
 La vista previa permite revisar y conservar un plan completo de versionado que ya no coincida con el origen, sin presentarlo como respaldo correcto ni borrar datos. Sus trabajadores y pruebas WPF locales cubren pausa, cancelación, cierre de interfaz y reanudación sin origen. La retención revisa los objetos parciales con cuarentena. Para borradores y diarios de acumulativo o espejo, la v1 conserva el trabajo retirado y continúa en otro destino dedicado; el anterior conserva su espacio, datos e incidencias. [Recorrido y límites](experiments/CopyProbe/PENDIENTES.md).
 
-El panel de producto separa lista y detalles, y los apila en ventanas estrechas. Hay una sesión sintética reproducible para revisar el escritorio sin abrir la configuración habitual. La aceptación automatizada del paquete actual cubre los tres modos, verificación, incidencias y recuperación. El recorrido normal de escritorio previo corresponde a 76b7eed; no se atribuye al candidato nuevo. El recorrido completo de accesibilidad, lector y escalado sigue pendiente. [Prueba de interfaz](experiments/CopyLab/INTERFAZ.md).
+El panel de producto separa lista y detalles, y los apila en ventanas estrechas. Hay una sesión sintética reproducible para revisar el escritorio sin abrir la configuración habitual. La aceptación automatizada cubre los tres modos, verificación, incidencias y recuperación. El primer uso de la candidata local `6f782af` cubrió desde Ruta la copia automática y la restauración de un archivo con el origen apartado. El recorrido completo de accesibilidad, lector y escalado sigue pendiente. [Prueba de interfaz](experiments/CopyLab/INTERFAZ.md) · [Primera prueba local](PRIMERA-PRUEBA.md).
 
 ## Paquete portable de Windows
 
