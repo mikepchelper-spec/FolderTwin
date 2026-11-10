@@ -20,7 +20,8 @@ Ejecuta `dotnet run --project experiments/CopyProbe -- --cloud-point <ruta-absol
 | Alcance | Estado |
 | --- | --- |
 | Puntos confirmados de los tres modos, reintento tras respuesta perdida y restauración de dos fechas | Probado con Kopia sobre almacenamiento de archivos y sobre un endpoint S3 desechable |
-| Transporte hacia cuentas de rclone, cola persistente, credenciales y estados de Ruta | En desarrollo |
+| Cola persistente | Probada con Kopia de archivos y S3 de laboratorio. Falta conectarla al ejecutor habitual y a Ruta |
+| Transporte hacia cuentas de rclone, credenciales y estados de Ruta | En desarrollo |
 | B2, AWS, Filen y MEGA con cuentas reales | Pendiente. Verificar autorización, cuotas, recuperación en otro equipo y alcance de la protección contra borrado |
 | Empaquetado Windows x64 y recorrido WPF | Pendiente |
 
@@ -29,3 +30,11 @@ El ensayo S3 usa [rclone serve s3](https://rclone.org/commands/rclone_serve_s3/)
 Ejecuta `experiments/AutomationAcceptance/Test-CloudPoint.ps1 -Kopia <kopia.exe> -Rclone <rclone.exe>`. Usa [rclone 1.76.0](https://github.com/rclone/rclone/releases/tag/v1.76.0), con SHA-256 del ZIP Windows x64 `8b4fd2737ade4e70c057ef4a49deb7cffe94b0fb9d7587c189d149823f21a1dc` y del ejecutable `acd80683e23151e93bbe0d6ffa74d26e542ec510332f630beecb9944f8d1a623`. [Licencia de rclone](https://github.com/rclone/rclone/blob/v1.76.0/COPYING)
 
 La CLI de Kopia 0.23.1 marca su repositorio directo de rclone como sin mantenimiento. La segunda vía requiere comparar ese adaptador con una pasarela local acotada, documentar qué proceso conserva las credenciales y validar la recuperación antes de elegir.
+
+## Cola de envíos
+
+El registro local usa la identidad confirmada de Kopia, el identificador del trabajo y el identificador de la generación para derivar una etiqueta estable por envío. La cola verifica la identidad del repositorio al abrir la conexión. Las transiciones quedan en un diario separado del historial de copias locales. El bloqueo del trabajador evita dos envíos simultáneos del mismo punto y el bloqueo del diario permite grabar una pausa o cancelación mientras el trabajador está activo. Los reintentos transitorios esperan 30, 60 y 120 segundos. Tras el cuarto intento, la cola conserva la incidencia para revisión.
+
+El ensayo vuelve a abrir el registro para verificar pausas, cancelaciones y reintentos. En Versionado termina un proceso real después de publicar el segundo punto y antes de escribir el resultado local. Comprueba que un segundo trabajador quede excluido durante el envío, aparta las dos carpetas locales y reconcilia la misma instantánea sin crear otra. También conecta deliberadamente el trabajador a otro repositorio y comprueba que rechace el envío. Los demás puntos simulan la pérdida de la confirmación y cotejan el historial desde una conexión de lectura con caché nueva.
+
+Para S3, Kopia admite credenciales en el entorno de su propio proceso. El ensayo usa campos explícitamente vacíos al crear y conectar el repositorio para impedir que la CLI copie las credenciales del entorno al JSON. Comprueba que la configuración generada no contenga la clave, el secreto S3 ni la contraseña del repositorio. Una conexión nueva rechaza el secreto inválido y luego abre el mismo repositorio con el secreto correcto. El almacenamiento protegido de esas credenciales entre ejecuciones forma parte de la conexión de producto. [Implementación S3 de Kopia 0.23.1](https://github.com/kopia/kopia/blob/v0.23.1/repo/blob/s3/s3_storage.go#L323)

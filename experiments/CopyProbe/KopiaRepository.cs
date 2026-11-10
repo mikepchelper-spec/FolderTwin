@@ -3,9 +3,24 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 
 internal sealed record KopiaPoint(string ManifestId, string RootId, DateTimeOffset Finished, long Bytes, int Files, int Directories);
-
-internal sealed class KopiaRepository(string executable, string config, string password)
+internal sealed class KopiaS3Credentials(string accessKey, string secretKey, string? sessionToken = null)
 {
+    internal string AccessKey { get; } = accessKey;
+    internal string SecretKey { get; } = secretKey;
+    internal string? SessionToken { get; } = sessionToken;
+}
+
+internal sealed class KopiaRepository(string executable, string config, string password, KopiaS3Credentials? s3 = null)
+{
+    internal async Task<string> IdentityAsync(CancellationToken token)
+    {
+        using var status = JsonDocument.Parse(await RunAsync(token, "repository", "status", "--json"));
+        if (!status.RootElement.TryGetProperty("uniqueIDHex", out var id) || id.ValueKind != JsonValueKind.String ||
+            id.GetString() is not { } value || !RetentionJournal.IsDigest(value))
+            throw new InvalidDataException("Kopia devolvió una identidad de repositorio no válida.");
+        return value;
+    }
+
     internal async Task<KopiaPoint?> FindAsync(Guid operation, CancellationToken token)
     {
         string tag = Tag(operation);
@@ -42,9 +57,14 @@ internal sealed class KopiaRepository(string executable, string config, string p
             afterUpload?.Invoke();
             existing = await FindAsync(operation, token) ?? throw new IOException("El punto enviado aún no aparece en el repositorio.");
         }
-        if (existing.Bytes != point.Bytes || existing.Files != point.Files || existing.Directories != checked(point.Directories + 1))
-            throw new InvalidDataException("El inventario remoto difiere del punto local confirmado.");
+        RequireInventory(existing, point);
         return existing;
+    }
+
+    internal static void RequireInventory(KopiaPoint remote, CloudPoint local)
+    {
+        if (remote.Bytes != local.Bytes || remote.Files != local.Files || remote.Directories != checked(local.Directories + 1))
+            throw new InvalidDataException("El inventario remoto difiere del punto local confirmado.");
     }
 
     internal async Task RestoreAsync(KopiaPoint point, string emptyOutput, CancellationToken token)
@@ -64,10 +84,18 @@ internal sealed class KopiaRepository(string executable, string config, string p
             UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true,
             RedirectStandardError = true, RedirectStandardInput = true
         };
-        foreach (string name in start.Environment.Keys.Where(key => key.StartsWith("KOPIA_", StringComparison.OrdinalIgnoreCase)).ToArray())
+        foreach (string name in start.Environment.Keys.Where(key => key.StartsWith("KOPIA_", StringComparison.OrdinalIgnoreCase) ||
+            key.StartsWith("AWS_", StringComparison.OrdinalIgnoreCase)).ToArray())
             start.Environment.Remove(name);
         start.Environment["KOPIA_PASSWORD"] = password;
         start.Environment["KOPIA_CHECK_FOR_UPDATES"] = "false";
+        if (s3 is not null)
+        {
+            start.Environment["AWS_ACCESS_KEY_ID"] = s3.AccessKey;
+            start.Environment["AWS_SECRET_ACCESS_KEY"] = s3.SecretKey;
+            if (s3.SessionToken is not null) start.Environment["AWS_SESSION_TOKEN"] = s3.SessionToken;
+            start.Environment["AWS_EC2_METADATA_DISABLED"] = "true";
+        }
         foreach (var argument in new[] { "--config-file", Path.GetFullPath(config), "--no-persist-credentials",
             "--no-use-credential-manager", "--disable-file-logging", "--disable-content-log", "--no-progress" }.Concat(arguments))
             start.ArgumentList.Add(argument);
