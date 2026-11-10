@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 
 if (args is ["--drive-aliases"])
     DriveAliasProbe.Run();
+else if (args is ["--held-kopia-child", _, _, _])
+    await CloudFaultProbe.HeldKopiaAsync(args[1], args[2], args[3]);
 else if (args is ["--first-use-update", _, _] or ["--first-use-update", _, _, "--withdraw-new"])
     await FirstUseUpdateProbe.RunAsync(args[1], args[2], withdrawNew: args.Length == 4);
 else if (args.Length >= 2 && File.Exists(args[1]) && args[0] is "--waiting-controls" or "--daily-performance" or "--storage-growth" or "--storage-safety" or "--cloud-scale" or "--cloud-faults" or "--cloud-resume-scale")

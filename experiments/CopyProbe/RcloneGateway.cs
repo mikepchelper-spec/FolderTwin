@@ -1,6 +1,4 @@
-using System.ComponentModel;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Microsoft.Win32.SafeHandles;
@@ -52,17 +50,13 @@ internal sealed class RcloneGateway : IDisposable
         var key = new KopiaS3Credentials("ft" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(12)),
             Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)));
         settings["RCLONE_AUTH_KEY"] = $"\"{key.AccessKey},{key.SecretKey}\"";
-        using var setup = new SafeFileHandle(CreateJobObject(0, null), ownsHandle: true);
-        if (setup.IsInvalid || !SetInformationJobObject(setup, 9, new ExtendedLimits { Flags = 0x2000 }, (uint)Marshal.SizeOf<ExtendedLimits>()))
-            throw new Win32Exception(Marshal.GetLastPInvokeError());
-
         var start = StartInfo(["serve", "s3", remote, "--addr", "127.0.0.1:0", "--log-level", "INFO",
             "--vfs-cache-mode", "off", "--dir-cache-time", "0s", .. readOnly ? new[] { "--read-only" } : []], settings);
         var process = Process.Start(start) ?? throw new IOException("No se pudo abrir el puente local de rclone.");
+        SafeFileHandle? owner = null;
         try
         {
-            if (!AssignProcessToJobObject(setup, process.SafeHandle))
-                throw new Win32Exception(Marshal.GetLastPInvokeError());
+            owner = CloudProcessLifetime.Attach(process);
             process.StandardInput.Close();
             _ = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
             while (await process.StandardError.ReadLineAsync(timeout.Token) is { } line)
@@ -70,14 +64,13 @@ internal sealed class RcloneGateway : IDisposable
                 var match = Regex.Match(line, @"http://127\.0\.0\.1:([1-9][0-9]{0,4})(?:/|\s|$)");
                 if (!match.Success || !ushort.TryParse(match.Groups[1].Value, out ushort port)) continue;
                 _ = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
-                var owner = new SafeFileHandle(setup.DangerousGetHandle(), ownsHandle: true);
-                setup.SetHandleAsInvalid();
                 return new(process, owner, $"127.0.0.1:{port}", key);
             }
             throw new IOException("rclone no pudo abrir la carpeta remota. Revisa la cuenta y el nombre de la carpeta.");
         }
         catch
         {
+            owner?.Dispose();
             Stop(process);
             process.Dispose();
             throw;
@@ -108,6 +101,7 @@ internal sealed class RcloneGateway : IDisposable
             using var child = Process.Start(StartInfo(arguments, environment)) ?? throw new IOException("No se pudo iniciar rclone.");
             try
             {
+                using var lifetime = CloudProcessLifetime.Attach(child);
                 var output = child.StandardOutput.ReadToEndAsync(cancellation);
                 var errors = child.StandardError.BaseStream.CopyToAsync(Stream.Null, cancellation);
                 if (input is not null) await child.StandardInput.WriteLineAsync(input.AsMemory(), cancellation);
@@ -136,22 +130,4 @@ internal sealed class RcloneGateway : IDisposable
         process.WaitForExit(5000);
     }
 
-    // JOBOBJECT_EXTENDED_LIMIT_INFORMATION on the Windows x64 target.
-    // The handle closes if the FolderTwin worker is terminated.
-    [StructLayout(LayoutKind.Explicit, Size = 144)]
-    private struct ExtendedLimits
-    {
-        [FieldOffset(16)] internal uint Flags;
-    }
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern nint CreateJobObject(nint attributes, string? name);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetInformationJobObject(SafeFileHandle job, int infoClass, in ExtendedLimits limits, uint length);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool AssignProcessToJobObject(SafeFileHandle job, SafeProcessHandle process);
 }

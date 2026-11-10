@@ -133,11 +133,12 @@ internal sealed class KopiaRepository(string executable, string config, string p
             "--no-use-credential-manager", "--disable-file-logging", "--disable-content-log", "--no-progress" }.Concat(arguments))
             start.ArgumentList.Add(argument);
         using var process = Process.Start(start) ?? throw new IOException("No se pudo iniciar Kopia.");
-        process.StandardInput.Close();
-        var output = process.StandardOutput.ReadToEndAsync(token);
-        var errors = ReadIssueAsync(process.StandardError, token);
         try
         {
+            using var lifetime = CloudProcessLifetime.Attach(process);
+            process.StandardInput.Close();
+            var output = process.StandardOutput.ReadToEndAsync(token);
+            var errors = ReadIssueAsync(process.StandardError, token);
             await Task.WhenAll(process.WaitForExitAsync(token), output, errors);
             if (process.ExitCode != 0)
             {

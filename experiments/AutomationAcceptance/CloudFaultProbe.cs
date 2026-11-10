@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Diagnostics;
+using System.Reflection;
 
 internal static class CloudFaultProbe
 {
@@ -83,6 +85,7 @@ internal static class CloudFaultProbe
             }
             await CheckRepositoryIntegrityAsync(kopia, fixture);
             await CheckLocalAdmissionAsync(kopia, fixture);
+            await CheckWorkerTerminationAsync(kopia, fixture);
             passed = true;
         }
         finally
@@ -91,6 +94,52 @@ internal static class CloudFaultProbe
             else Console.Error.WriteLine($"Synthetic fault fixture preserved at {fixture.Root}.");
         }
         string Folder(string name) => Directory.CreateDirectory(Path.Combine(fixture.Root, name)).FullName;
+    }
+
+    internal static async Task HeldKopiaAsync(string kopia, string fixture, string endpoint)
+    {
+        if (!IPEndPoint.TryParse(endpoint, out var address) || !address.Address.Equals(IPAddress.Loopback))
+            throw new ArgumentException("The synthetic endpoint must use loopback.");
+        var workspace = LabWorkspace.Open(fixture);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        var reader = new KopiaRepository(kopia, Path.Combine(workspace.Root, "held-kopia.config"),
+            "synthetic-held-password", new("synthetic-key", "synthetic-secret"));
+        await reader.RunAsync(timeout.Token, "repository", "connect", "s3", "--bucket", "foldertwin", "--endpoint", endpoint,
+            "--region", "us-east-1", "--access-key=", "--secret-access-key=", "--disable-tls", "--readonly");
+    }
+
+    private static async Task CheckWorkerTerminationAsync(string kopia, LabWorkspace fixture)
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        string executable = Environment.ProcessPath ?? throw new InvalidOperationException("Missing test executable.");
+        var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true };
+        if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+            start.ArgumentList.Add(Assembly.GetExecutingAssembly().Location);
+        foreach (string value in new[] { "--held-kopia-child", kopia, fixture.Root, listener.LocalEndpoint.ToString()! })
+            start.ArgumentList.Add(value);
+        using var worker = Process.Start(start) ?? throw new IOException("Could not start the held worker.");
+        try
+        {
+            using var client = await listener.AcceptTcpClientAsync(timeout.Token);
+            using var stream = client.GetStream();
+            using var reader = new StreamReader(stream, Encoding.ASCII, leaveOpen: true);
+            string? request = await reader.ReadLineAsync(timeout.Token);
+            if (request is null) throw new InvalidDataException("Kopia exited before making the held request.");
+            while (await reader.ReadLineAsync(timeout.Token) is { Length: > 0 }) { }
+            worker.Kill();
+            await worker.WaitForExitAsync(timeout.Token);
+            string? after = null;
+            try { after = await reader.ReadLineAsync(timeout.Token); }
+            catch (IOException error) when (error.InnerException is SocketException) { }
+            if (after is not null) throw new InvalidDataException("Kopia remained connected after its worker died.");
+            Console.WriteLine("PASS killing the worker closed the in-flight Kopia request.");
+        }
+        finally
+        {
+            if (!worker.HasExited) { worker.Kill(entireProcessTree: true); await worker.WaitForExitAsync(); }
+        }
     }
 
     private static async Task CheckRepositoryIntegrityAsync(string kopia, LabWorkspace fixture)
