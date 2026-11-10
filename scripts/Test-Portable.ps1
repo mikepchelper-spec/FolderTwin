@@ -2,7 +2,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$PackageDirectory,
-    [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{40}$')][string]$SourceRevision
+    [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{40}$')][string]$SourceRevision,
+    [switch]$RequireCloudTools
 )
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath $PackageDirectory).Path
@@ -33,6 +34,19 @@ foreach ($required in @('README.md', 'NOTAS.md', 'GUIA.md', 'SUPPORT.md', 'INSTA
 }
 foreach ($report in @('ENTREGA.md', 'ENTREGA-AUTOMATIZACION.md', 'V1.md', 'PLAN.md', 'ALFA.md', 'ACEPTACION.md', 'INVESTIGACION.md')) {
     if (Test-Path -LiteralPath (Join-Path $root $report)) { throw "Informe de desarrollo mezclado con las guías: $report" }
+}
+if ($RequireCloudTools) {
+    $cloud = @{
+        'cloud-tools/kopia.exe' = '96C0946314B50DCC7C5AE9D3EC7E3763E742FCEBF7D5CBEBDAAC3CEEE5FB3BD7'
+        'cloud-tools/rclone.exe' = 'ACD80683E23151E93BBE0D6FFA74D26E542EC510332F630BEECB9944F8D1A623'
+        'cloud-tools/LICENSE-rclone.txt' = '8CD2E9E750B90A04B7D82DBBCA3930C696AE0309D7C10464F90A44F45754CD04'
+    }
+    foreach ($path in $cloud.Keys) {
+        if (!$expected.Contains($path) -or (Get-FileHash -LiteralPath (Join-Path $root $path)).Hash -ne $cloud[$path]) {
+            throw "Componente de nube ausente o distinto: $path"
+        }
+    }
+    if (!$expected.Contains('cloud-tools/LICENSE-kopia.txt')) { throw 'Falta la licencia de Kopia.' }
 }
 $readme = Get-Content -LiteralPath (Join-Path $root 'README.md') -Raw
 if (-not $readme.Contains('COMPILACION.json') -or -not $readme.Contains('después') -or -not $readme.Contains('por separado')) {

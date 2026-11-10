@@ -385,7 +385,7 @@ internal sealed partial class VersionStore
         return catalog.Degraded;
     }
 
-    internal CatalogSnapshot Restore(string generation, string output, string? relativeFile = null, bool requireRegisteredPoint = false)
+    internal CatalogSnapshot Restore(string generation, string output, string? relativeFile = null)
     {
         using var scope = workspace.OpenRegisteredRoot();
         workspace.CheckRoots(Destination, output);
@@ -395,14 +395,6 @@ internal sealed partial class VersionStore
         using var target = new DirectoryFence(output);
         LabWorkspace.RequireEmpty(target.Root);
         var catalog = ReadPoint(store.Root, generation);
-        if (requireRegisteredPoint)
-        {
-            var ledger = GenerationRegistry.Read(store.Root, binding);
-            if (!ledger.Generations.TryGetValue(generation, out byte[]? registered) ||
-                !registered.AsSpan().SequenceEqual(catalog.DocumentHash) || ledger.Expired.Contains(generation) ||
-                ledger.Abandoned.ContainsKey(generation) || ledger.PendingMirrorGeneration == generation)
-                throw new InvalidDataException("El punto cambió de estado y requiere revisión antes de enviarlo.");
-        }
         BatchFile[] files = relativeFile is null ? catalog.Files :
             [catalog.Files.SingleOrDefault(file => file.RelativePath == relativeFile)
                 ?? throw new InvalidDataException("El archivo no pertenece a la generación seleccionada.")];
@@ -430,27 +422,8 @@ internal sealed partial class VersionStore
             observe?.Invoke(new(WorkPhase.Verifying, index, files.Length, files[index].RelativePath));
             BatchCatalog.VerifyFile(output, files[index]);
         }
-        if (requireRegisteredPoint)
-        {
-            // A private cloud staging tree contains only the catalog's files.
-            // Retire the exact receipts created by this successful restoration.
-            foreach (var file in files)
-            {
-                string temporary = FolderBatch.TemporaryPath(output, file.RelativePath);
-                using var parent = new DirectoryFence(output, temporary);
-                DeleteStageRecord(parent.Parent(temporary), CopyRecovery.ReceiptPath(temporary));
-                DeleteStageRecord(parent.Parent(temporary), CopyRecovery.LockPath(temporary));
-            }
-            DeleteStageRecord(target.Root, DestinationBinding.MarkerName);
-        }
         observe?.Invoke(new(WorkPhase.Restoring, total, total));
         return catalog;
-
-        static void DeleteStageRecord(SafeFileHandle directory, string path)
-        {
-            using var record = WindowsProbeNative.OpenPlainFile(directory, path, FileAccess.Read, FileShare.None, rename: true);
-            WindowsProbeNative.DeletePlainFile(record.SafeFileHandle);
-        }
     }
 
     private static FileStream OpenLock(SafeFileHandle root, FileAccess access) =>

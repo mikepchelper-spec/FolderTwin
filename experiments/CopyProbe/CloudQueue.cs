@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using Microsoft.Win32.SafeHandles;
 
 internal enum CloudTransferState { Pending, Paused, Cancelled, Retry, Review, Available }
-internal enum CloudTransferIssue { None, LocalPoint, Repository, Credentials, Space }
+internal enum CloudTransferIssue { None, LocalPoint, Repository, Credentials, Space, Quota, DestinationMissing }
 internal enum CloudTransferAction { Pause, Cancel, Retry }
 internal sealed record CloudTicket(Guid Job, string Repository, string Generation, Guid Operation)
 {
@@ -101,7 +101,8 @@ internal sealed partial class ProductJobRegistry
         using var worker = CloudLock(entry, "worker.lock");
         var initial = ReadCloudTransfer(entry, ticket).Transfer;
         time ??= TimeProvider.System;
-        if (initial.State is not (CloudTransferState.Pending or CloudTransferState.Retry) || initial.RetryUtc > time.GetUtcNow())
+        if (initial.State is not (CloudTransferState.Pending or CloudTransferState.Retry) || initial.RetryUtc > time.GetUtcNow() ||
+            IsCloudPaused(ticket.Job))
             return initial;
 
         using var stopped = CancellationTokenSource.CreateLinkedTokenSource(shutdown);
@@ -141,9 +142,11 @@ internal sealed partial class ProductJobRegistry
         }
         catch (Exception error) when (VersionJob.Expected(error) || error is OperationCanceledException)
         {
-            var issue = error.HResult == unchecked((int)0x80070070) ? CloudTransferIssue.Space : failureStage;
+            var issue = error is CloudProviderException provider ? provider.Issue :
+                error is CloudLocalDestinationUnavailableException ? CloudTransferIssue.DestinationMissing :
+                LabWorkspace.IsDiskFull(error.HResult) ? CloudTransferIssue.Space : failureStage;
             bool retry = error is not (InvalidDataException or UnauthorizedAccessException) &&
-                (issue == CloudTransferIssue.Repository || VersionJob.SharingViolation(error));
+                (issue is CloudTransferIssue.Repository or CloudTransferIssue.DestinationMissing || VersionJob.SharingViolation(error));
             return Finish(retry ? CloudTransferState.Retry : CloudTransferState.Review, issue, null);
         }
         finally
@@ -170,13 +173,14 @@ internal sealed partial class ProductJobRegistry
         }
     }
 
-    private static async Task ObserveCloudControlAsync(SafeFileHandle entry, CloudTicket ticket, CancellationTokenSource stopped)
+    private async Task ObserveCloudControlAsync(SafeFileHandle entry, CloudTicket ticket, CancellationTokenSource stopped)
     {
         try
         {
             while (!stopped.IsCancellationRequested)
             {
-                if (ReadCloudTransfer(entry, ticket).Transfer.State is CloudTransferState.Paused or CloudTransferState.Cancelled)
+                if (ReadCloudTransfer(entry, ticket).Transfer.State is CloudTransferState.Paused or CloudTransferState.Cancelled ||
+                    IsCloudPaused(ticket.Job))
                     stopped.Cancel();
                 await Task.Delay(250, stopped.Token);
             }

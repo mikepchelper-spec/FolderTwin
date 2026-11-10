@@ -379,7 +379,10 @@ internal static class FolderBatch
         destination, Path.GetDirectoryName(relative) ?? "",
         ControlPrefix + Convert.ToHexString(SHA256.HashData(PathEncoding.GetBytes(relative))) + ".tmp");
 
-    internal static T WithDirectories<T>(SafeFileHandle root, string relative, Func<T> action)
+    internal static T WithDirectories<T>(SafeFileHandle root, string relative, Func<T> action) =>
+        WithDirectories(root, relative, _ => action());
+
+    internal static T WithDirectories<T>(SafeFileHandle root, string relative, Func<SafeFileHandle, T> action)
     {
         var opened = new List<SafeFileHandle>();
         try
@@ -391,7 +394,7 @@ internal static class FolderBatch
                 opened.Add(child);
                 parent = child;
             }
-            return action();
+            return action(parent);
         }
         finally
         {

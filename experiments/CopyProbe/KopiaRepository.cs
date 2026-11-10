@@ -4,6 +4,10 @@ using System.Text.RegularExpressions;
 
 internal sealed record KopiaPoint(string ManifestId, string RootId, DateTimeOffset Finished, long Bytes, int Files, int Directories);
 internal sealed record CloudRecoveryPoint(Guid Job, string Generation, KopiaPoint Point);
+internal sealed class CloudProviderException(CloudTransferIssue issue, string message) : IOException(message)
+{
+    internal CloudTransferIssue Issue { get; } = issue;
+}
 internal sealed class KopiaS3Credentials(string accessKey, string secretKey, string? sessionToken = null)
 {
     internal string AccessKey { get; } = accessKey;
@@ -131,12 +135,20 @@ internal sealed class KopiaRepository(string executable, string config, string p
         using var process = Process.Start(start) ?? throw new IOException("No se pudo iniciar Kopia.");
         process.StandardInput.Close();
         var output = process.StandardOutput.ReadToEndAsync(token);
-        var errors = process.StandardError.BaseStream.CopyToAsync(Stream.Null, token);
+        var errors = ReadIssueAsync(process.StandardError, token);
         try
         {
             await Task.WhenAll(process.WaitForExitAsync(token), output, errors);
             if (process.ExitCode != 0)
-                throw new IOException($"Kopia terminó con código {process.ExitCode}. Revisa la conexión y vuelve a intentar.");
+            {
+                var issue = await errors;
+                throw new CloudProviderException(issue, issue switch
+                {
+                    CloudTransferIssue.Credentials => "El proveedor rechazó las credenciales. Revisa el acceso al repositorio.",
+                    CloudTransferIssue.Quota => "El proveedor informó que alcanzó su cuota de almacenamiento.",
+                    _ => $"Kopia terminó con código {process.ExitCode}. Revisa la conexión y vuelve a intentar."
+                });
+            }
             return await output;
         }
         finally
@@ -148,6 +160,27 @@ internal sealed class KopiaRepository(string executable, string config, string p
                 await process.WaitForExitAsync();
             }
         }
+    }
+
+    private static async Task<CloudTransferIssue> ReadIssueAsync(StreamReader errors, CancellationToken token)
+    {
+        var issue = CloudTransferIssue.Repository;
+        while (await errors.ReadLineAsync(token) is { } line)
+        {
+            if (line.Contains("QuotaExceeded", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("quota exceeded", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("Insufficient Storage", StringComparison.OrdinalIgnoreCase))
+                issue = CloudTransferIssue.Quota;
+            else if (issue == CloudTransferIssue.Repository &&
+                (line.Contains("InvalidAccessKeyId", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("SignatureDoesNotMatch", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("ExpiredToken", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("invalid credentials", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("access denied", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("wrong repository password", StringComparison.OrdinalIgnoreCase)))
+                issue = CloudTransferIssue.Credentials;
+        }
+        return issue;
     }
 
     private static string Tag(Guid operation) => $"foldertwin:{operation:N}";

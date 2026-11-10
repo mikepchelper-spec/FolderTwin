@@ -44,6 +44,7 @@ public partial class ProductCloudWindow
             Check(window.Region.Visibility == Visibility.Collapsed && window.SessionToken.IsVisible, "Filen exposed S3 fields or hid its key.");
             await ClickAsync(window, window.CreateCloud);
             string repository;
+            await ClickAsync(window, window.PauseCloudJob);
             File.WriteAllText(input, "Segunda fecha sintética de Ruta");
             byte[] second = SHA256.HashData(File.ReadAllBytes(input));
             using (var registry = Open())
@@ -53,7 +54,10 @@ public partial class ProductCloudWindow
                     "Ruta did not report the first cloud point.");
                 Check(ProductRunner.Run(registry, job.Id).State == ProductRunState.Confirmed, "Second local backup did not complete.");
                 await ProductCloudDispatch.RunPassAsync(registry, kopia, CancellationToken.None, lab: true, () => rclone, remote);
+                Check(registry.IsCloudPaused(job.Id) && registry.CloudTransfers(job.Id, repository).Length == 1,
+                    "The cloud pause did not persist or blocked the local backup.");
             }
+            await ClickAsync(window, window.PauseCloudJob);
             await ClickAsync(window, window.RefreshCloud);
             Check(window.CloudStatus.Text.Contains("0 sin confirmar", StringComparison.Ordinal), "Ruta did not show the current cloud state.");
             window.Close();

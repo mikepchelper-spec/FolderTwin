@@ -195,6 +195,20 @@ public partial class ProductCloudWindow : Window
     private async void PauseClick(object sender, RoutedEventArgs e) => await ControlAsync(CloudTransferAction.Pause);
     private async void CancelClick(object sender, RoutedEventArgs e) => await ControlAsync(CloudTransferAction.Cancel);
     private async void RetryClick(object sender, RoutedEventArgs e) => await ControlAsync(CloudTransferAction.Retry);
+    private async void PauseCloudJobClick(object sender, RoutedEventArgs e) => await RunAsync(async token =>
+    {
+        using var registry = openRegistry();
+        if (job is null || registry.ReadCloudConnection(job.Id) is null) return;
+        bool pause = !registry.IsCloudPaused(job.Id);
+        registry.SetCloudPaused(job.Id, pause);
+        if (!pause)
+        {
+            if (testDispatch is null) { using var worker = ProductWorker.StartCloud(registry.Location); }
+            else await testDispatch(registry, token);
+            startMonitor(registry);
+        }
+        ReadStatus(registry);
+    });
 
     private async Task ControlAsync(CloudTransferAction action) => await RunAsync(_ =>
     {
@@ -212,6 +226,9 @@ public partial class ProductCloudWindow : Window
     private void ReadStatus(ProductJobRegistry registry)
     {
         var connection = job is null ? null : registry.ReadCloudConnection(job.Id);
+        bool paused = connection is not null && registry.IsCloudPaused(job!.Id);
+        PauseCloudJob.IsEnabled = connection is not null;
+        PauseCloudJob.Content = paused ? "Reanudar copia de este trabajo" : "Pausar copia de este trabajo";
         CloudTransfer[] transfers = connection is null ? [] : registry.CloudTransfers(job!.Id, connection.Repository);
         var last = transfers.LastOrDefault(item => item.State == CloudTransferState.Available)?.Point;
         var next = transfers.FirstOrDefault(item => item.State != CloudTransferState.Available);
@@ -231,12 +248,15 @@ public partial class ProductCloudWindow : Window
             CloudTransferIssue.LocalPoint => " Comprueba que el disco local del respaldo esté conectado y el punto siga disponible.",
             CloudTransferIssue.Credentials => " Vuelve a conectar con credenciales válidas.",
             CloudTransferIssue.Space => " Libera espacio para preparar el punto.",
+            CloudTransferIssue.Quota => " El proveedor informó que alcanzó su cuota de almacenamiento.",
+            CloudTransferIssue.DestinationMissing => " Reconecta el disco del respaldo local para preparar el envío.",
             CloudTransferIssue.Repository => " Revisa el destino, la cuota y la conexión.",
             _ => ""
         };
         string restored = registry.LastCloudRestore(connection.Repository)?.ToLocalTime().ToString("g") ?? "Todavía ninguna";
-        CloudStatus.Text = $"Último punto disponible en nube · {last?.Finished.ToLocalTime().ToString("g") ?? "Todavía ninguno"}. " +
-            $"Última recuperación verificada · {restored}. {transfers.Count(item => item.State != CloudTransferState.Available)} sin confirmar. {state}{issue}";
+        string pauseText = paused ? "Copia en nube pausada para este trabajo. " : "";
+        CloudStatus.Text = $"Último envío confirmado en nube · {last?.Finished.ToLocalTime().ToString("g") ?? "Todavía ninguno"}. " +
+            $"Última recuperación verificada · {restored}. {transfers.Count(item => item.State != CloudTransferState.Available)} sin confirmar. {pauseText}{state}{issue}";
     }
 
     private async Task RunAsync(Func<CancellationToken, Task> action, TimeSpan? limit = null)

@@ -66,7 +66,7 @@ internal sealed record CloudConnection(string Repository, CloudDestination Desti
 internal static class ProductCloudDispatch
 {
     internal static bool HasWork(ProductJobRegistry registry, ProductJob job) =>
-        job.Enabled && !job.Retired && registry.HasCloudConnection(job.Id);
+        job.Enabled && !job.Retired && registry.HasCloudConnection(job.Id) && !registry.IsCloudPaused(job.Id);
 
     internal static async Task RunPassAsync(ProductJobRegistry registry, string kopia, CancellationToken token, bool lab = false,
         Func<string>? rclone = null, string? labRcloneRoot = null)
@@ -106,7 +106,9 @@ internal static class ProductCloudDispatch
                 catch (Exception error) when (!token.IsCancellationRequested &&
                     (VersionJob.Expected(error) || error is OperationCanceledException))
                 {
-                    registry.RecordCloudConnectionFailure(next.Ticket, CloudTransferIssue.Repository, error is not InvalidDataException);
+                    var issue = error is CloudProviderException provider ? provider.Issue : CloudTransferIssue.Repository;
+                    registry.RecordCloudConnectionFailure(next.Ticket, issue,
+                        issue == CloudTransferIssue.Repository && error is not InvalidDataException);
                     continue;
                 }
                 await registry.ProcessCloudTransferAsync(next.Ticket, session.Repository, token);
@@ -183,6 +185,7 @@ internal sealed class CloudRepositorySession : IDisposable
 
 internal sealed partial class ProductJobRegistry
 {
+    private const string CloudPauseName = "paused";
     private sealed record CloudConnectionRevision(int Version, long Sequence, byte[] Previous, CloudConnection Connection, byte[] ProtectedCredentials);
     private sealed record CloudRestoreReceipt(int Version, string Repository, string Manifest, DateTimeOffset FinishedUtc);
 
@@ -190,6 +193,37 @@ internal sealed partial class ProductJobRegistry
     {
         using var job = OpenJob(jobId);
         return DirectoryPresent(job, "cloud-connection");
+    }
+
+    internal bool IsCloudPaused(Guid jobId)
+    {
+        using var job = OpenJob(jobId);
+        if (!DirectoryPresent(job, "cloud-connection")) return false;
+        using var settings = WindowsProbeNative.OpenPlainDirectory(job, "cloud-connection");
+        if (!WindowsProbeNative.PlainFileExists(settings, CloudPauseName)) return false;
+        try
+        {
+            if (Decode<Guid>(settings, CloudPauseName) != jobId)
+                throw new InvalidDataException("La pausa de nube corresponde a otro trabajo.");
+            return true;
+        }
+        catch (FileNotFoundException) { return false; }
+    }
+
+    internal void SetCloudPaused(Guid jobId, bool paused)
+    {
+        using var job = OpenJob(jobId);
+        using var settings = WindowsProbeNative.OpenPlainDirectory(job, "cloud-connection");
+        using var locked = CloudStateLock(settings);
+        if (paused)
+            WriteCloudRecord(settings, CloudPauseName, Encode(jobId));
+        else if (WindowsProbeNative.PlainFileExists(settings, CloudPauseName))
+        {
+            if (Decode<Guid>(settings, CloudPauseName) != jobId)
+                throw new InvalidDataException("La pausa de nube corresponde a otro trabajo.");
+            using var marker = WindowsProbeNative.OpenPlainFile(settings, CloudPauseName, FileAccess.Read, FileShare.Delete, rename: true);
+            WindowsProbeNative.DeletePlainFile(marker.SafeFileHandle);
+        }
     }
 
     internal CloudConnection? ReadCloudConnection(Guid jobId)

@@ -247,6 +247,13 @@ internal static class CloudPointProbe
                 LocalJobRoots.ReviewDedicatedDestination(source, targets));
             id = job.Id;
             registry.SaveCloudConnection(id, connection, secrets, lab: true);
+            string exported = Path.Combine(fixture.Root, "synthetic-job-export.json");
+            registry.ExportConfiguration(id, exported);
+            string exportedText = File.ReadAllText(exported);
+            Check(!exportedText.Contains(password, StringComparison.Ordinal) &&
+                !exportedText.Contains(s3.SecretKey, StringComparison.Ordinal) &&
+                !exportedText.Contains(s3.AccessKey, StringComparison.Ordinal),
+                "The product export exposed a cloud credential.");
             var result = ProductRunner.Run(registry, id);
             Check(result is { State: ProductRunState.Confirmed, Generation: not null }, result.Detail ?? "Dispatch source failed.");
             generation = result.Generation!;

@@ -22,6 +22,14 @@ Si todavía no hay trabajos, **Crear mi primer respaldo** abre el asistente. Gua
 
 En **Aplicación**, **Importar un trabajo** y **Recuperar archivos**, usa **Volver a trabajos** en la cabecera para regresar a la lista conservando tu selección. En el asistente, **Atrás** vuelve al paso anterior y **Cancelar** regresa a la lista.
 
+## Tercera copia en nube
+
+En el paquete de nube, selecciona un trabajo sintético en Ruta y abre **Copia en nube**. Elige el proveedor y un bucket privado o una carpeta remota dedicada. Usa **Crear y activar copia** para un repositorio nuevo o **Conectar y activar copia** para uno que ya exista. Guarda la contraseña del repositorio fuera del equipo. Si la instalación tiene un ejecutor de una candidata anterior, usa primero **Aplicación → Instalar o actualizar ejecutor**.
+
+FolderTwin envía puntos locales completos. **Actualizar envíos** muestra la última confirmación remota, los envíos pendientes y la última restauración verificada. Puedes pausar toda la copia remota del trabajo o controlar un envío individual. Ante un problema de acceso, vuelve a conectar con una credencial válida. Si falta el disco local, reconéctalo. Si se agotó la cuota, revisa el espacio del proveedor y reintenta.
+
+Para recuperar en otro equipo, abre **Copia en nube** aunque la lista de trabajos esté vacía. Introduce la ubicación y las credenciales del repositorio, pulsa **Consultar fechas de nube**, elige una fecha y usa **Recuperar en carpeta nueva**. Los perfiles de Filen y MEGA siguen en validación externa. Usa carpetas sintéticas hasta completar la prueba con tu proveedor.
+
 ## Ayuda y versión
 
 **ⓘ Ayuda y versión**, arriba de la ventana, o **F1** abre las explicaciones de los controles visibles. Puedes expandir cada explicación con un clic o con el teclado. Al pasar el mouse sobre un control, aparece también su ayuda breve. Si está deshabilitado, la explicación indica qué falta para usarlo. Para consultar una sección plegada, ábrela antes de entrar en Ayuda.

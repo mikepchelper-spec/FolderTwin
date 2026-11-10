@@ -43,6 +43,7 @@
                 <TextBlock x:Name="CloudStatus" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" Margin="0,8" />
                 <WrapPanel Margin="0,4,0,8">
                     <Button x:Name="RefreshCloud" Content="Actualizar envíos" Click="RefreshClick" Margin="0,0,6,5" />
+                    <Button x:Name="PauseCloudJob" Content="Pausar copia de este trabajo" Click="PauseCloudJobClick" IsEnabled="False" Margin="0,0,6,5" />
                     <Button x:Name="PauseCloud" Content="Pausar envío" Click="PauseClick" Margin="0,0,6,5" />
                     <Button x:Name="CancelCloud" Content="Cancelar envío" Click="CancelClick" Margin="0,0,6,5" />
                     <Button x:Name="RetryCloud" Content="Reintentar envío" Click="RetryClick" Margin="0,0,6,5" />

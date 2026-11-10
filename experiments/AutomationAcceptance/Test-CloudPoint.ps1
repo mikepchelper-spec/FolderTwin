@@ -3,7 +3,8 @@
 param(
     [Parameter(Mandatory)][string]$Kopia,
     [Parameter(Mandatory)][string]$Rclone,
-    [string]$Dotnet = (Get-Command dotnet).Source
+    [string]$Dotnet = (Get-Command dotnet).Source,
+    [string]$PackageDirectory
 )
 $ErrorActionPreference = 'Stop'
 $Kopia = (Resolve-Path -LiteralPath $Kopia).ProviderPath
@@ -17,11 +18,19 @@ $fixture = [IO.Directory]::CreateTempSubdirectory('FolderTwin-CloudS3-').FullNam
 $storage = Join-Path $fixture 's3'
 [void][IO.Directory]::CreateDirectory((Join-Path $storage 'foldertwin'))
 Write-Output "Synthetic S3 workspace: $fixture"
-$project = Join-Path $PSScriptRoot '../CopyProbe/CopyProbe.csproj'
-$artifacts = Join-Path $fixture 'build'
-& $Dotnet build $project --artifacts-path $artifacts --nologo
-if ($LASTEXITCODE -ne 0) { throw 'CopyProbe build failed.' }
-$probe = Join-Path $artifacts 'bin/CopyProbe/debug/CopyProbe.dll'
+if ($PackageDirectory) {
+    $package = (Resolve-Path -LiteralPath $PackageDirectory).ProviderPath
+    $program = Join-Path $package 'CopyProbe.exe'
+    if (!(Test-Path -LiteralPath $program -PathType Leaf)) { throw 'CopyProbe.exe is missing from the verified package.' }
+    $prefix = @()
+} else {
+    $project = Join-Path $PSScriptRoot '../CopyProbe/CopyProbe.csproj'
+    $artifacts = Join-Path $fixture 'build'
+    & $Dotnet build $project --artifacts-path $artifacts --nologo
+    if ($LASTEXITCODE -ne 0) { throw 'CopyProbe build failed.' }
+    $program = $Dotnet
+    $prefix = @(Join-Path $artifacts 'bin/CopyProbe/debug/CopyProbe.dll')
+}
 
 $access = 'foldertwin-synthetic'
 $secret = [Guid]::NewGuid().ToString('N')
@@ -54,7 +63,7 @@ try {
     [Environment]::SetEnvironmentVariable('AWS_ACCESS_KEY_ID', $access)
     [Environment]::SetEnvironmentVariable('AWS_SECRET_ACCESS_KEY', $secret)
     [Environment]::SetEnvironmentVariable('AWS_SESSION_TOKEN', $null)
-    & $Dotnet $probe --cloud-point $Kopia --s3-lab $endpoint
+    & $program @prefix --cloud-point $Kopia --s3-lab $endpoint
     if ($LASTEXITCODE -ne 0) { throw 'Synthetic S3 acceptance failed.' }
 } finally {
     [Environment]::SetEnvironmentVariable('AWS_ACCESS_KEY_ID', $savedAccess)
