@@ -1,19 +1,24 @@
 using System.Security.Cryptography;
+using System.Net;
 
 internal static class CloudPointProbe
 {
-    internal static async Task<int> RunAsync(string kopia)
+    internal static async Task<int> RunAsync(string kopia, string? endpoint = null)
     {
+        if (endpoint is not null && (!IPEndPoint.TryParse(endpoint, out var address) ||
+            !address.Address.Equals(IPAddress.Loopback) || address.Port == 0))
+            throw new ArgumentException("The synthetic S3 endpoint must bind to IPv4 loopback.", nameof(endpoint));
         var fixture = LabWorkspace.Create();
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         var token = timeout.Token;
         bool completed = false;
         try
         {
-            string repository = Create("repository");
+            string[] backend = endpoint is null ? ["filesystem", "--path", Create("repository")] :
+                ["s3", "--bucket", "foldertwin", "--endpoint", endpoint, "--region", "us-east-1", "--disable-tls"];
             string password = Guid.NewGuid().ToString("N");
             var writer = new KopiaRepository(kopia, Path.Combine(Create("writer"), "repository.config"), password);
-            await writer.RunAsync(token, "repository", "create", "filesystem", "--path", repository, "--no-enable-actions");
+            await writer.RunAsync(token, ["repository", "create", .. backend, "--no-enable-actions"]);
             await writer.RunAsync(token, "maintenance", "set", "--enable-quick=false", "--enable-full=false");
             // An empty list inherits .kopiaignore. Use a name that cannot be a
             // file entry in the verified Windows tree.
@@ -63,8 +68,8 @@ internal static class CloudPointProbe
                 Directory.Move(source, Path.Combine(fixture.Root, $"{mode}-source-aside"));
                 Directory.Move(targets, Path.Combine(fixture.Root, $"{mode}-targets-aside"));
                 var reader = new KopiaRepository(kopia, Path.Combine(Create($"{mode}-reader"), "repository.config"), password);
-                await reader.RunAsync(token, "repository", "connect", "filesystem", "--path", repository, "--readonly",
-                    "--cache-directory", Create($"{mode}-reader-cache"));
+                await reader.RunAsync(token, ["repository", "connect", .. backend, "--readonly",
+                    "--cache-directory", Create($"{mode}-reader-cache")]);
                 foreach (var (operation, expected, hash, keepsRemoved) in published)
                 {
                     var observed = await reader.FindAsync(operation, token);

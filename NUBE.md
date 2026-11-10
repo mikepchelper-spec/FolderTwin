@@ -19,9 +19,13 @@ Ejecuta `dotnet run --project experiments/CopyProbe -- --cloud-point <ruta-absol
 
 | Alcance | Estado |
 | --- | --- |
-| Puntos confirmados de los tres modos, reintento tras respuesta perdida y restauración de dos fechas | Probado con Kopia real sobre almacenamiento de archivos desechable |
-| Transporte S3 y rclone, cola persistente, credenciales y estados de Ruta | En desarrollo |
+| Puntos confirmados de los tres modos, reintento tras respuesta perdida y restauración de dos fechas | Probado con Kopia sobre almacenamiento de archivos y sobre un endpoint S3 desechable |
+| Transporte hacia cuentas de rclone, cola persistente, credenciales y estados de Ruta | En desarrollo |
 | B2, AWS, Filen y MEGA con cuentas reales | Pendiente. Verificar autorización, cuotas, recuperación en otro equipo y alcance de la protección contra borrado |
 | Empaquetado Windows x64 y recorrido WPF | Pendiente |
 
-El siguiente ensayo debe reutilizar estos puntos y pasar por un endpoint S3 local. La CLI de Kopia 0.23.1 marca su repositorio directo de rclone como sin mantenimiento. La segunda vía requiere comparar ese adaptador con una pasarela local acotada, documentar qué proceso conserva las credenciales y validar la recuperación antes de elegir.
+El ensayo S3 usa [rclone serve s3](https://rclone.org/commands/rclone_serve_s3/) en loopback, con una clave sintética temporal. Repite los seis puntos y sus restauraciones. Comprueba el cliente S3 y la recuperación, con el servidor de laboratorio como destino. Las pruebas de Object Lock y las políticas de B2 o AWS se ejecutarán por separado.
+
+Ejecuta `experiments/AutomationAcceptance/Test-CloudPoint.ps1 -Kopia <kopia.exe> -Rclone <rclone.exe>`. Usa [rclone 1.76.0](https://github.com/rclone/rclone/releases/tag/v1.76.0), con SHA-256 del ZIP Windows x64 `8b4fd2737ade4e70c057ef4a49deb7cffe94b0fb9d7587c189d149823f21a1dc` y del ejecutable `acd80683e23151e93bbe0d6ffa74d26e542ec510332f630beecb9944f8d1a623`. [Licencia de rclone](https://github.com/rclone/rclone/blob/v1.76.0/COPYING)
+
+La CLI de Kopia 0.23.1 marca su repositorio directo de rclone como sin mantenimiento. La segunda vía requiere comparar ese adaptador con una pasarela local acotada, documentar qué proceso conserva las credenciales y validar la recuperación antes de elegir.
