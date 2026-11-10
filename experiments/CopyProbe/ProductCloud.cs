@@ -8,6 +8,17 @@ internal enum CloudProvider { AwsS3, BackblazeB2, CompatibleS3, Filen, Mega }
 
 internal sealed record CloudDestination(CloudProvider Provider, string Endpoint, string Region, string Bucket, string Prefix = "")
 {
+    internal bool UsesRclone => Provider is CloudProvider.Filen or CloudProvider.Mega;
+
+    internal void Validate(bool lab)
+    {
+        if (!UsesRclone) { _ = S3Arguments(lab); return; }
+        if (Endpoint != "" || Region != "" || Bucket != "" || Prefix.Length is < 2 or > 200 ||
+            !Prefix.EndsWith('/') || Prefix[..^1].Split('/').Any(part => part.Length == 0 ||
+                part.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_'))))
+            throw new InvalidDataException("Elige una carpeta dedicada a FolderTwin. Usa letras, números, guiones y barras.");
+    }
+
     internal string[] S3Arguments(bool lab = false)
     {
         if (!Enum.IsDefined(Provider) || Provider is CloudProvider.Filen or CloudProvider.Mega ||
@@ -35,11 +46,18 @@ internal sealed class CloudCredentials(string password, string accessKey, string
 
     internal KopiaS3Credentials S3()
     {
+        Validate();
+        return new(AccessKey, SecretKey, SessionToken);
+    }
+
+    internal void Validate(CloudProvider? provider = null)
+    {
         if (Password.Length is < 1 or > 1024 || AccessKey.Length is < 1 or > 1024 || SecretKey.Length is < 1 or > 2048 ||
             SessionToken?.Length > 16_384 || Password.Contains('\0') || AccessKey.Any(char.IsControl) ||
-            SecretKey.Any(char.IsControl) || SessionToken?.Any(char.IsControl) == true)
+            SecretKey.Any(char.IsControl) || SessionToken?.Any(char.IsControl) == true ||
+            provider == CloudProvider.Filen && string.IsNullOrWhiteSpace(SessionToken) ||
+            provider == CloudProvider.Mega && SessionToken is not null)
             throw new InvalidDataException("Las credenciales de nube están incompletas o contienen caracteres inválidos.");
-        return new(AccessKey, SecretKey, SessionToken);
     }
 }
 
@@ -50,7 +68,8 @@ internal static class ProductCloudDispatch
     internal static bool HasWork(ProductJobRegistry registry, ProductJob job) =>
         job.Enabled && !job.Retired && registry.HasCloudConnection(job.Id);
 
-    internal static async Task RunPassAsync(ProductJobRegistry registry, string kopia, CancellationToken token, bool lab = false)
+    internal static async Task RunPassAsync(ProductJobRegistry registry, string kopia, CancellationToken token, bool lab = false,
+        Func<string>? rclone = null, string? labRcloneRoot = null)
     {
         using var lease = registry.AcquireCloudDispatcher();
         var history = new ProductJobRegistry.DisplayRunHistory();
@@ -75,7 +94,8 @@ internal static class ProductCloudDispatch
                     continue;
                 }
                 if (saved is not { } current || current.Connection != connection) continue;
-                using var session = new CloudRepositorySession(kopia, connection.Destination, current.Credentials, lab);
+                using var session = new CloudRepositorySession(kopia, connection.Destination, current.Credentials,
+                    lab, rclone, labRcloneRoot);
                 using var connectDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
                 connectDeadline.CancelAfter(TimeSpan.FromSeconds(45));
                 try
@@ -103,21 +123,43 @@ internal static class ProductCloudDispatch
 internal sealed class CloudRepositorySession : IDisposable
 {
     private readonly DirectoryInfo scratch = Directory.CreateTempSubdirectory("FolderTwin-CloudConnection-");
-    internal KopiaRepository Repository { get; }
+    private KopiaRepository? repository;
+    internal KopiaRepository Repository => repository ?? throw new InvalidOperationException("La conexión de nube aún no está abierta.");
     private readonly CloudDestination destination;
     private readonly bool lab;
+    private readonly string kopia;
+    private readonly CloudCredentials credentials;
+    private readonly Func<string>? rclone;
+    private readonly string? labRcloneRoot;
+    private RcloneGateway? gateway;
 
-    internal CloudRepositorySession(string kopia, CloudDestination destination, CloudCredentials credentials, bool lab = false)
+    internal CloudRepositorySession(string kopia, CloudDestination destination, CloudCredentials credentials, bool lab = false,
+        Func<string>? rclone = null, string? labRcloneRoot = null)
     {
+        this.kopia = kopia;
         this.destination = destination;
+        this.credentials = credentials;
         this.lab = lab;
-        Repository = new(kopia, Path.Combine(scratch.FullName, "repository.config"), credentials.Password, credentials.S3());
+        this.rclone = rclone;
+        this.labRcloneRoot = labRcloneRoot;
     }
 
     internal async Task<CloudConnection> OpenAsync(bool create, bool readOnly, CancellationToken token)
     {
         if (create && readOnly) throw new ArgumentException("A new repository requires write access.");
-        await Repository.RunAsync(token, ["repository", create ? "create" : "connect", .. destination.S3Arguments(lab),
+        if (repository is not null) throw new InvalidOperationException("La conexión ya se abrió.");
+        destination.Validate(lab);
+        credentials.Validate(destination.Provider);
+        var s3 = destination;
+        if (destination.UsesRclone)
+        {
+            gateway = await RcloneGateway.OpenAsync(rclone?.Invoke() ?? throw new FileNotFoundException("Este paquete necesita rclone."),
+                destination, credentials, create, readOnly, token, lab ? labRcloneRoot : null);
+            s3 = new(CloudProvider.CompatibleS3, gateway.Endpoint, "us-east-1", "foldertwin");
+        }
+        repository = new(kopia, Path.Combine(scratch.FullName, "repository.config"), credentials.Password,
+            gateway?.Credentials ?? credentials.S3());
+        await Repository.RunAsync(token, ["repository", create ? "create" : "connect", .. s3.S3Arguments(lab || gateway is not null),
             "--cache-directory", Path.Combine(scratch.FullName, "cache"), "--max-list-cache-duration=0s",
             .. create ? new[] { "--no-enable-actions" } : readOnly ? new[] { "--readonly" } : []]);
         if (create)
@@ -132,6 +174,7 @@ internal sealed class CloudRepositorySession : IDisposable
 
     public void Dispose()
     {
+        gateway?.Dispose();
         // Only the fresh scratch directory allocated by this session is owned here.
         using (var fence = new DirectoryFence(scratch.FullName)) { }
         scratch.Delete(recursive: true);
@@ -159,8 +202,8 @@ internal sealed partial class ProductJobRegistry
 
     internal void SaveCloudConnection(Guid jobId, CloudConnection connection, CloudCredentials credentials, bool lab = false)
     {
-        _ = connection.Destination.S3Arguments(lab);
-        _ = credentials.S3();
+        connection.Destination.Validate(lab);
+        credentials.Validate(connection.Destination.Provider);
         if (!RetentionJournal.IsDigest(connection.Repository)) throw new InvalidDataException("El repositorio no tiene una identidad válida.");
         using var job = OpenJob(jobId);
         _ = ReadConfirmed(job, ReadIntent(job, jobId));
@@ -189,7 +232,7 @@ internal sealed partial class ProductJobRegistry
         {
             var credentials = JsonSerializer.Deserialize<CloudCredentials>(clear) ??
                 throw new InvalidDataException("Las credenciales de nube están vacías.");
-            _ = credentials.S3();
+            credentials.Validate(latest.Connection.Destination.Provider);
             return (latest.Connection, credentials);
         }
         finally { CryptographicOperations.ZeroMemory(clear); }

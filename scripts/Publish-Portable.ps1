@@ -6,7 +6,9 @@ param(
     [string]$DotNet = 'dotnet',
     [string]$SourceArchive,
     [string]$SourceRevision,
-    [string]$CloudKopiaArchive
+    [string]$CloudKopiaArchive,
+    [string]$CloudRcloneArchive,
+    [string]$CloudRcloneLicense
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,6 +17,9 @@ $output = [IO.Path]::TrimEndingDirectorySeparator($ExecutionContext.SessionState
 $sourceFile = if ($SourceArchive) { (Resolve-Path -LiteralPath $SourceArchive).Path }
 $work = $output + '.build'
 $runtimeVersion = '10.0.14'
+if ($CloudRcloneArchive -and (!$CloudKopiaArchive -or !$CloudRcloneLicense) -or $CloudRcloneLicense -and !$CloudRcloneArchive) {
+    throw 'Para distribuir rclone, indica los ZIP de Kopia y rclone y la licencia oficial de rclone.'
+}
 if (-not $SourceRevision) {
     $SourceRevision = & git -C $repo rev-parse HEAD
     if ($LASTEXITCODE -ne 0) { throw 'Indica SourceRevision al compilar un árbol sin Git.' }
@@ -71,6 +76,22 @@ try {
         $tools = New-Item -ItemType Directory -Path (Join-Path $output 'cloud-tools')
         Copy-Item -LiteralPath $kopia -Destination $tools.FullName
         Copy-Item -LiteralPath (Join-Path $sourceTools 'LICENSE') -Destination (Join-Path $tools.FullName 'LICENSE-kopia.txt')
+    }
+    if ($CloudRcloneArchive) {
+        $archive = (Resolve-Path -LiteralPath $CloudRcloneArchive).ProviderPath
+        $license = (Resolve-Path -LiteralPath $CloudRcloneLicense).ProviderPath
+        if ((Get-FileHash -LiteralPath $archive).Hash -ne '8B4FD2737ADE4E70C057EF4A49DEB7CFFE94B0FB9D7587C189D149823F21A1DC' -or
+            (Get-FileHash -LiteralPath $license).Hash -ne '8CD2E9E750B90A04B7D82DBBCA3930C696AE0309D7C10464F90A44F45754CD04') {
+            throw 'El ZIP o la licencia de rclone no coinciden con la versión fijada.'
+        }
+        $extracted = Join-Path $work 'rclone'
+        Expand-Archive -LiteralPath $archive -DestinationPath $extracted
+        $rclone = Join-Path $extracted 'rclone-v1.76.0-windows-amd64/rclone.exe'
+        if ((Get-FileHash -LiteralPath $rclone).Hash -ne 'ACD80683E23151E93BBE0D6FFA74D26E542EC510332F630BEECB9944F8D1A623') {
+            throw 'El ejecutable de rclone no coincide con la versión fijada.'
+        }
+        Copy-Item -LiteralPath $rclone -Destination $tools.FullName
+        Copy-Item -LiteralPath $license -Destination (Join-Path $tools.FullName 'LICENSE-rclone.txt')
     }
     foreach ($guide in @('GUIA.md', 'SUPPORT.md', 'NOTAS.md', 'PILOTO.md', 'COMPATIBILIDAD.md', 'INSTALACION.md', 'global.json')) {
         Copy-Item -LiteralPath (Join-Path $repo $guide) -Destination $output

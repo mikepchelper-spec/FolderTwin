@@ -100,6 +100,8 @@ if (args is ["--cloud-point", var kopia])
     return await CloudPointProbe.RunAsync(kopia);
 if (args is ["--cloud-point", var kopiaS3, "--s3-lab", var endpoint])
     return await CloudPointProbe.RunAsync(kopiaS3, endpoint);
+if (args is ["--cloud-rclone", var gatewayKopia, var gatewayRclone])
+    return await CloudPointProbe.RunRcloneAsync(gatewayKopia, gatewayRclone);
 if (args is ["--held-cloud-child", var cloudRoot, var cloudJob, var cloudRepository, var cloudGeneration, var cloudKopia] &&
     Guid.TryParseExact(cloudJob, "N", out var cloudJobId) && RetentionJournal.IsDigest(cloudRepository))
     return await CloudPointProbe.HeldChildAsync(cloudRoot, CloudTicket.For(cloudJobId, cloudRepository, cloudGeneration), cloudKopia);

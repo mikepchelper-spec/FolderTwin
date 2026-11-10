@@ -5,6 +5,71 @@ using System.Reflection;
 
 internal static class CloudPointProbe
 {
+    internal static async Task<int> RunRcloneAsync(string kopia, string rclone)
+    {
+        var fixture = LabWorkspace.Create();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        var token = timeout.Token;
+        bool complete = false;
+        try
+        {
+            string remote = Folder("rclone-storage");
+            using var registry = new ProductJobRegistry(Folder("jobs"));
+            foreach (var provider in new[] { CloudProvider.Filen, CloudProvider.Mega })
+            {
+                string source = Folder(provider + "-source"), targets = Folder(provider + "-targets");
+                string sample = Path.Combine(source, "muestra.txt");
+                var job = registry.Create(new(provider.ToString(), ProductBackupMode.Versions, null),
+                    LocalJobRoots.ReviewDedicatedDestination(source, targets));
+                var destination = new CloudDestination(provider, "", "", "", "backups/" + provider.ToString().ToLowerInvariant() + "/");
+                var account = new CloudCredentials(Guid.NewGuid().ToString("N"), "synthetic@example.invalid",
+                    Guid.NewGuid().ToString("N"), provider == CloudProvider.Filen ? Guid.NewGuid().ToString("N") : null);
+                CloudConnection connection;
+                using (var session = new CloudRepositorySession(kopia, destination, account, lab: true, () => rclone, remote))
+                    connection = await session.OpenAsync(create: true, readOnly: false, token);
+                registry.SaveCloudConnection(job.Id, connection, account, lab: true);
+                var hashes = new Dictionary<string, byte[]>();
+                for (int i = 0; i < 2; i++)
+                {
+                    File.WriteAllText(sample, $"Synthetic rclone content {i}");
+                    var backup = ProductRunner.Run(registry, job.Id);
+                    Check(backup is { State: ProductRunState.Confirmed, Generation: not null }, "Could not confirm a local point.");
+                    hashes.Add(backup.Generation!, SHA256.HashData(File.ReadAllBytes(sample)));
+                    await ProductCloudDispatch.RunPassAsync(registry, kopia, token, lab: true, () => rclone, remote);
+                    var queued = registry.CloudTransfers(job.Id, connection.Repository).Single(item => item.Ticket.Generation == backup.Generation);
+                    Check(queued.State == CloudTransferState.Available, $"Gateway send failed ({queued.State}, {queued.Issue}).");
+                }
+                Directory.Move(source, Path.Combine(fixture.Root, provider + "-source-aside"));
+                Directory.Move(targets, Path.Combine(fixture.Root, provider + "-targets-aside"));
+                using var reader = new CloudRepositorySession(kopia, destination, account, lab: true, () => rclone, remote);
+                Check(await reader.OpenAsync(create: false, readOnly: true, token) == connection, "Gateway restart opened a different repository.");
+                var points = (await reader.Repository.ListAsync(token)).Where(point => point.Job == job.Id).ToArray();
+                Check(points.Length == hashes.Count, "Gateway recovery could not enumerate two dates.");
+                foreach (var point in points)
+                {
+                    string output = Folder($"{provider}-recovery-{point.Point.ManifestId}");
+                    await reader.Repository.RestoreAsync(point.Point, output, token);
+                    var actual = SHA256.HashData(File.ReadAllBytes(Path.Combine(output, "muestra.txt")));
+                    Check(actual.AsSpan().SequenceEqual(hashes[point.Generation]), "The recovered gateway bytes differ.");
+                    Console.WriteLine($"{provider} profile, local rclone backend, SHA-256 {Convert.ToHexStringLower(actual)}");
+                }
+            }
+            complete = true;
+            Console.WriteLine("PASS both rclone profiles through the product gateway with a disposable local backend.");
+            return 0;
+        }
+        finally
+        {
+            if (complete)
+            {
+                using (fixture.OpenRegisteredRoot()) { }
+                Directory.Delete(fixture.Root, recursive: true);
+            }
+            else Console.Error.WriteLine($"Synthetic rclone fixture preserved at {fixture.Root}.");
+        }
+        string Folder(string name) => Directory.CreateDirectory(Path.Combine(fixture.Root, name)).FullName;
+    }
+
     internal static async Task<int> RunAsync(string kopia, string? endpoint = null)
     {
         if (endpoint is not null && (!IPEndPoint.TryParse(endpoint, out var address) ||

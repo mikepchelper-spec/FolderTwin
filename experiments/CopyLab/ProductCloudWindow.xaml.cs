@@ -17,16 +17,23 @@ public partial class ProductCloudWindow : Window
     private readonly ProductJob? job;
     private readonly Func<string> kopia;
     private readonly Action<ProductJobRegistry> startMonitor;
+    private readonly Func<CloudDestination, CloudCredentials, CloudRepositorySession>? testSession;
+    private readonly Func<ProductJobRegistry, CancellationToken, Task>? testDispatch;
+    private readonly Func<string>? testOutput;
     private readonly CancellationTokenSource closed = new();
     private CloudConnection? readConnection;
 
     internal ProductCloudWindow(Func<ProductJobRegistry> openRegistry, ProductJob? job, Func<string> kopia,
-        Action<ProductJobRegistry> startMonitor)
+        Action<ProductJobRegistry> startMonitor, Func<CloudDestination, CloudCredentials, CloudRepositorySession>? testSession = null,
+        Func<ProductJobRegistry, CancellationToken, Task>? testDispatch = null, Func<string>? testOutput = null)
     {
         this.openRegistry = openRegistry;
         this.job = job;
         this.kopia = kopia;
         this.startMonitor = startMonitor;
+        this.testSession = testSession;
+        this.testDispatch = testDispatch;
+        this.testOutput = testOutput;
         InitializeComponent();
         CloudHeading.Text = job is null ? "Recuperar una copia en nube" : $"Copia en nube · {job.Options.Name}";
         CreateCloud.IsEnabled = ConnectCloud.IsEnabled = job is { Enabled: true, Retired: false };
@@ -53,12 +60,31 @@ public partial class ProductCloudWindow : Window
 
     private void ProviderChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (Endpoint is not null) Endpoint.IsEnabled = Provider.SelectedIndex == (int)CloudProvider.CompatibleS3;
+        if (SessionToken is null) return;
+        var provider = (CloudProvider)Provider.SelectedIndex;
+        bool remote = provider is CloudProvider.Filen or CloudProvider.Mega;
+        Region.Visibility = RegionLabel.Visibility = Endpoint.Visibility = EndpointLabel.Visibility =
+            Bucket.Visibility = BucketLabel.Visibility = remote ? Visibility.Collapsed : Visibility.Visible;
+        Endpoint.IsEnabled = provider == CloudProvider.CompatibleS3;
+        PrefixLabel.Content = remote ? "Carpeta dedicada del repositorio" : "Carpeta del repositorio (opcional)";
+        AccessKeyLabel.Content = remote ? "_Correo de la cuenta" : "_Identificador de acceso";
+        SecretKeyLabel.Content = remote ? "_Contraseña de la cuenta" : "_Clave de acceso";
+        SessionToken.Visibility = SessionTokenLabel.Visibility = provider == CloudProvider.Mega ? Visibility.Collapsed : Visibility.Visible;
+        SessionTokenLabel.Content = provider == CloudProvider.Filen ? "Clave API de Filen" : "Token de sesión (opcional)";
+        ProviderHelp.Text = remote
+            ? "Proveedor experimental. La conexión con una cuenta real y la recuperación desde otro equipo siguen pendientes. Usa una carpeta dedicada y guarda la contraseña del repositorio fuera de este equipo."
+            : "Vista previa para carpetas sintéticas. Usa un bucket privado y guarda la contraseña del repositorio fuera de este equipo.";
+        AccessKey.Clear();
+        SecretKey.Clear();
+        SessionToken.Clear();
     }
 
     private CloudDestination Destination()
     {
         var provider = (CloudProvider)Provider.SelectedIndex;
+        string prefix = Prefix.Text.Trim().Trim('/');
+        if (provider is CloudProvider.Filen or CloudProvider.Mega)
+            return new(provider, "", "", "", prefix.Length == 0 ? "" : prefix + "/");
         string region = Region.Text.Trim();
         string endpoint = provider switch
         {
@@ -66,13 +92,12 @@ public partial class ProductCloudWindow : Window
             CloudProvider.BackblazeB2 => $"s3.{region}.backblazeb2.com",
             _ => Endpoint.Text.Trim()
         };
-        string prefix = Prefix.Text.Trim().Trim('/');
         return new(provider, endpoint, region, Bucket.Text.Trim(), prefix.Length == 0 ? "" : prefix + "/");
     }
 
     private CloudCredentials Credentials() =>
         new(RepositoryPassword.Password, AccessKey.Text.Trim(), SecretKey.Password,
-            SessionToken.Password.Length == 0 ? null : SessionToken.Password);
+            (CloudProvider)Provider.SelectedIndex == CloudProvider.Mega || SessionToken.Password.Length == 0 ? null : SessionToken.Password);
 
     private async void CreateClick(object sender, RoutedEventArgs e) => await ConfigureAsync(create: true);
     private async void ConnectClick(object sender, RoutedEventArgs e) => await ConfigureAsync(create: false);
@@ -82,18 +107,18 @@ public partial class ProductCloudWindow : Window
         if (job is not { Enabled: true, Retired: false }) return;
         var destination = Destination();
         var credentials = Credentials();
-        string executable = kopia();
         using var registry = openRegistry();
         var current = registry.Get(job.Id);
         if (!current.Enabled || current.Retired)
             throw new InvalidDataException("Habilita el trabajo antes de activar la copia en nube.");
         CloudConnection connection = await Task.Run(async () =>
         {
-            using var session = new CloudRepositorySession(executable, destination, credentials);
+            using var session = Session(destination, credentials);
             return await session.OpenAsync(create, readOnly: false, token);
         }, token);
-        registry.SaveCloudConnection(job.Id, connection, credentials);
-        using (ProductWorker.StartCloud(registry.Location)) { }
+        registry.SaveCloudConnection(job.Id, connection, credentials, lab: testSession is not null);
+        if (testDispatch is null) { using var worker = ProductWorker.StartCloud(registry.Location); }
+        else await testDispatch(registry, token);
         try { startMonitor(registry); }
         catch (Exception error) when (ProductAutomation.Expected(error))
         {
@@ -109,10 +134,9 @@ public partial class ProductCloudWindow : Window
         readConnection = null;
         var destination = Destination();
         var credentials = Credentials();
-        string executable = kopia();
         var (connection, points) = await Task.Run(async () =>
         {
-            using var session = new CloudRepositorySession(executable, destination, credentials);
+            using var session = Session(destination, credentials);
             var connection = await session.OpenAsync(create: false, readOnly: true, token);
             return (connection, await session.Repository.ListAsync(token));
         }, token);
@@ -126,14 +150,18 @@ public partial class ProductCloudWindow : Window
     {
         if (readConnection is not { } reviewed || CloudDates.SelectedItem is not DateChoice selected || Destination() != reviewed.Destination)
             throw new InvalidDataException("Consulta las fechas del repositorio y elige la que quieres recuperar.");
-        var dialog = new OpenFolderDialog { Title = "Elige dónde crear la carpeta recuperada", AddToRecent = false, DereferenceLinks = false };
-        if (dialog.ShowDialog(this) != true) return;
-        string parent = Path.TrimEndingDirectorySeparator(Path.GetFullPath(dialog.FolderName));
+        string? selectedParent = testOutput?.Invoke();
+        if (selectedParent is null)
+        {
+            var dialog = new OpenFolderDialog { Title = "Elige dónde crear la carpeta recuperada", AddToRecent = false, DereferenceLinks = false };
+            if (dialog.ShowDialog(this) != true) return;
+            selectedParent = dialog.FolderName;
+        }
+        string parent = Path.TrimEndingDirectorySeparator(Path.GetFullPath(selectedParent));
         var credentials = Credentials();
-        string executable = kopia();
         string output = await Task.Run(async () =>
         {
-            using var session = new CloudRepositorySession(executable, reviewed.Destination, credentials);
+            using var session = Session(reviewed.Destination, credentials);
             if (await session.OpenAsync(create: false, readOnly: true, token) != reviewed)
                 throw new InvalidDataException("El repositorio cambió. Vuelve a consultar sus fechas.");
             var observed = (await session.Repository.ListAsync(token)).SingleOrDefault(point => point == selected.Recovery) ??
@@ -153,6 +181,9 @@ public partial class ProductCloudWindow : Window
         }, token);
         CloudStatus.Text = $"Recuperación completada y autenticada por Kopia. {output}";
     }, TimeSpan.FromHours(2));
+
+    private CloudRepositorySession Session(CloudDestination destination, CloudCredentials credentials) =>
+        testSession?.Invoke(destination, credentials) ?? new(kopia(), destination, credentials, rclone: ProductCloudWorker.ReviewedRclone);
 
     private async void RefreshClick(object sender, RoutedEventArgs e) => await RunAsync(_ =>
     {

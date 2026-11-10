@@ -10,33 +10,35 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel x:Name="Actions">
                 <TextBlock x:Name="CloudHeading" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
-                <TextBlock Text="Vista previa para carpetas sintéticas. Usa un bucket privado y guarda la contraseña del repositorio fuera de este equipo." TextWrapping="Wrap" Margin="0,8" />
+                <TextBlock x:Name="ProviderHelp" Text="Vista previa para carpetas sintéticas. Usa un bucket privado y guarda la contraseña del repositorio fuera de este equipo." TextWrapping="Wrap" Margin="0,8" />
                 <Label Content="_Proveedor" Target="{Binding ElementName=Provider}" />
                 <ComboBox x:Name="Provider" SelectedIndex="0" SelectionChanged="ProviderChanged">
                     <ComboBoxItem Content="AWS S3" />
                     <ComboBoxItem Content="Backblaze B2 por S3" />
                     <ComboBoxItem Content="Endpoint S3 compatible" />
+                    <ComboBoxItem Content="Filen · experimental" />
+                    <ComboBoxItem Content="MEGA · experimental" />
                 </ComboBox>
-                <Label Content="_Región" Target="{Binding ElementName=Region}" />
+                <Label x:Name="RegionLabel" Content="_Región" Target="{Binding ElementName=Region}" />
                 <TextBox x:Name="Region" MaxLength="64" Text="us-east-1" />
-                <Label Content="_Servidor S3 compatible" Target="{Binding ElementName=Endpoint}" />
+                <Label x:Name="EndpointLabel" Content="_Servidor S3 compatible" Target="{Binding ElementName=Endpoint}" />
                 <TextBox x:Name="Endpoint" MaxLength="255" IsEnabled="False" />
-                <Label Content="_Bucket" Target="{Binding ElementName=Bucket}" />
+                <Label x:Name="BucketLabel" Content="_Bucket" Target="{Binding ElementName=Bucket}" />
                 <TextBox x:Name="Bucket" MaxLength="63" />
-                <Label Content="Carpeta del repositorio (opcional)" Target="{Binding ElementName=Prefix}" />
+                <Label x:Name="PrefixLabel" Content="Carpeta del repositorio (opcional)" Target="{Binding ElementName=Prefix}" />
                 <TextBox x:Name="Prefix" MaxLength="200" />
-                <Label Content="_Identificador de acceso" Target="{Binding ElementName=AccessKey}" />
+                <Label x:Name="AccessKeyLabel" Content="_Identificador de acceso" Target="{Binding ElementName=AccessKey}" />
                 <TextBox x:Name="AccessKey" MaxLength="1024" />
-                <Label Content="_Clave de acceso" Target="{Binding ElementName=SecretKey}" />
+                <Label x:Name="SecretKeyLabel" Content="_Clave de acceso" Target="{Binding ElementName=SecretKey}" />
                 <PasswordBox x:Name="SecretKey" MaxLength="2048" />
-                <Label Content="Token de sesión (opcional)" Target="{Binding ElementName=SessionToken}" />
+                <Label x:Name="SessionTokenLabel" Content="Token de sesión (opcional)" Target="{Binding ElementName=SessionToken}" />
                 <PasswordBox x:Name="SessionToken" MaxLength="16384" />
                 <Label Content="_Contraseña del repositorio" Target="{Binding ElementName=RepositoryPassword}" />
                 <PasswordBox x:Name="RepositoryPassword" MaxLength="1024" />
                 <WrapPanel Margin="0,12,0,0">
                     <Button x:Name="CreateCloud" Content="Crear y activar copia" Click="CreateClick" Margin="0,0,6,5" />
                     <Button x:Name="ConnectCloud" Content="Conectar y activar copia" Click="ConnectClick" Margin="0,0,6,5" />
-                    <Button Content="Consultar fechas de nube" Click="ListClick" Margin="0,0,6,5" />
+                    <Button x:Name="ListCloud" Content="Consultar fechas de nube" Click="ListClick" Margin="0,0,6,5" />
                 </WrapPanel>
                 <TextBlock x:Name="CloudStatus" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" Margin="0,8" />
                 <WrapPanel Margin="0,4,0,8">
@@ -47,7 +49,7 @@
                 </WrapPanel>
                 <Label Content="_Fecha en nube" Target="{Binding ElementName=CloudDates}" />
                 <ComboBox x:Name="CloudDates" DisplayMemberPath="Label" />
-                <Button Content="Recuperar en carpeta _nueva" HorizontalAlignment="Left" Click="RestoreClick" Margin="0,8,0,0" />
+                <Button x:Name="RestoreCloud" Content="Recuperar en carpeta _nueva" HorizontalAlignment="Left" Click="RestoreClick" Margin="0,8,0,0" />
             </StackPanel>
         </ScrollViewer>
     </DockPanel>
