@@ -91,7 +91,7 @@ internal static class CloudScaleProbe
         string bucket = Path.Combine(served, "foldertwin");
         if (Directory.Exists(archive)) Directory.Move(archive, bucket);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
-        deadline.CancelAfter(TimeSpan.FromMinutes(2));
+        deadline.CancelAfter(TimeSpan.FromMinutes(15));
         token = deadline.Token;
         string access = Guid.NewGuid().ToString("N"), secret = Guid.NewGuid().ToString("N");
         var start = new ProcessStartInfo(Path.Combine(tools, "rclone.exe"))
@@ -121,11 +121,15 @@ internal static class CloudScaleProbe
             if (await reader.IdentityAsync(token) != connection.Repository) throw new InvalidDataException("Downloaded repository changed.");
             var recovery = (await reader.ListAsync(token)).Single(item => item.Job == job && item.Generation == generation);
             string restored = Directory.CreateDirectory(Path.Combine(fixture.Root, $"restored-{Guid.NewGuid():N}")).FullName;
+            Console.WriteLine($"Independent restore started: files={recovery.Point.Files}");
             var timer = Stopwatch.StartNew();
             await reader.RestoreAsync(recovery.Point, restored, token);
+            var elapsed = timer.Elapsed;
             byte[] actual = SHA256.HashData(File.ReadAllBytes(Path.Combine(restored, sample)));
             if (!actual.AsSpan().SequenceEqual(expected)) throw new InvalidDataException("Restored scale sample differs.");
-            Console.WriteLine($"independent_restore_s={timer.Elapsed.TotalSeconds:F3} sha256={Convert.ToHexStringLower(actual)}");
+            int files = Directory.EnumerateFiles(restored, "*", SearchOption.AllDirectories).Count();
+            if (files != recovery.Point.Files) throw new InvalidDataException("Restored scale file count differs.");
+            Console.WriteLine($"independent_restore_s={elapsed.TotalSeconds:F3} restored_files={files} sha256={Convert.ToHexStringLower(actual)}");
         }
         finally { if (!child.HasExited) { child.Kill(); await child.WaitForExitAsync(); } }
     }

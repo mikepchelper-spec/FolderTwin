@@ -18,7 +18,7 @@ El paquete local reproducible `335a98a` validó cambios y recuperación entre la
 
 La revisión de capacidad mide el crecimiento con los tres modos vigilados entre C: y D: y comprueba la recuperación tras un fallo de espacio inyectado. Ruta, historial y bandeja muestran la incidencia de espacio por trabajo. [Mediciones de capacidad y retención manual](CAPACIDAD.md).
 
-Este proyecto está dedicado al respaldo cotidiano local de carpetas.
+La candidata local de nube `c90f013` añade una tercera copia cifrada en Kopia a los tres modos de respaldo. Ruta configura el envío y permite recuperar fechas desde un perfil vacío. La aceptación usa S3 y almacenamiento rclone de laboratorio. Backblaze B2, AWS S3, Filen y MEGA conservan sus pruebas con cuentas reales pendientes. [Candidata y matriz de pruebas](NUBE.md).
 
 Esta entrega es **experimental y solo para datos sintéticos y carpetas desechables**. Para participar: [soporte](SUPPORT.md), [contribuciones](CONTRIBUTING.md), [reporte privado de vulnerabilidades](SECURITY.md) y [mantenimiento y futuras entregas](MANTENIMIENTO.md). No adjuntes respaldos, credenciales, configuraciones, logs completos ni rutas personales a las incidencias.
 
