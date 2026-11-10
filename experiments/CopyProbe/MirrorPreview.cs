@@ -96,7 +96,7 @@ internal sealed partial class VersionStore
             : null;
         return new(generation, sourcePlan, hash, registry.MirrorGeneration, before?.DocumentHash ?? new byte[32], registry.LastHash,
             currentIdentity, added, replaced, removed, addedDirectories, removedDirectories, conflicts, stageBytes,
-            checked(desiredPlan.Bytes + stageBytes + (workspace.IsAccumulative ? 5L : 3L) * catalogBytes),
+            checked(desiredPlan.Bytes + stageBytes + (workspace.IsAccumulative ? 5L : automatic ? 4L : 3L) * catalogBytes),
             LabWorkspace.AvailableSpace(root), maximumChangePercent,
             !workspace.IsAccumulative && sourcePlan.Files.Length == 0 && sourcePlan.Directories.Length == 0, mass,
             workspace.IsAccumulative ? observed : null, checked((int)previousEntries), affected);

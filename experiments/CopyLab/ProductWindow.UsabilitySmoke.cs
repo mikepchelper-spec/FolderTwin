@@ -142,12 +142,25 @@ public partial class ProductWindow
                 if (Directory.Exists(target)) throw new IOException("Preserve substituted synthetic target for investigation.");
                 Directory.Move(detachedTarget, target);
             }
-            using (var registry = Open())
-            using (var attempt = registry.StartRun(versioned.Id))
-                _ = attempt.Finish(ProductRunState.Review, errorCode: unchecked((int)0x80070070), detail: "Synthetic capacity error.");
-            await window.RefreshRuntimeAsync();
-            Check(window.StatusText.Text.Contains("Espacio insuficiente", StringComparison.Ordinal) &&
-                window.StatusText.Text.Contains("diario", StringComparison.Ordinal), "Disk-full presentation did not explain preserved partial state.");
+            string completeDateBeforeCapacityFailure = window.RouteBackupDate.Text;
+            int preflightCode;
+            try { LabWorkspace.RequireSpace(1, LabWorkspace.ReserveBytes); throw new InvalidOperationException("Expected a space rejection."); }
+            catch (IOException error) { preflightCode = error.HResult; }
+            foreach (int code in new[] { preflightCode, 112 })
+            {
+                using var registry = Open();
+                using (var attempt = registry.StartRun(versioned.Id))
+                    _ = attempt.Finish(ProductRunState.Review, errorCode: code, detail: "Synthetic capacity error.");
+                await window.RefreshRuntimeAsync();
+                var tray = TraySnapshot.ReadProduct(registry);
+                Check(window.StatusText.Text.Contains("Espacio insuficiente", StringComparison.Ordinal) &&
+                    window.StatusText.Text.Contains("Libera espacio", StringComparison.Ordinal) &&
+                    window.RouteBadgeText.Text == "Espacio insuficiente" && window.RouteBackupDate.Text == completeDateBeforeCapacityFailure &&
+                    window.NextProtectionStep.Text.Contains("Reintentar respaldo", StringComparison.Ordinal) &&
+                    window.RunHistoryList.Items.OfType<string>().Any(row => row.Contains("Espacio insuficiente", StringComparison.Ordinal)) &&
+                    tray.Status.Contains("Espacio insuficiente en 1 trabajo", StringComparison.Ordinal) && tray.Attention.FirstOrDefault() == $"{versioned.Id:N}-space",
+                    "The disk-full result did not preserve the date and identify the action for the affected job in Ruta, history and tray.");
+            }
             await Click(window, window.BackupJobButton);
             Check(window.StatusText.Text.StartsWith("Respaldo completo", StringComparison.Ordinal), "Retry failed after resolving synthetic incidents.");
             await window.CheckDesktopLayoutAsync();

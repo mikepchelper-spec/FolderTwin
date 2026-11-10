@@ -10,6 +10,8 @@ $harness = Join-Path $artifacts 'bin/AutomationAcceptance/debug/CopyLab.dll'
 dotnet $harness --drive-aliases
 dotnet $harness --waiting-controls "$package\FolderTwin.exe"
 dotnet $harness --daily-performance "$package\FolderTwin.exe" 4096 ProtectedMirror prepared
+dotnet $harness --storage-growth "$package\FolderTwin.exe" 4096
+dotnet $harness --storage-safety "$package\FolderTwin.exe"
 ```
 
 `--drive-aliases` registra los tres modos desde una letra temporal que apunta al destino de D:. Cambia el alias, reutiliza la letra original para un sustituto en C: y comprueba identidades, ausencia, retorno y restauración. Retira sus propios alias al finalizar. El ensayo trabaja con alias de la sesión y deja la reasignación de una partición VHDX al laboratorio dedicado.
@@ -19,6 +21,8 @@ dotnet $harness --daily-performance "$package\FolderTwin.exe" 4096 ProtectedMirr
 El mismo ensayo traslada al origen un árbol preparado fuera del alcance del vigilante con 256 archivos y renombra después su carpeta raíz. Recupera todos los descendientes con el origen apartado. Acumulativo debe conservar las dos rutas, versionado debe guardar el cambio de ruta y espejo debe conservar el árbol previo y pedir revisión ante el renombrado masivo.
 
 `--daily-performance` acepta 4.096 o 329.000 archivos y un modo (`Accumulative`, `ProtectedMirror` o `Versions`). Ejecuta el monitor del paquete sobre un registro aislado y mide cinco operaciones ordinarias y la recuperación del archivo afectado con el origen apartado. `prepared` reutiliza la preparación verificada del arnés del motor para medir un árbol ya poblado en acumulativo o espejo. En esos modos, la escala de 329.000 usa siempre esa preparación. Evita ejecutar otras pruebas de disco simultáneamente si vas a comparar las latencias.
+
+`--storage-growth` usa el monitor extraído y mide por fase el tamaño lógico y la asignación de archivos NTFS. La variante de 4.096 abre los tres trabajos a la vez. La de 329.000 concentra el ensayo en versionado. Revisa la salida por fase y el SHA-256 de la restauración del último guardado. `--storage-safety` usa tres trabajos nuevos con un presupuesto inyectado solo para la comprobación inicial y un fallo de disco lleno durante la publicación. Comprueba recuperación sin origen, continuidad de otro trabajo, reanudación y asignación liberada por la purga manual. El [informe de capacidad](../../CAPACIDAD.md) registra el alcance y los resultados.
 
 `Test-IsolatedStartup.ps1 -PackageDirectory <extracción> -SourceRevision <commit-completo>` verifica el paquete y abre su `FolderTwin.exe` sin argumentos. Antes comprueba en un proceso aparte que Windows devuelve la carpeta temporal al consultar `LocalAppData` con el entorno aislado. Exige que Ruta aparezca, que el registro se cree en esa carpeta y que la ventana cierre con el registro vacío. Conserva el resultado en el espacio desechable. Este ensayo usa la cuenta interactiva actual y un perfil de aplicación aislado por proceso. El arnés del runner hospedado permite comprobar por separado una cuenta Windows desechable completa.
 

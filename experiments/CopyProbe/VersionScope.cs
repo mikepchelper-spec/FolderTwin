@@ -64,11 +64,12 @@ internal sealed class VersionScope
             throw new InvalidDataException("El plan no corresponde a las identidades del trabajo.");
     }
 
-    internal void SaveIntent(BatchPlan plan, SafeFileHandle scope, PendingFiles files, Action<PendingStep>? checkpoint = null)
+    internal void SaveIntent(BatchPlan plan, SafeFileHandle scope, PendingFiles files, Action<PendingStep>? checkpoint = null,
+        byte[]? metadataHash = null)
     {
         ValidatePlan(plan);
-        if (lab is not null) PendingBatch.SaveLocked(plan, scope, files, checkpoint);
-        else PendingBatch.SaveProductLocked(plan, scope, files, checkpoint);
+        if (lab is not null) PendingBatch.SaveLocked(plan, scope, files, checkpoint, metadataHash);
+        else PendingBatch.SaveProductLocked(plan, scope, files, checkpoint, metadataHash);
     }
 
     internal BatchPlan ReadIntent(SafeFileHandle scope, string destination, SafeFileHandle store, PendingFiles files) =>

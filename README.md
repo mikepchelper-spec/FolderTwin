@@ -16,6 +16,8 @@ La candidata local incorpora la vigilancia continua. El código admite altas, ed
 
 El paquete local reproducible `335a98a` validó cambios y recuperación entre la SSD C: y el HDD D: con 4.096 archivos en los tres modos y con 329.000 en espejo. La simulación de tres trabajos con 3.024 intentos cada uno comprobó Ruta, bandeja y reserva de nuevas ejecuciones. [Mediciones y pruebas desde la extracción](RENDIMIENTO.md).
 
+La revisión de capacidad mide el crecimiento con los tres modos vigilados entre C: y D: y comprueba la recuperación tras un fallo de espacio inyectado. Ruta, historial y bandeja muestran la incidencia de espacio por trabajo. [Mediciones de capacidad y retención manual](CAPACIDAD.md).
+
 Este proyecto está dedicado al respaldo cotidiano local de carpetas.
 
 Esta entrega es **experimental y solo para datos sintéticos y carpetas desechables**. Para participar: [soporte](SUPPORT.md), [contribuciones](CONTRIBUTING.md), [reporte privado de vulnerabilidades](SECURITY.md) y [mantenimiento y futuras entregas](MANTENIMIENTO.md). No adjuntes respaldos, credenciales, configuraciones, logs completos ni rutas personales a las incidencias.

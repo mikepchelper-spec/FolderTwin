@@ -32,7 +32,8 @@ internal sealed partial class VersionStore
     }
 
     internal bool UpdateAutomaticMirror(string source, bool captureAffectedPaths, Func<MirrorPreview, bool> authorize,
-        Action<MirrorStep>? checkpoint = null, string[]? editHints = null, Action? scopedComparison = null)
+        Action<MirrorStep>? checkpoint = null, string[]? editHints = null, Action? scopedComparison = null,
+        Func<ulong>? measureAvailable = null)
     {
         using var scope = workspace.OpenRegisteredRoot();
         workspace.CheckRoots(source, Destination);
@@ -51,7 +52,7 @@ internal sealed partial class VersionStore
         // Both admission and publication use this exact inventory under the same
         // store lock. ContinueMirror rechecks both trees before mutating current.
         if (!authorize(fresh)) return false;
-        LabWorkspace.RequireSpace(fresh.EstimatedBytes, fresh.AvailableBytes);
+        LabWorkspace.RequireSpace(fresh.EstimatedBytes, measureAvailable?.Invoke() ?? fresh.AvailableBytes);
         try
         {
             CopyAndConfirm(root.Root, fresh.SourcePlan, fresh.Generation, checkpoint: null, objectCheckpoint: null,
@@ -298,6 +299,8 @@ internal sealed partial class VersionStore
             }
         MirrorJournal.SetState(directory, plan, "applied");
         checkpoint?.Invoke(MirrorStep.Applied);
+        if (automatic && (plan.Version == 2 || plan.SourceHash.AsSpan().SequenceEqual(plan.DocumentHash)))
+            ReleaseDuplicatePreparation(scope, pending, directory, plan);
 
         void RequireCurrent(bool afterPublication)
         {
@@ -305,6 +308,25 @@ internal sealed partial class VersionStore
                 RequireScopedContents(MirrorCurrentPath, plan.CurrentIdentity, afterPublication ? after : before!,
                     afterPublication ? afterApply : beforeApply!);
             else RequireMirrorContents(afterPublication ? after : before, plan.CurrentIdentity);
+        }
+    }
+
+    private void ReleaseDuplicatePreparation(SafeFileHandle scope, SafeFileHandle pending, SafeFileHandle directory, MirrorPlan plan)
+    {
+        // Applied operations retain the plan and state markers. Pending, superseded,
+        // and distinct source or baseline inventories retain their recovery data.
+        try
+        {
+            var prepared = PreparedMirrorSource(directory, plan.Generation);
+            using var duplicate = WindowsProbeNative.OpenPlainFile(directory, prepared.Metadata, FileAccess.Read, FileShare.None, rename: true);
+            if (!BatchCatalog.MatchesDocument(duplicate, plan.Generation, plan.DocumentHash)) return;
+            var (_, identity) = workspace.ReadRegisteredSource(Destination, scope, IntentFiles(pending, plan.Generation), plan.DocumentHash);
+            if (identity.AsSpan().SequenceEqual(plan.SourceIdentity)) WindowsProbeNative.DeletePlainFile(duplicate.SafeFileHandle);
+        }
+        catch (Exception error) when (VersionJob.Expected(error))
+        {
+            // Releasing a redundant file is optional once the update is applied.
+            System.Diagnostics.Trace.TraceWarning("Se conservó un descriptor de preparación del espejo. Código 0x{0:X8}.", error.HResult);
         }
     }
 

@@ -248,9 +248,12 @@ internal sealed class LabWorkspace
 
     internal static void RequireSpace(long bytes, ulong available)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(bytes);
         if ((ulong)bytes + ReserveBytes > available)
-            throw new IOException("El espacio disponible no alcanza para el contenido y la reserva del laboratorio.");
+            throw new IOException("El espacio disponible no alcanza para la operación y su reserva de trabajo.", unchecked((int)0x80070070));
     }
+
+    internal static bool IsDiskFull(int? code) => code is 39 or 112 or unchecked((int)0x80070027) or unchecked((int)0x80070070);
 
     internal static ulong AvailableSpace(SafeFileHandle directory)
     {

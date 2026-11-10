@@ -39,19 +39,19 @@ internal static class PendingBatch
     }
 
     internal static void SaveLocked(BatchPlan plan, SafeFileHandle fixture, PendingFiles files,
-        Action<PendingStep>? checkpoint = null)
+        Action<PendingStep>? checkpoint = null, byte[]? metadataHash = null)
     {
         var location = new Location(1, WindowsProbeNative.DirectoryIdentity(fixture),
             Path.GetRelativePath(plan.FixtureRoot, plan.Source), plan.SourceIdentity,
-            BatchCatalog.WriteMetadata(Stream.Null, plan, files.Generation));
+            metadataHash ?? BatchCatalog.WriteMetadata(Stream.Null, plan, files.Generation));
         SaveLocked(plan, files, location, checkpoint);
     }
 
     internal static void SaveProductLocked(BatchPlan plan, SafeFileHandle destination, PendingFiles files,
-        Action<PendingStep>? checkpoint = null)
+        Action<PendingStep>? checkpoint = null, byte[]? metadataHash = null)
     {
         var location = new Location(2, WindowsProbeNative.DirectoryIdentity(destination), plan.Source,
-            plan.SourceIdentity, BatchCatalog.WriteMetadata(Stream.Null, plan, files.Generation));
+            plan.SourceIdentity, metadataHash ?? BatchCatalog.WriteMetadata(Stream.Null, plan, files.Generation));
         SaveLocked(plan, files, location, checkpoint);
     }
 

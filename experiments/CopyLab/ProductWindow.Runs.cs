@@ -105,10 +105,13 @@ public partial class ProductWindow
             "Última comparación automática · " + RouteDate(reconciled?.Result?.FinishedUtc);
         var restored = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Restore &&
             run.Result?.State == ProductRunState.Confirmed && run.Restore is not null);
+        var lastBackup = history.Runs.FirstOrDefault(run => run.Intent.Operation is ProductRunOperation.Backup or ProductRunOperation.ReviewMirror);
         OpenRestoredFolderButton.IsEnabled = OpenRecoveryOutputButton.IsEnabled = !busy && restored is not null;
         NextProtectionStep.Text = job is null ? "" : active is not null ?
             "Siguiente paso · Espera el resultado de la operación o usa Pausar y Cancelar ejecución." :
             !job.Enabled || job.Retired ? "Trabajo deshabilitado. Puedes recuperar sus puntos y revisar la configuración para habilitar futuras copias." :
+            LabWorkspace.IsDiskFull(lastBackup?.Result?.ErrorCode) ?
+            "Siguiente paso · Libera espacio fuera de los archivos internos del respaldo y pulsa Reintentar respaldo." :
             correct is null ?
             (job.WatchMode == ProductWatchMode.Watching ? "Siguiente paso · Consulta el monitor mientras se prepara la primera copia." :
                 "Siguiente paso · Pulsa Respaldar ahora para crear la primera copia.") :
@@ -119,7 +122,6 @@ public partial class ProductWindow
             "Siguiente paso · Abre Recuperar archivos y verifica este respaldo. Después recupera una muestra en una carpeta nueva." :
             restored is null ? "Siguiente paso · Recupera una muestra en una carpeta nueva y abre los archivos para comprobarlos." :
             "Copia verificada. Puedes abrir la última carpeta recuperada de este trabajo.";
-        var lastBackup = history.Runs.FirstOrDefault(run => run.Intent.Operation is ProductRunOperation.Backup or ProductRunOperation.ReviewMirror);
         BackupJobButton.Content = lastBackup is { Running: false, Result.State: not (ProductRunState.Confirmed or ProductRunState.Unchanged) } or { Running: false, Result: null }
             ? "↻ _Reintentar respaldo" : "▷ _Respaldar ahora";
         if (job is not null)
@@ -194,6 +196,7 @@ public partial class ProductWindow
             "Sin cambios desde el último punto" => ("Sin cambios", ""),
             "Recuperación completa" => ("✓ Recuperado", ""),
             "Esperando disco de destino" => ("Esperando disco", "Attention"),
+            "Espacio insuficiente" => ("Espacio insuficiente", "Attention"),
             "Revisión del espejo lista" => ("Revisión pendiente", "Attention"),
             "Pausado" or "En ejecución" => (activity, ""),
             _ when history.Runs.Length == 0 => ("Sin respaldos", ""),
@@ -234,6 +237,7 @@ public partial class ProductWindow
             ProductRunState.WaitingForDestination => "Esperando disco de destino",
             ProductRunState.Busy => "Archivo o destino en uso",
             ProductRunState.Unchanged => "Sin cambios desde el último punto",
+            _ when LabWorkspace.IsDiskFull(result.ErrorCode) => "Espacio insuficiente",
             _ => "Requiere atención"
         } : "Interrumpido; revisa o reintenta";
 
@@ -272,8 +276,8 @@ public partial class ProductWindow
             "Respaldo completo pendiente. Abre Recuperar para consultar el punto parcial con los archivos legibles.",
         ProductRunState.Busy => "Un archivo o el destino está en uso. Cierra la aplicación que lo usa o espera a que termine la otra operación. Luego reintenta.",
         ProductRunState.Unchanged => "La comparación no encontró cambios. La fecha del último respaldo completo y la última verificación se conservan.",
-        _ when result.ErrorCode is { } code && (code & 0xffff) is 112 or 39 =>
-            "Espacio insuficiente. El intento queda parcial y conserva su diario. Libera espacio fuera de los archivos internos del respaldo y reintenta.",
+        _ when LabWorkspace.IsDiskFull(result.ErrorCode) =>
+            "Espacio insuficiente. Libera espacio fuera de los archivos internos del respaldo y vuelve a intentar la operación.",
         _ => (result.Detail ?? "La operación necesita revisión antes de continuar.") +
             " Conserva los datos y el historial. Comprueba las carpetas registradas y resuelve la incidencia antes de reintentar."
     }) + (result.RelativePath is { } path ? "\n" + path : "");

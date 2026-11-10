@@ -80,7 +80,8 @@ internal static partial class ProductRunner
     }
 
     internal static ProductRunResult Run(ProductJobRegistry registry, Guid id, Guid? approvalId = null,
-        Action<WorkProgress>? checkpoint = null, Func<DateTimeOffset>? clock = null, bool automatic = false, string[]? editHints = null)
+        Action<WorkProgress>? checkpoint = null, Func<DateTimeOffset>? clock = null, bool automatic = false, string[]? editHints = null,
+        Func<ulong>? measureAvailable = null)
     {
         using var run = registry.StartRun(id, clock, automatic: automatic);
         var control = new Controller(run, checkpoint);
@@ -115,7 +116,7 @@ internal static partial class ProductRunner
                     store.ResumePoint(generation, expectedSourceIdentity: job.Source.Identity);
                 }
                 else if (!store.CreatePoint(job.Source.VolumePath, generation,
-                    beforeAutomaticPublication: automatic ? () => run.SetGeneration(generation) : null))
+                    beforeAutomaticPublication: automatic ? () => run.SetGeneration(generation) : null, measureAvailable: measureAvailable))
                     return run.Finish(ProductRunState.Unchanged, clock: clock);
             }
             else
@@ -144,7 +145,7 @@ internal static partial class ProductRunner
                         if (consent) run.AuthorizeAutomaticMirror(fresh);
                         else run.SetGeneration(fresh.Generation);
                         return true;
-                    }, editHints: editHints, scopedComparison: () => scoped = true);
+                    }, editHints: editHints, scopedComparison: () => scoped = true, measureAvailable: measureAvailable);
                     if (!updated)
                     {
                         if (rejected is null) return run.Finish(ProductRunState.Unchanged, clock: clock, scoped: scoped);

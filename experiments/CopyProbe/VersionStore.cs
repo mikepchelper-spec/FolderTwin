@@ -92,7 +92,8 @@ internal sealed partial class VersionStore
 
     internal bool CreatePoint(string source, string generation, Action<CatalogStep>? checkpoint = null,
         Action<PendingStep>? pendingCheckpoint = null, Action<CopyStep, string>? objectCheckpoint = null,
-        Action<RegistryStep>? registryCheckpoint = null, Action? beforeAutomaticPublication = null)
+        Action<RegistryStep>? registryCheckpoint = null, Action? beforeAutomaticPublication = null,
+        Func<ulong>? measureAvailable = null)
     {
         if (workspace.IsAccumulative || IsPartialPoint(generation))
             throw new InvalidDataException("La copia acumulativa se publica mediante su actualización de carpeta actual.");
@@ -138,7 +139,9 @@ internal sealed partial class VersionStore
             if (GenerationRegistry.Read(store.Root, binding).Abandoned.ContainsKey(generation))
                 throw new InvalidDataException("El plan se conservó como abandonado. Inicia una generación nueva.");
         }
-        LabWorkspace.RequireSpace(0, LabWorkspace.AvailableSpace(store.Root));
+        // The durable execution descriptor and both catalog replicas each contain this document.
+        byte[] metadataHash = BatchCatalog.WriteMetadata(Stream.Null, plan, generation, out int catalogBytes);
+        LabWorkspace.RequireSpace(3L * catalogBytes, measureAvailable?.Invoke() ?? LabWorkspace.AvailableSpace(store.Root));
         if (beforeAutomaticPublication is null) SaveIntent();
         CopyAndConfirm(store.Root, plan, generation, checkpoint, objectCheckpoint,
             beforePublication: beforeAutomaticPublication is null ? null : () => { beforeAutomaticPublication(); SaveIntent(); });
@@ -146,7 +149,7 @@ internal sealed partial class VersionStore
 
         void SaveIntent()
         {
-            workspace.SaveIntent(plan, scope.Root, files, pendingCheckpoint);
+            workspace.SaveIntent(plan, scope.Root, files, pendingCheckpoint, metadataHash);
             RecordExpected(store.Root, plan, generation, registryCheckpoint);
         }
     }

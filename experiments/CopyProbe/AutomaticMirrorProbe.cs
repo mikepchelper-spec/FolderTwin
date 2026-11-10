@@ -148,6 +148,9 @@ internal static class AutomaticMirrorProbe
                 var point = ProductRunner.Run(registry, scoped.Id, automatic: true, editHints: ["save.tmp", Name(0)]);
                 Check(point is { State: ProductRunState.Confirmed, Scoped: true }, point.Detail ?? "The hinted edit did not use the scoped path.");
                 var scopedStore = VersionStore.OpenProduct(scoped);
+                string Prepared(string generation) => Path.Combine(scoped.Destination.LastVolumePath, "mirror", "operations", generation, "source.jsonl");
+                Check(!File.Exists(Prepared(point.Generation!)) && File.Exists(Path.Combine(scoped.Destination.LastVolumePath,
+                    "pending", point.Generation + ".jsonl")), "An applied scoped update retained an exact duplicate or lost the durable descriptor.");
                 Check(File.ReadAllText(Path.Combine(scopedStore.MirrorCurrentPath, Name(0))) == "edited", "Scoped edit did not update the mirror.");
                 var comparison = ProductRunner.Run(registry, scoped.Id, automatic: true);
                 Check(comparison is { State: ProductRunState.Unchanged, Scoped: false }, "Reconciliation was not independent of the scoped path.");
@@ -163,7 +166,11 @@ internal static class AutomaticMirrorProbe
                         return true;
                     }, checkpoint: step =>
                     {
-                        if (step == MirrorStep.Retired) throw new IOException("Synthetic interruption after retirement.");
+                        if (step == MirrorStep.Retired)
+                        {
+                            Check(File.Exists(Prepared(interrupted!)), "A pending update lost its preparation before the applied marker.");
+                            throw new IOException("Synthetic interruption after retirement.");
+                        }
                     }, editHints: [Name(0)]);
                     throw new InvalidOperationException("The scoped interruption was not reached.");
                 }
@@ -173,10 +180,23 @@ internal static class AutomaticMirrorProbe
                 var resumedScoped = ProductRunner.Run(registry, scoped.Id, automatic: true);
                 Check(resumedScoped is { State: ProductRunState.Confirmed, Scoped: true } && resumedScoped.Generation == interrupted,
                     resumedScoped.Detail ?? "The scoped journal could not finish without the source.");
+                Check(!File.Exists(Prepared(interrupted!)), "Resuming an interrupted scoped update did not release the redundant preparation.");
                 string scopedRestore = Folder("scoped-restore-" + mode);
                 scopedStore.Restore(resumedScoped.Generation!, scopedRestore, Name(0));
                 Check(File.ReadAllText(Path.Combine(scopedRestore, Name(0))) == "second", "The scoped journal did not restore the edited bytes.");
                 Directory.Move(detachedEditing, editing);
+
+                File.WriteAllText(edited, "synthetic later bytes");
+                string? altered = null;
+                Check(scopedStore.UpdateAutomaticMirror(scoped.Source.VolumePath, captureAffectedPaths: false, preview =>
+                {
+                    altered = Prepared(preview.Generation);
+                    return preview.Scoped;
+                }, checkpoint: step =>
+                {
+                    if (step == MirrorStep.Registered) File.WriteAllText(altered!, "synthetic nonmatching preparation");
+                }, editHints: [Name(0)]) && File.ReadAllText(altered!) == "synthetic nonmatching preparation",
+                    "An externally altered preparation was removed as a duplicate.");
 
                 File.WriteAllText(Path.Combine(editing, "added.txt"), "new structural entry");
                 var added = ProductRunner.Run(registry, scoped.Id, automatic: true, editHints: [Name(0)]);

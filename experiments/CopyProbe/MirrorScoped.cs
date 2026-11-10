@@ -78,7 +78,7 @@ internal sealed partial class VersionStore
         byte[] hash = changed == 0 ? before.DocumentHash : BatchCatalog.WriteMetadata(Stream.Null, desired, generation, out catalogBytes);
         long bytes = staged.Sum(file => file.Length);
         return new(generation, desired, hash, registry.MirrorGeneration, before.DocumentHash, registry.LastHash, currentIdentity,
-            added.Length, replacements.Count, removals.Length, 0, 0, [], bytes, checked(2 * bytes + (workspace.IsAccumulative ? 5L : 3L) * catalogBytes),
+            added.Length, replacements.Count, removals.Length, 0, 0, [], bytes, checked(2 * bytes + (workspace.IsAccumulative ? 5L : 4L) * catalogBytes),
             LabWorkspace.AvailableSpace(root), 25, false, false, baseline, previousEntries, replacements.Keys.Concat(removed).ToArray(),
             Scoped: true, ScopedFiles: staged);
     }

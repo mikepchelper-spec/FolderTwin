@@ -70,7 +70,7 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
         var attention = new List<string>();
         var dates = new List<DateTimeOffset>();
         var runnable = new List<Guid>();
-        int busy = 0, pending = 0;
+        int busy = 0, pending = 0, lowSpace = 0;
         if (list.Unreadable != 0 || list.Pending.Length != 0) attention.Add("job-definitions");
         if (jobs.Any(job => job.WatchMode == ProductWatchMode.Watching) && registry.ReadMonitorProcess() is null)
             attention.Add("monitor-stopped");
@@ -81,6 +81,7 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
             bool running = history.Runs.Any(run => run.Running);
             if (running) busy++; else runnable.Add(job.Id);
             var latestBackup = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Backup);
+            if (LabWorkspace.IsDiskFull(latestBackup?.Result?.ErrorCode)) lowSpace++;
             var latestVerification = history.Runs.FirstOrDefault(run => run.Intent.Operation == ProductRunOperation.Verify);
             var activity = history.Runs.FirstOrDefault(run => run.Intent.Operation != ProductRunOperation.Restore);
             if (activity is { Running: false, Intent.Operation: ProductRunOperation.ReviewAbandon or ProductRunOperation.AbandonVersion })
@@ -94,7 +95,7 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
             foreach (var latest in new[] { latestBackup, latestVerification })
             {
                 if (latest?.Result is { State: not (ProductRunState.Confirmed or ProductRunState.Unchanged) } result)
-                    attention.Add($"{job.Id:N}-{result.State}");
+                    attention.Add(LabWorkspace.IsDiskFull(result.ErrorCode) ? $"{job.Id:N}-space" : $"{job.Id:N}-{result.State}");
                 else if (latest?.Result is { Degraded: true })
                     attention.Add($"{job.Id:N}-{latest.Intent.Operation}-replica");
                 else if (latest is { Result: null, Running: false })
@@ -120,11 +121,12 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
             catch (Exception error) when (VersionJob.Expected(error)) { attention.Add($"{job.Id:N}-unavailable"); }
         }
         if (dates.Any(date => date > DateTimeOffset.UtcNow.AddMinutes(1))) attention.Add("clock");
-        string status = attention.Count != 0 ? "Hay trabajos o registros que requieren atención." :
+        string status = lowSpace != 0 ? $"Espacio insuficiente en {lowSpace} {(lowSpace == 1 ? "trabajo" : "trabajos")}. Abre FolderTwin para revisar el destino y reintentar." :
+            attention.Count != 0 ? "Hay trabajos o registros que requieren atención." :
             busy > 0 ? $"{busy} trabajos en curso u ocupados." : pending > 0 ? $"{pending} trabajos aún sin un punto confirmado." :
             jobs.Length == 0 ? "Sin trabajos habilitados." : $"{jobs.Length} trabajos con su último intento confirmado.";
         return new(status, dates.Count == 0 ? "Sin respaldo completo consultable." : AgeText(dates.Min()),
-            runnable.ToArray(), attention.Distinct().ToArray());
+            runnable.ToArray(), attention.Distinct().OrderByDescending(key => key.EndsWith("-space", StringComparison.Ordinal)).ToArray());
     }
 
     private static string AgeText(DateTimeOffset date)

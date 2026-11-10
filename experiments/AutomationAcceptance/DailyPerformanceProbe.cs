@@ -19,12 +19,7 @@ internal static class DailyPerformanceProbe
             if (Path.GetPathRoot(source) != @"C:\") throw new InvalidOperationException("The source fixture must be on C:.");
             Console.WriteLine($"Seeding {files} synthetic files on C: for {mode}.");
             var seed = Stopwatch.StartNew();
-            for (int i = 0; i < files; i += 256)
-            {
-                string group = Directory.CreateDirectory(Path.Combine(source, $"group-{i / 256:D4}")).FullName;
-                for (int j = i; j < Math.Min(i + 256, files); j++)
-                    File.WriteAllText(Path.Combine(group, $"file-{j:D6}.txt"), $"synthetic {j % 32:D2}");
-            }
+            Seed(source, files);
             Console.WriteLine(FormattableString.Invariant($"seed_s={seed.Elapsed.TotalSeconds:F3}"));
             using var registry = new ProductJobRegistry(settings);
             var job = registry.Create(new($"Synthetic performance {mode}", mode, null),
@@ -36,11 +31,8 @@ internal static class DailyPerformanceProbe
             if (prepared && mode != ProductBackupMode.Versions)
             {
                 Console.WriteLine("Preparing and verifying the starting tree on D:.");
-                // Call the fixture builder from the same core, including earlier packages where it is private.
-                var prepare = typeof(AutomaticScaleProbe).GetMethod("PrepareCurrentTree",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
                 var setup = Stopwatch.StartNew();
-                prepare.Invoke(null, [job, source]);
+                PrepareCurrentTree(job, source);
                 Console.WriteLine(FormattableString.Invariant($"prepared_s={setup.Elapsed.TotalSeconds:F3}"));
             }
             var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true };
@@ -181,5 +173,23 @@ internal static class DailyPerformanceProbe
         }
 
         string Folder(string name) => Directory.CreateDirectory(Path.Combine(fixture.Root, name)).FullName;
+    }
+
+    internal static void Seed(string source, int files)
+    {
+        for (int i = 0; i < files; i += 256)
+        {
+            string group = Directory.CreateDirectory(Path.Combine(source, $"group-{i / 256:D4}")).FullName;
+            for (int j = i; j < Math.Min(i + 256, files); j++)
+                File.WriteAllText(Path.Combine(group, $"file-{j:D6}.txt"), $"synthetic {j % 32:D2}");
+        }
+    }
+
+    internal static void PrepareCurrentTree(ProductJob job, string source)
+    {
+        // The same fixture builder is private in the previously accepted binaries.
+        var prepare = typeof(AutomaticScaleProbe).GetMethod("PrepareCurrentTree",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        prepare.Invoke(null, [job, source]);
     }
 }
