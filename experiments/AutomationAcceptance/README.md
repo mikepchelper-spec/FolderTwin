@@ -3,7 +3,7 @@
 Los ensayos enlazan `CopyProbe.dll` de una extracción verificada y usan carpetas sintéticas nuevas en C: y D:. Requieren Windows 11 x64, dos volúmenes fijos NTFS y el SDK del proyecto. Verifica antes el paquete con `scripts/Test-Portable.ps1`. Usa el mismo paquete para `CopyProbe.dll` y `FolderTwin.exe`.
 
 ```powershell
-$package = 'C:\FolderTwin-Distribucion\FolderTwin-3cb9c6a'
+$package = 'C:\FolderTwin-Distribucion\FolderTwin-6f782af'
 $artifacts = Join-Path $env:TEMP ('FolderTwin-Acceptance-' + [guid]::NewGuid().ToString('N'))
 dotnet build experiments/AutomationAcceptance --artifacts-path $artifacts "-p:ReferenceCoreAssembly=$package\CopyProbe.dll"
 $harness = Join-Path $artifacts 'bin/AutomationAcceptance/debug/CopyLab.dll'

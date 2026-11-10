@@ -104,6 +104,7 @@ internal static class StorageSafetyProbe
             VerifyRetained(ids[0], ages[0], "undone");
             string purge = retainedStore.BeginRetention(Preview());
             var quarantined = RetentionSize("ready-to-purge");
+            CheckPurgeRejectsBadReplica(purge, preview.Objects[0], ids[^1]);
             retainedStore.PurgeRetention(purge, clock: now.AddDays(2));
             var purged = RetentionSize("purged");
             Check(quarantined.Allocated - purged.Allocated > 0 && quarantined.Logical - purged.Logical > 0,
@@ -140,6 +141,41 @@ internal static class StorageSafetyProbe
                 Console.WriteLine($"retention phase={phase} total_logical={total.Logical} total_allocated={total.Allocated} " +
                     $"quarantine_logical={footprint["quarantine"].Logical} quarantine_allocated={footprint["quarantine"].Allocated}");
                 return total;
+            }
+
+            void CheckPurgeRejectsBadReplica(string operation, string digest, string retained)
+            {
+                string destination = retentionJob.Destination.LastVolumePath;
+                string replica = Path.Combine(destination, "manifests_backup", retained + ".jsonl");
+                string quarantinedObject = Path.Combine(destination, "quarantine", operation, digest);
+                byte[] original = File.ReadAllBytes(replica);
+                byte[] objectHash = SHA256.HashData(File.ReadAllBytes(quarantinedObject));
+                CatalogSnapshot catalog;
+                using (var input = File.OpenRead(replica)) catalog = BatchCatalog.Parse(input, retained);
+                var differentFiles = catalog.Files.ToArray();
+                differentFiles[0] = differentFiles[0] with { Hash = SHA256.HashData("different synthetic catalog"u8) };
+                var different = new BatchPlan(fixture.Root, retentionJob.Source.VolumePath, destination, retentionJob.Source.Identity,
+                    retentionJob.Destination, catalog.Directories, differentFiles);
+                try
+                {
+                    using (var output = File.Create(replica)) _ = BatchCatalog.WriteMetadata(output, different, retained);
+                    using (var input = File.OpenRead(replica))
+                        Check(!BatchCatalog.Parse(input, retained).DocumentHash.AsSpan().SequenceEqual(catalog.DocumentHash),
+                            "The fixture did not contain two valid but different catalogs for the same generation.");
+                    RejectPurge();
+                    File.WriteAllText(replica, "synthetic damaged replica");
+                    RejectPurge();
+                }
+                finally { File.WriteAllBytes(replica, original); }
+                Console.WriteLine("PASS valid conflicting catalogs and damaged replicas both blocked purge and preserved the quarantined bytes.");
+
+                void RejectPurge()
+                {
+                    try { retainedStore.PurgeRetention(operation, clock: now.AddDays(2)); throw new Exception("Unsafe purge was accepted."); }
+                    catch (InvalidDataException) { }
+                    Check(SHA256.HashData(File.ReadAllBytes(quarantinedObject)).AsSpan().SequenceEqual(objectHash),
+                        "Rejected purge modified the quarantined bytes.");
+                }
             }
         }
         finally
