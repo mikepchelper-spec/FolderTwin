@@ -33,6 +33,7 @@ Esta entrega es **experimental y solo para datos sintéticos y carpetas desechab
 - [Aceptación de RC2](ENTREGA-RC2.md): ZIP, hashes, pruebas del paquete y compatibilidad. La [aceptación histórica de RC1](ENTREGA.md) conserva sus resultados y observaciones de escritorio.
 - [Guía del piloto](PILOTO.md): preparación, observación, recuperación y criterios de detención.
 - [Primera prueba local entre C: y D:](PRIMERA-PRUEBA.md). Guía y resultados del primer uso y actualización sintéticos de `6f782af`.
+- [Tercera copia en nube](NUBE.md). Estado del laboratorio, evidencia y matriz de aceptación.
 - [Recuperar respaldos anteriores](COMPATIBILIDAD.md): acceso desde la interfaz, formatos admitidos y límites.
 - [Instalación y actualización](INSTALACION.md): paquete portable, ejecutor estable, reanudación y trabajo pendiente.
 - [Investigación](INVESTIGACION.md): necesidades observadas, documentación técnica y fuentes.

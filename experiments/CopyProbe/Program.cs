@@ -96,6 +96,8 @@ if (args is ["--workspace"])
     return WorkspaceProbe.Run();
 if (args is ["--versions"])
     return VersionProbe.Run();
+if (args is ["--cloud-point", var kopia])
+    return await CloudPointProbe.RunAsync(kopia);
 if (args is ["--registry"])
     return RegistryProbe.Run();
 if (args is ["--retention"])

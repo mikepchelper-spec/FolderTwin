@@ -186,6 +186,8 @@ Para exploraciones rápidas, la igualdad de tamaño y fecha puede permitir reuti
 
 ## 6. Funciones deseables, priorizadas
 
+La tercera copia 3-2-1 está en desarrollo como historial remoto cifrado de puntos confirmados. El laboratorio ya restauró dos fechas de cada modo desde un repositorio Kopia de archivos desechable. La aceptación de S3 y rclone, Ruta, la cola y el ZIP corresponden a hitos posteriores. Las pruebas con proveedores reales se registran por separado. [Evidencia y matriz](NUBE.md)
+
 **Primera beta:** elegir carpetas; copia manual; versión por fecha; recuperar; previsualizar; progreso real; pausa segura entre archivos; cancelación; verificación manual completa; historial de incidencias; horario; avisos de disco ausente; retención revisable cuando la limpieza haya superado sus pruebas; exportar/importar configuración sin secretos; modo oscuro y accesibilidad. Hasta entonces, conservar todo y avisar sobre el espacio.
 
 **Después de estabilizar:** pruebas físicas de reconexión USB, perfiles de exclusión opcionales para dependencias de proyectos, verificación completa programada, mediciones de respuesta del sistema y VSS para escenarios documentados. La candidata local ya agrupa cambios y reconcilia el inventario en los tres modos. Evalúa la prioridad de fondo del ejecutor a partir de mediciones y mantén la prioridad de la interfaz. Las exclusiones requieren consentimiento explícito e incluyen la revisión de `.git`, documentación y código.
