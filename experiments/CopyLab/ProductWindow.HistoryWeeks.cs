@@ -62,7 +62,7 @@ public partial class ProductWindow
                 window.SelectJob(job.Id);
                 Check(window.RouteBackupDate.Text == RouteDate(backup) && window.RouteVerifyDate.Text == RouteDate(verify),
                     "Ruta lost the latest complete backup or integral verification behind the simulated attempts.");
-                Check(window.RunHistoryList.Items.OfType<string>().Any(label => label.Contains("synthetic-incident.txt", StringComparison.Ordinal)),
+                Check(window.RunHistoryList.Items.OfType<HistoryRow>().Any(row => row.Label.Contains("synthetic-incident.txt", StringComparison.Ordinal)),
                     "Ruta lost the recent incident after reserving a new attempt.");
                 var history = registry.RunHistory(job.Id);
                 Check(history.Unreadable == 0 && history.Runs.Any(run => run.Result?.RelativePath == "synthetic-incident.txt") &&

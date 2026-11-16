@@ -1,6 +1,7 @@
 <Window x:Class="CopyLab.ExistingBackupWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:CopyLab" local:RouteTheme.UsePalette="True"
         Title="FolderTwin · Abrir respaldo existente" Width="800" Height="680" MinWidth="580" MinHeight="480"
         WindowStartupLocation="CenterOwner" Language="es-CO" Icon="Assets/FolderTwin.ico">
     <Window.Resources>

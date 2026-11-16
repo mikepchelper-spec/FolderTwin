@@ -105,7 +105,67 @@ public partial class ProductWindow
                     "Retention bypassed its review on an empty job.");
                 window.ProductRetentionPanel.IsExpanded = window.JobSettingsPanel.IsExpanded = false;
             }
-            Console.Error.WriteLine("PASS WPF light/dark, minimum size, wizard steps/error/cancel, empty recovery, visible return in recovery/application/import, unchanged history retains its keyboard row, settings/retention Tab and review gates. This does not certify a screen reader or real DPI.");
+            await CheckHistoryPagingAsync();
+            Console.Error.WriteLine("PASS WPF light/dark, minimum size, wizard steps/error/cancel, empty recovery, visible return in recovery/application/import, history pagination and old incidents, live history preserves selection/focus, settings/retention Tab and review gates. This does not certify a screen reader or real DPI.");
+
+            async Task CheckHistoryPagingAsync()
+            {
+                window.runtimeTimer.Stop();
+                window.RunHistoryList.SelectedIndex = -1;
+                using var registry = Open();
+                Guid incident;
+                using (var run = registry.StartRun(job.Id))
+                {
+                    incident = run.Intent.Id;
+                    run.Finish(ProductRunState.Review, "incidencia-antigua.txt");
+                }
+                for (int index = 0; index < 65; index++)
+                {
+                    using var run = registry.StartRun(job.Id);
+                    run.Finish(ProductRunState.Unchanged);
+                }
+                await window.RefreshRuntimeAsync(rereadHistory: true);
+                window.RunHistoryPanel.IsExpanded = true;
+                Check(window.historyRows.Count == HistoryPageSize && window.OlderHistoryButton.IsEnabled &&
+                    window.historyRows.All(row => row.Id != incident), "History did not bound its first page.");
+                await Click(window, window.OlderHistoryButton);
+                await Click(window, window.OlderHistoryButton);
+                Check(window.historyRows.Any(row => row.Id == incident), "Pagination did not expose an incident older than 30 attempts.");
+                window.RunHistoryList.SelectedItem = window.historyRows.Single(row => row.Id == incident);
+                window.RunHistoryList.ScrollIntoView(window.RunHistoryList.SelectedItem);
+                await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
+                var container = (ListBoxItem)window.RunHistoryList.ItemContainerGenerator.ContainerFromItem(window.RunHistoryList.SelectedItem);
+                window.RestoreKeyboardFocus(container);
+                await FocusIs(container);
+                using (var run = registry.StartRun(job.Id)) run.Finish(ProductRunState.Unchanged);
+                await window.RefreshRuntimeAsync(rereadHistory: true);
+                await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
+                Check(window.RunHistoryList.SelectedItem is HistoryRow { Id: var selected } && selected == incident &&
+                    ReferenceEquals(container, window.RunHistoryList.ItemContainerGenerator.ContainerFromItem(window.RunHistoryList.SelectedItem)),
+                    "A new attempt moved selection or replaced the focused history container.");
+                await FocusIs(container);
+                window.HistoryOnlyIncidents.IsChecked = true;
+                Check(window.historyRows.Count == 1 && window.historyRows[0].Id == incident &&
+                    !window.OlderHistoryButton.IsEnabled, "The incident filter only searched the visible page.");
+                window.HistoryOnlyIncidents.IsChecked = false;
+                Check(window.historyOffset == 0 && window.historyRows.Count == HistoryPageSize,
+                    "Clearing the filter did not return to the newest page.");
+                using var active = registry.StartRun(job.Id);
+                await window.RefreshRuntimeAsync(rereadHistory: true);
+                window.RunHistoryList.SelectedIndex = 0;
+                window.RunHistoryList.ScrollIntoView(window.RunHistoryList.SelectedItem);
+                await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
+                var activeItem = (ListBoxItem)window.RunHistoryList.ItemContainerGenerator.ContainerFromIndex(0);
+                window.RestoreKeyboardFocus(activeItem);
+                await FocusIs(activeItem);
+                active.Finish(ProductRunState.Review, "incidencia-nueva.txt");
+                await window.RefreshRuntimeAsync(rereadHistory: true);
+                Check(window.RunHistoryList.SelectedItem is HistoryRow updated && updated.Id == active.Intent.Id &&
+                    updated.Label.Contains("incidencia-nueva.txt", StringComparison.Ordinal) &&
+                    ReferenceEquals(activeItem, window.RunHistoryList.ItemContainerGenerator.ContainerFromIndex(0)),
+                    "A live result changed the selected history row identity.");
+                await FocusIs(activeItem);
+            }
 
             async Task ReturnThroughHeaderAsync()
             {

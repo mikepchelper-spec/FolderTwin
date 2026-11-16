@@ -12,6 +12,7 @@ internal static class ProductBackupRecoveryProbe
         try
         {
             foreach (var mode in Enum.GetValues<ProductBackupMode>()) Test(mode);
+            CheckRegistryCoordination();
             passed = true;
             Console.WriteLine("PASS standalone product recovery restored two dates of all modes with source and registry absent, denied backup writes, checked replicas and hashes, and preserved occupied outputs.");
             return 0;
@@ -135,7 +136,67 @@ internal static class ProductBackupRecoveryProbe
         }
 
         string Folder(string name) => Directory.CreateDirectory(System.IO.Path.Combine(fixture.Root, name)).FullName;
+
+        void CheckRegistryCoordination()
+        {
+            string source = Folder("coordinated-source"), targets = Folder("coordinated-backups");
+            string settings = Folder("coordinated-registry"), outputParent = Folder("coordinated-output");
+            File.WriteAllText(System.IO.Path.Combine(source, "sample.txt"), "emergency recovery bytes");
+            using var registry = new ProductJobRegistry(settings);
+            var job = registry.Create(new("Healthy recovery", ProductBackupMode.Versions, null),
+                LocalJobRoots.ReviewDedicatedDestination(source, targets));
+            var point = ProductRunner.Run(registry, job.Id);
+            Check(point.State == ProductRunState.Confirmed, "The coordinated backup failed.");
+            var output = LocalJobRoots.ReviewDedicatedDestination(job.Destination.LastVolumePath, outputParent);
+            using (var running = registry.StartRun(job.Id))
+            {
+                Reject(() => { using var blocked = registry.BeginIndependentRecovery(output); });
+                running.Finish(ProductRunState.Unchanged);
+            }
+            var draft = LocalJobRoots.ReviewDedicatedDestination(source, targets);
+            try
+            {
+                registry.Create(new("Pending registration", ProductBackupMode.Versions, null), draft,
+                    step => { if (step == ProductRegistrationStep.Prepared) throw new InjectedStopException(); });
+                throw new InvalidDataException("The synthetic registration did not stop.");
+            }
+            catch (InjectedStopException) { }
+            using (var exclusion = registry.BeginIndependentRecovery(output))
+            {
+                Reject(() => { using var blocked = registry.StartRun(job.Id); });
+                using var roots = LocalJobRoots.CreateDedicatedDestination(output);
+                ProductBackupRecovery.Open(job.Destination.LastVolumePath).Restore(point.Generation!, roots.Review.Destination.VolumePath);
+            }
+            string intent = System.IO.Path.Combine(settings, draft.FolderId.ToString("N"), "intent.json");
+            File.WriteAllText(intent, "damaged synthetic registration");
+            Reject(() => { using var blocked = registry.BeginIndependentRecovery(output); });
+            var isolated = LocalJobRoots.ReviewDedicatedDestination(job.Destination.LastVolumePath,
+                System.IO.Path.GetPathRoot(System.IO.Path.GetTempPath())!);
+            using var exclusionForUnknownRoots = registry.BeginIndependentRecovery(isolated);
+            string? created = null;
+            try
+            {
+                using var roots = LocalJobRoots.CreateDedicatedDestination(isolated);
+                created = roots.Review.Destination.VolumePath;
+                ProductBackupRecovery.Open(job.Destination.LastVolumePath).Restore(point.Generation!, created);
+                Check(File.ReadAllText(System.IO.Path.Combine(created, "sample.txt")) == "emergency recovery bytes" &&
+                    File.ReadAllText(intent) == "damaged synthetic registration", "Damaged registration affected independent recovery.");
+            }
+            finally
+            {
+                if (created is not null)
+                {
+                    string expected = System.IO.Path.Combine(isolated.Parent.VolumePath, isolated.FolderName);
+                    if (!created.Equals(expected, StringComparison.OrdinalIgnoreCase)) throw new IOException("Unexpected synthetic recovery output.");
+                    using (var verified = new DirectoryFence(created)) { }
+                    Directory.Delete(created, recursive: true);
+                }
+            }
+            Console.WriteLine("PASS emergency recovery excludes active workers, accepts pending jobs, and recovers beside unknown roots while preserving damaged configuration.");
+        }
     }
+
+    private sealed class InjectedStopException : Exception;
 
     private static Dictionary<string, string> Snapshot(string root) => Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
         .ToDictionary(path => System.IO.Path.GetRelativePath(root, path), path => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))));

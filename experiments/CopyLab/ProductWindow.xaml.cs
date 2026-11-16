@@ -108,10 +108,12 @@ public partial class ProductWindow : Window
         JobWorkspace.ColumnDefinitions[1].Width = new GridLength(wide ? 16 : 0);
         JobWorkspace.ColumnDefinitions[2].Width = new GridLength(wide ? 294 : 0);
         JobWorkspace.RowDefinitions[1].Height = new GridLength(wide ? 0 : 12);
-        JobWorkspace.RowDefinitions[0].MinHeight = wide ? 0 : 80;
-        JobWorkspace.RowDefinitions[0].Height = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(80);
+        JobWorkspace.RowDefinitions[0].MinHeight = wide ? 0 : 64;
+        JobWorkspace.RowDefinitions[0].Height = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(64);
         JobWorkspace.RowDefinitions[2].Height = wide ? new GridLength(0) : new GridLength(2, GridUnitType.Star);
         JobRailLabel.Visibility = RouteEyebrow.Visibility = RouteSubtitle.Visibility = wide ? Visibility.Visible : Visibility.Collapsed;
+        RouteHeading.Margin = wide ? new Thickness(0, 16, 0, 15) : new Thickness(0, 6, 0, 7);
+        RouteTitle.FontSize = wide ? 34 : 26;
         JobRail.Padding = wide ? new Thickness(12) : new Thickness(6, 3, 6, 3);
         JobRail.VerticalAlignment = wide ? VerticalAlignment.Top : VerticalAlignment.Stretch;
         JobRail.MinHeight = wide ? 190 : 0;

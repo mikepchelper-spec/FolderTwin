@@ -46,6 +46,7 @@ public partial class App : Application
                 await ProductCloudWindow.RunSmokeAsync();
                 await ProductWindow.RunCloudHealthSmokeAsync();
                 await ExistingBackupWindow.RunSmokeAsync();
+                await RouteThemeProbe.RunAsync();
                 Shutdown(0);
                 return;
             }

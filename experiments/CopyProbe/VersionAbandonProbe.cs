@@ -14,8 +14,23 @@ internal static class VersionAbandonProbe
         CheckWorker();
         CheckProductWorkers();
         CheckStaleProductReview();
+        CheckRegistryCapacity();
         Console.WriteLine("PASS version abandonment preserves plans, catalogs and shared objects, resumes metadata boundaries, rejects committed points and permits a fresh verified backup with guarded retention.");
         return 0;
+    }
+
+    private static void CheckRegistryCapacity()
+    {
+        using var fixture = new Fixture(catalogs: true);
+        long before = RegistryCheckpointProbe.FillNearProductionLimit(fixture.Root, fixture.Store.Destination,
+            fixture.Job.Destination, fixture.Baseline);
+        var review = fixture.Store.PreviewAbandonVersion(fixture.Pending);
+        long after = new FileInfo(Path.Combine(fixture.Store.Destination, GenerationRegistry.PrimaryName)).Length;
+        Check(before > 16 * 1024 * 1024 - 2048 && after < 4096, "A review near the production limit did not compact before deriving its proof.");
+        fixture.Store.BeginAbandonVersion(review);
+        Check(fixture.Store.RegisteredGenerations().Abandoned.ContainsKey(fixture.Pending) && !fixture.Store.Verify(fixture.Baseline),
+            "Compaction invalidated a durable abandonment review or its retained point.");
+        Console.WriteLine($"PASS production registry capacity: before={before}, compact={after}, pending abandonment and earlier verification complete.");
     }
 
     private static void CheckBoundary(AbandonStep boundary)

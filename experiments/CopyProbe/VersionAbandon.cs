@@ -37,6 +37,9 @@ internal sealed partial class VersionStore
         using var pending = WindowsProbeNative.OpenPlainDirectory(root, PendingDirectory);
         var plan = ReadIntent(scope, root, pending, generation);
         byte[] document = BatchCatalog.WriteMetadata(Stream.Null, plan, generation);
+        // The review persists the hash of the future registration. Compact before
+        // deriving it so registering and abandoning cannot change that proof.
+        GenerationRegistry.Reserve(root, binding, 3);
         var prepared = GenerationRegistry.PreviewRegistration(root, binding, generation, document);
         var artifacts = new List<AbandonArtifact>();
         foreach (string area in new[] { PrimaryDirectory, ReplicaDirectory, CommitDirectory })

@@ -28,6 +28,8 @@ En el paquete de nube, selecciona un trabajo sintético en Ruta y abre **Copia e
 
 FolderTwin envía puntos locales completos. **Actualizar envíos** muestra la última confirmación remota, los envíos pendientes y la última restauración verificada. Puedes pausar toda la copia remota del trabajo o controlar un envío individual. Ante un problema de acceso, vuelve a conectar con una credencial válida. Si falta el disco local, reconéctalo. Si se agotó la cuota, revisa el espacio del proveedor y reintenta.
 
+Al crear un repositorio, repite su contraseña de recuperación y confirma que has guardado su ubicación y contraseña fuera del equipo. FolderTwin comprueba una nueva apertura de lectura antes de activar el destino. Elige el envío en **Envío que quieres controlar** antes de pausarlo, cancelarlo o reintentarlo; las páginas permiten consultar los anteriores. Ruta y bandeja distinguen el estado local del remoto, incluida la fecha confirmada y el atraso. Un error de nube conserva su incidencia y permite continuar las copias locales.
+
 Para recuperar en otro equipo, abre **Copia en nube** aunque la lista de trabajos esté vacía. Introduce la ubicación y las credenciales del repositorio, pulsa **Consultar fechas de nube**, elige una fecha y usa **Recuperar en carpeta nueva**. Los perfiles de Filen y MEGA siguen en validación externa. Usa carpetas sintéticas hasta completar la prueba con tu proveedor.
 
 ## Ayuda y versión
@@ -57,6 +59,8 @@ En **Ruta de respaldo**, selecciona un trabajo para ver las tarjetas **Origen** 
 
 Selecciona un trabajo para consultar el último respaldo completo, la última verificación explícita, el punto recuperable, el horario o próximo reintento y el espacio observado. Un intento fallido y una restauración no cambian la fecha del último respaldo completo. **Historial e incidencias** conserva los resultados y la ruta afectada cuando está disponible.
 
+El historial muestra treinta intentos por página. **Anteriores** y **Más recientes** permiten recorrerlo; **Mostrar solo incidencias** busca en todo el historial. Consultar una página anterior conserva la selección mientras llegan nuevos intentos.
+
 **Respaldar ahora** inicia un trabajador independiente. El pie muestra la fase, el archivo y el progreso. **Pausar**, continuar y **Cancelar ejecución** se atienden en límites seguros; un paso ya iniciado puede terminar. Cancelar conserva los datos parciales para revisión y reintento. Cerrar la ventana deja continuar al trabajador; al abrir de nuevo se consulta su estado persistido.
 
 En el espejo, **Respaldar ahora** prepara una revisión. Comprueba altas, modificaciones, retiradas, conflictos y espacio antes de **Aplicar espejo revisado**. Cuando aparezcan, revisa y acepta por separado el origen vacío y el alcance de los cambios. Si ya existe una actualización autorizada pendiente, **Reanudar actualización** continúa su diario; no empieza otra con datos diferentes.
@@ -76,6 +80,10 @@ Después de una recuperación confirmada, **Abrir carpeta recuperada** muestra s
 La salida debe estar separada de los orígenes, destinos y configuración de los trabajos. La aplicación crea una subcarpeta nueva y evita reemplazar una restauración anterior. Si se interrumpe una recuperación, conserva la salida parcial; para repetir, revisa otra carpeta nueva. Recuperar un punto confirmado no necesita que el origen siga conectado. Una fecha expirada requiere deshacer su cuarentena cuando todavía sea reversible.
 
 ## Resolver una incidencia
+
+Si perdiste el registro de trabajos o la exportación, vuelve a **Trabajos → Abrir respaldo existente** y elige la subcarpeta dedicada del respaldo. El lector admite el formato de producto FTVERS03: ofrece fechas, búsqueda, carpetas, verificación y recuperación completa o de un archivo en una carpeta nueva. No habilita copias ni retención en ese respaldo. Puedes recuperar con el origen ausente y con el respaldo protegido contra escritura. Los formatos de alfa conservan su procedimiento en [Compatibilidad](COMPATIBILIDAD.md).
+
+Si hay una configuración dañada cuyas rutas no pueden comprobarse, elige como ubicación de salida la raíz de un disco, por ejemplo `D:\`. La aplicación crea una subcarpeta nueva y conserva el registro dañado para investigar. Espera a que terminen los trabajadores activos antes de recuperar. Una cancelación conserva la salida parcial identificada en pantalla; para repetir usa otra carpeta nueva.
 
 | Aviso o situación | Acción |
 |---|---|

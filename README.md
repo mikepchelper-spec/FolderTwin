@@ -20,7 +20,7 @@ La revisión de capacidad mide el crecimiento con los tres modos vigilados entre
 
 La candidata local de nube `c90f013` añade una tercera copia cifrada en Kopia a los tres modos de respaldo. Ruta configura el envío y permite recuperar fechas desde un perfil vacío. La aceptación usa S3 y almacenamiento rclone de laboratorio. Backblaze B2, AWS S3, Filen y MEGA conservan sus pruebas con cuentas reales pendientes. [Candidata y matriz de pruebas](NUBE.md).
 
-La auditoría integral del 14 de noviembre abrió un goal de correcciones. El primer hito incorpora aislamiento de fallos de nube, estado remoto en Ruta y bandeja, controles por envío y recuperación local independiente. La aceptación de desarrollo y los siguientes hitos están en el [seguimiento de correcciones](CORRECCIONES-AUDITORIA.md).
+La auditoría integral del 14 de noviembre abrió un goal de correcciones. El desarrollo incorpora aislamiento de fallos de nube, estado remoto en Ruta y bandeja, controles por envío, recuperación local independiente, compactación recuperable del registro e historiales paginados. La aceptación de desarrollo y los hitos pendientes están en el [seguimiento de correcciones](CORRECCIONES-AUDITORIA.md). El paquete final de estas correcciones todavía no está aceptado.
 
 Esta entrega es **experimental y solo para datos sintéticos y carpetas desechables**. Para participar: [soporte](SUPPORT.md), [contribuciones](CONTRIBUTING.md), [reporte privado de vulnerabilidades](SECURITY.md) y [mantenimiento y futuras entregas](MANTENIMIENTO.md). No adjuntes respaldos, credenciales, configuraciones, logs completos ni rutas personales a las incidencias.
 

@@ -179,10 +179,7 @@ public partial class ExistingBackupWindow : Window
             await Task.Run(() =>
             {
                 using var registry = openRegistry();
-                // Reuse maintenance exclusion to prevent new jobs and concurrent
-                // workers from claiming this output during emergency recovery.
-                using var maintenance = registry.BeginMaintenance(registry.ReviewMaintenance());
-                maintenance.CheckRestoreLocation(target);
+                using var exclusion = registry.BeginIndependentRecovery(target);
                 using var roots = LocalJobRoots.CreateDedicatedDestination(target);
                 ProductBackupRecovery.Open(reader.Path, observe)
                     .Restore(selected.Point.Id, roots.Review.Destination.VolumePath, relativeFile);

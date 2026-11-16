@@ -11,7 +11,7 @@ internal sealed record RegistryState(Dictionary<string, byte[]> Generations, Has
 
 // Replicated append-only expectations, separate from the manifests being retained.
 // Repair only an exact prefix of the event supplied by the caller's durable plan.
-internal static class GenerationRegistry
+internal static partial class GenerationRegistry
 {
     internal const string PrimaryName = ".foldertwin-generations-v1.jsonl";
     internal const string ReplicaName = ".foldertwin-generations-replica-v1.jsonl";
@@ -50,6 +50,7 @@ internal static class GenerationRegistry
 
     internal static RegistryState Read(SafeFileHandle root, DestinationBinding binding)
     {
+        if (ReadCheckpoint(root, binding) is { } checkpoint) return Parse(checkpoint, binding);
         using var primary = WindowsProbeNative.OpenPlainFile(root, PrimaryName, FileAccess.Read, FileShare.Read);
         using var replica = WindowsProbeNative.OpenPlainFile(root, ReplicaName, FileAccess.Read, FileShare.Read);
         byte[] first = ReadBytes(primary);
@@ -84,6 +85,7 @@ internal static class GenerationRegistry
     // never sufficient authority for copying, retention selection or deletion.
     internal static RegistryState ReadCommonPrefix(SafeFileHandle root, DestinationBinding binding)
     {
+        if (ReadCheckpoint(root, binding) is { } checkpoint) return Parse(checkpoint, binding);
         using var primary = WindowsProbeNative.OpenPlainFile(root, PrimaryName, FileAccess.Read, FileShare.Read);
         using var replica = WindowsProbeNative.OpenPlainFile(root, ReplicaName, FileAccess.Read, FileShare.Read);
         byte[] first = ReadBytes(primary);
@@ -101,6 +103,7 @@ internal static class GenerationRegistry
         _ = VersionStore.GenerationTime(generation);
         if (hash.Length != 32)
             throw new InvalidDataException("Hash de generación no válido.");
+        if (!validateOnly) Reserve(root, binding, kind == "register" ? 3 : kind == "mirror-begin" ? 2 : 1);
         using var primary = WindowsProbeNative.OpenPlainFile(root, PrimaryName, validateOnly ? FileAccess.Read : FileAccess.ReadWrite, FileShare.None);
         using var replica = WindowsProbeNative.OpenPlainFile(root, ReplicaName, validateOnly ? FileAccess.Read : FileAccess.ReadWrite, FileShare.None);
         byte[] first = ReadBytes(primary);

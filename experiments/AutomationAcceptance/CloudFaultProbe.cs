@@ -13,6 +13,7 @@ internal static class CloudFaultProbe
         bool passed = false;
         try
         {
+            await KopiaOutputProbe.RunAsync(fixture.Root);
             using var registry = new ProductJobRegistry(Folder("registry"));
             string source = Folder("source"), targets = Folder("targets");
             string input = Path.Combine(source, "muestra.txt");

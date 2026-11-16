@@ -157,7 +157,7 @@ public partial class ProductWindow
                     window.StatusText.Text.Contains("Libera espacio", StringComparison.Ordinal) &&
                     window.RouteBadgeText.Text == "Espacio insuficiente" && window.RouteBackupDate.Text == completeDateBeforeCapacityFailure &&
                     window.NextProtectionStep.Text.Contains("Reintentar respaldo", StringComparison.Ordinal) &&
-                    window.RunHistoryList.Items.OfType<string>().Any(row => row.Contains("Espacio insuficiente", StringComparison.Ordinal)) &&
+                    window.RunHistoryList.Items.OfType<HistoryRow>().Any(row => row.Label.Contains("Espacio insuficiente", StringComparison.Ordinal)) &&
                     tray.Status.Contains("Espacio insuficiente en 1 trabajo", StringComparison.Ordinal) && tray.Attention.FirstOrDefault() == $"{versioned.Id:N}-space",
                     "The disk-full result did not preserve the date and identify the action for the affected job in Ruta, history and tray.");
             }

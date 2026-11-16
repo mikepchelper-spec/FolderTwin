@@ -109,6 +109,10 @@ if (args is ["--held-cloud-child", var cloudRoot, var cloudJob, var cloudReposit
     return await CloudPointProbe.HeldChildAsync(cloudRoot, CloudTicket.For(cloudJobId, cloudRepository, cloudGeneration), cloudKopia);
 if (args is ["--registry"])
     return RegistryProbe.Run();
+if (args is ["--registry-checkpoint"])
+    return RegistryCheckpointProbe.Run();
+if (args is ["--checkpoint-held-child", var checkpointFixture, var checkpointStore, var checkpointBoundary])
+    return RegistryCheckpointProbe.HeldChild(checkpointFixture, checkpointStore, checkpointBoundary);
 if (args is ["--retention"])
     return RetentionProbe.Run();
 if (args is ["--mirror"])

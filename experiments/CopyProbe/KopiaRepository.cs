@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -17,6 +18,8 @@ internal sealed class KopiaS3Credentials(string accessKey, string secretKey, str
 
 internal sealed class KopiaRepository(string executable, string config, string password, KopiaS3Credentials? s3 = null)
 {
+    private const int MaximumOutputCharacters = 16 * 1024 * 1024;
+
     internal async Task<string> IdentityAsync(CancellationToken token)
     {
         using var status = JsonDocument.Parse(await RunAsync(token, "repository", "status", "--json"));
@@ -137,9 +140,33 @@ internal sealed class KopiaRepository(string executable, string config, string p
         {
             using var lifetime = CloudProcessLifetime.Attach(process);
             process.StandardInput.Close();
-            var output = process.StandardOutput.ReadToEndAsync(token);
+            var output = ReadOutputAsync(process.StandardOutput, token);
             var errors = ReadIssueAsync(process.StandardError, token);
-            await Task.WhenAll(process.WaitForExitAsync(token), output, errors);
+            var exited = process.WaitForExitAsync(token);
+            Task[] tasks = [exited, output, errors];
+            try
+            {
+                // A reader can reject output while the child is still filling its
+                // pipe. Observe that failure immediately so cleanup can stop it.
+                var pending = tasks.ToList();
+                while (pending.Count != 0)
+                {
+                    Task completed = await Task.WhenAny(pending);
+                    await completed;
+                    pending.Remove(completed);
+                }
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    try { process.Kill(entireProcessTree: true); }
+                    catch (InvalidOperationException) when (process.HasExited) { }
+                }
+                // Drain/observe every reader after termination without replacing
+                // the original limit or cancellation error.
+                try { await Task.WhenAll(tasks); } catch { }
+            }
             if (process.ExitCode != 0)
             {
                 var issue = await errors;
@@ -163,11 +190,30 @@ internal sealed class KopiaRepository(string executable, string config, string p
         }
     }
 
+    private static async Task<string> ReadOutputAsync(StreamReader output, CancellationToken token)
+    {
+        var text = new StringBuilder();
+        char[] buffer = new char[4096];
+        int count;
+        while ((count = await output.ReadAsync(buffer.AsMemory(), token)) != 0)
+        {
+            if (count > MaximumOutputCharacters - text.Length)
+                throw new InvalidDataException("La respuesta de Kopia supera el límite de lectura de FolderTwin. " +
+                    "Consulta y recupera el historial completo con Kopia independiente.");
+            text.Append(buffer, 0, count);
+        }
+        return text.ToString();
+    }
+
     private static async Task<CloudTransferIssue> ReadIssueAsync(StreamReader errors, CancellationToken token)
     {
         var issue = CloudTransferIssue.Repository;
-        while (await errors.ReadLineAsync(token) is { } line)
+        char[] buffer = new char[4096];
+        string suffix = "";
+        int count;
+        while ((count = await errors.ReadAsync(buffer.AsMemory(), token)) != 0)
         {
+            string line = suffix + new string(buffer, 0, count);
             if (line.Contains("QuotaExceeded", StringComparison.OrdinalIgnoreCase) ||
                 line.Contains("quota exceeded", StringComparison.OrdinalIgnoreCase) ||
                 line.Contains("Insufficient Storage", StringComparison.OrdinalIgnoreCase))
@@ -180,6 +226,9 @@ internal sealed class KopiaRepository(string executable, string config, string p
                  line.Contains("access denied", StringComparison.OrdinalIgnoreCase) ||
                  line.Contains("wrong repository password", StringComparison.OrdinalIgnoreCase)))
                 issue = CloudTransferIssue.Credentials;
+            // Preserve enough overlap for every diagnostic token split across
+            // reads, including a provider response with no newline at all.
+            suffix = line.Length > 64 ? line[^64..] : line;
         }
         return issue;
     }

@@ -17,6 +17,9 @@ internal sealed partial class VersionStore
         var current = BuildRetentionPreview(inventory, review.Policy, review.ReviewedUtc);
         if (!SameReview(review, current) || review.Keep.Length == 0)
             throw new InvalidDataException("El almacén cambió desde la revisión. Vuelve a previsualizar la retención.");
+        // Reserve expiration and a complete undo before the first destructive step.
+        GenerationRegistry.Reserve(store.Root, binding, Math.Max(1, checked(review.Expire.Length * 2)));
+        review = review with { RegistryHash = GenerationRegistry.Read(store.Root, binding).LastHash };
         string id = Guid.NewGuid().ToString("N");
         using var quarantine = WindowsProbeNative.OpenOrCreatePlainDirectory(store.Root, RetentionJournal.DirectoryName);
         using var directory = WindowsProbeNative.OpenOrCreatePlainDirectory(quarantine, id);
@@ -58,6 +61,7 @@ internal sealed partial class VersionStore
                 ApplyRetentionTransitions(root, plan, expired: false);
             var inventory = AuditRetention(root);
             ValidatePlanReferences(plan, inventory);
+            GenerationRegistry.Reserve(root, binding, Math.Max(1, plan.Review.Expire.Length));
             RetentionJournal.SetState(directory, plan, "undoing");
             checkpoint?.Invoke(RetentionStep.Undoing);
             foreach (string digest in plan.Review.Objects)

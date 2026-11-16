@@ -45,7 +45,6 @@ internal sealed partial class ProductJobRegistry
     internal sealed class MaintenanceLease(ProductJobRegistry owner, ProductJob[] jobs, List<IDisposable> held) : IDisposable
     {
         internal ProductJob[] Jobs => jobs;
-        internal void CheckRestoreLocation(DedicatedDestinationReview target) => owner.CheckRestoreLocationLocked(target);
         internal void Disable(Guid id)
         {
             var definition = jobs.Single(job => job.Id == id);

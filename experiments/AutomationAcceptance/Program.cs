@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 
-if (args is ["--drive-aliases"])
+if (args.Length >= 2 && args[^2] == "--cloud-output-child")
+    return KopiaOutputProbe.Emit(args);
+else if (args is ["--drive-aliases"])
     DriveAliasProbe.Run();
 else if (args is ["--held-kopia-child", _, _, _])
     await CloudFaultProbe.HeldKopiaAsync(args[1], args[2], args[3]);
