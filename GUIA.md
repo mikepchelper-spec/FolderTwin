@@ -117,6 +117,6 @@ Los formatos anteriores se abren desde **Aplicación → Respaldos de alfa**, se
 
 ## Alcance y comprobaciones pendientes
 
-El alcance es carpetas y discos locales NTFS en Windows 11 x64. VSS, las instantáneas coherentes de bases de datos abiertas, NAS, la nube propia y la sincronización bidireccional quedan fuera. Los enlaces, EFS, flujos y archivos de nube que todavía necesitan descargarse pueden generar incidencias. Se respaldan el contenido y los metadatos admitidos de los archivos.
+El alcance es carpetas y discos locales NTFS en Windows 11 x64. VSS, las instantáneas coherentes de bases de datos abiertas, NAS, la nube propia y la sincronización bidireccional quedan fuera. Los enlaces, EFS, flujos no admitidos y archivos de nube que todavía necesitan descargarse pueden generar incidencias. El desarrollo conserva la marca de procedencia `Zone.Identifier`, hasta 16 KiB, como metadato de cada archivo; conserva tanto su ausencia como una marca vacía. Los otros flujos alternativos requieren revisión. Se respaldan el contenido y los metadatos admitidos de los archivos.
 
 La matriz `V1.md` en las fuentes distingue las pruebas de software, las observaciones de escritorio y las validaciones externas. El [procedimiento del piloto](PILOTO.md) describe cómo registrar 7–14 días de ensayos de entorno con datos sintéticos.

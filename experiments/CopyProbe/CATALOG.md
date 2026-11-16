@@ -24,16 +24,17 @@ Orden: cabecera, carpetas en orden ordinal por ruta, archivos en orden ordinal p
 
 | Registro | Propiedades |
 |---|---|
-| Cabecera | `kind: "header"`, `version: 1, 2 o 3`, `jobId: GUID`, `generationId: "initial"`, `identity: base64` |
+| Cabecera | `kind: "header"`, `version: 1, 2, 3 o 4`, `jobId: GUID`, `generationId: "initial"`, `identity: base64` |
 | Carpeta | `kind: "directory"`, `path: ruta relativa` |
 | Archivo v1 | `kind: "file"`, `path: ruta relativa`, `size: entero de 64 bits no negativo`, `hash: base64` |
 | Archivo v2 | Los campos de archivo v1 y `lastWriteUtc: fecha ISO 8601 UTC con Z, posterior a 1601-01-01T00:00:00Z` |
 | Archivo v3 | Los campos de archivo v2, `creationUtc: fecha con el mismo formato que lastWriteUtc` y `hidden: booleano` |
+| Archivo v4 | Los campos de archivo v3 y `zoneData: base64 canónico o null`, `zoneHash: SHA-256 hexadecimal minúsculo o null` |
 | Pie | `kind: "footer"`, `files: recuento`, `directories: recuento`, `hash: base64` |
 
 `jobId` es el GUID del marcador del destino. `identity` contiene los 24 bytes obtenidos con `FILE_ID_INFO`: número de serie del volumen y ID del directorio. `generationId` solo admite `initial` en este experimento. No se incluyen rutas absolutas del origen ni del usuario.
 
-Los nuevos análisis con archivos escriben v3. El lector admite v1 y v2. Un lote anterior conserva su formato al reintentarse. Los lotes sin archivos pueden escribirse como v1. La confirmación binaria tiene el mismo formato y sigue enlazando los bytes completos de cada catálogo.
+Los nuevos análisis sin marcas escriben v3; con alguna marca escriben v4 para todos sus archivos. `zoneData` y `zoneHash` son null juntos cuando no hay flujo; una cadena base64 vacía representa un flujo presente de cero bytes. El límite es 16 KiB. Se comprueban codificación canónica y hash antes de aplicar metadatos. El lector admite v1/v2/v3/v4. Un lote anterior conserva su formato al reintentarse. Los lotes sin archivos pueden escribirse como v1. La confirmación sigue enlazando los bytes completos del catálogo. [Contrato y pruebas de Zone.Identifier](ZONE-IDENTIFIER.md).
 
 En NTFS, reutilizar un nombre recién eliminado puede recuperar su fecha de creación anterior. Tras renombrar, el motor comprueba la fecha por el mismo handle y la corrige si NTFS la cambió. Si una interrupción deja un archivo final con fecha distinta, el reintento lo conserva para revisión y el lote queda sin confirmar. [Comportamiento de fechas en Windows](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime).
 

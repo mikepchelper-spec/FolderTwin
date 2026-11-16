@@ -12,7 +12,7 @@ internal sealed partial class VersionStore
         workspace.RequireSourceIdentity(source, origin.Root);
         byte[] sourceIdentity = WindowsProbeNative.DirectoryIdentity(origin.Root);
         var before = MirrorPrevious(scope, root, registry.MirrorGeneration, sourceIdentity, verifyObjects: false);
-        if (before is null || before.Files.Length == 0 || before.Files[0].CatalogVersion != 3) return null;
+        if (before is null || before.Files.Length == 0 || before.Files[0].CatalogVersion < 3) return null;
         if (!before.DocumentHash.AsSpan().SequenceEqual(registry.Generations[registry.MirrorGeneration!]))
             throw new InvalidDataException("El catálogo actual del espejo no coincide con su registro.");
 

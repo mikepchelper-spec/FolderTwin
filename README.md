@@ -129,7 +129,7 @@ Los espacios configurables se conservan al cerrar. Para retomarlos, pulsa **Abri
 
 En un lote confirmado, pulsa **Verificar respaldo** para comprobar las carpetas y comparar el tamaño y SHA-256 de cada archivo con el catálogo. La ventana señala las rutas ausentes, alteradas o que no pudo leer. La comprobación es de solo lectura sobre el respaldo.
 
-El laboratorio admite el flujo principal de cada archivo. Si encuentra flujos de datos alternativos de NTFS en un archivo o carpeta, lo indica para revisión y conserva el contenido existente.
+El desarrollo admite el flujo principal y `Zone.Identifier` de los archivos, hasta 16 KiB por marca, como metadato verificable por ruta. Los demás flujos NTFS, y cualquier flujo en carpetas o archivos internos de control, generan una incidencia y conservan el contenido existente. La aceptación del paquete de estas correcciones sigue pendiente. [Contrato y pruebas](experiments/CopyProbe/ZONE-IDENTIFIER.md).
 
 También revisa los atributos al abrir las rutas, incluida la raíz. Los archivos o carpetas detectados como offline, cifrados con EFS o con puntos de reanálisis quedan para revisión. La validación con proveedores de nube reales sigue pendiente.
 

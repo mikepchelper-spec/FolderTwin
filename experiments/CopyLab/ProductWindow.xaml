@@ -371,7 +371,8 @@
                 </ScrollViewer>
                 </Grid>
                 </Grid>
-                <WrapPanel Grid.Row="3" Margin="0,8,0,0">
+                <Expander x:Name="MoreJobActions" Grid.Row="3" Header="_Más acciones" Margin="0,8,0,0" IsExpanded="True">
+                <WrapPanel Margin="0,4,0,0">
                     <Button x:Name="RefreshJobsButton" Content="Act_ualizar" Click="RefreshJobsClick" Margin="0,0,6,3" />
                     <Button x:Name="ImportConfigurationButton" Content="_Importar configuración" Click="ImportConfigurationClick" Margin="0,0,6,3" />
                     <Button x:Name="OpenExistingBackupButton" Content="Abrir respaldo e_xistente" Click="OpenExistingBackupClick" Margin="0,0,6,3" />
@@ -381,6 +382,7 @@
                     <Button x:Name="ResumeRegistrationButton" Content="_Reanudar registro" Click="ResumeRegistrationClick"
                             IsEnabled="False" Visibility="Collapsed" Margin="0,0,6,3" />
                 </WrapPanel>
+                </Expander>
             </Grid>
 
             <ScrollViewer x:Name="ApplicationPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -552,7 +554,9 @@
         </Grid>
 
         <StackPanel Grid.Row="2" Margin="0,12,0,0">
-                <TextBlock x:Name="OperationStatusText" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                <ScrollViewer MaxHeight="44" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <TextBlock x:Name="OperationStatusText" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                </ScrollViewer>
                 <ProgressBar x:Name="RunProgress" Height="4" Margin="0,8,0,0" Visibility="Collapsed"
                              AutomationProperties.Name="Progreso de la operación activa" />
                 <WrapPanel x:Name="RunControlsPanel" Visibility="Collapsed" Margin="0,8,0,0">

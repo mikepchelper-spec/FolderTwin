@@ -129,7 +129,7 @@ internal sealed partial class ProductJobRegistry
                 RemoveCloudStage(entry);
                 using var stage = OpenCloudStage(entry);
                 string payload = WindowsProbeNative.VolumePath(stage);
-                var point = VersionStore.ExportConfirmedPoint(this, ticket.Job, ticket.Generation, payload, deadline.Token);
+                var point = VersionStore.ExportConfirmedPoint(this, ticket.Job, ticket.Generation, payload, deadline.Token, prepared?.Layout ?? 2);
                 WriteCloudRecord(entry, "prepared", Encode(point));
                 failureStage = CloudTransferIssue.Repository;
                 remote = await repository.PublishAsync(ticket.Operation, point, payload, deadline.Token, afterUpload);

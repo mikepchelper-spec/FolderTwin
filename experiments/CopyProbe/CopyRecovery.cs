@@ -117,7 +117,7 @@ internal static class CopyRecovery
 
         using var data = WindowsProbeNative.OpenPlainFile(directory, hasTemporary ? temporary : destination,
             FileAccess.Read, FileShare.Read, rename: hasTemporary, writeAttributes: hasTemporary && metadata?.CreationUtc is not null);
-        WindowsProbeNative.RequireSupportedData(data.SafeFileHandle, Path.GetFileName(destination));
+        WindowsProbeNative.RequireSupportedData(data.SafeFileHandle, Path.GetFileName(destination), metadata?.ZoneData is not null);
         if (!SHA256.HashData(data).AsSpan().SequenceEqual(record[Magic.Length..DataHashEnd]))
             return RecoveryResult.HashMismatch;
         metadata?.RequireMatch(data.SafeFileHandle);

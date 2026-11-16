@@ -291,7 +291,7 @@ internal sealed partial class VersionStore
                 RequireObject(recovery, file.RelativePath, file);
                 using (var copy = WindowsProbeNative.OpenPlainFile(retired, token, FileAccess.Read, FileShare.None, rename: true))
                 {
-                    RequireObject(copy, file.RelativePath, file);
+                    RequireObject(copy, file.RelativePath, file, file.Metadata?.ZoneData is not null);
                     file.Metadata?.RequireMatch(copy.SafeFileHandle);
                     WindowsProbeNative.DeletePlainFile(copy.SafeFileHandle);
                 }
@@ -425,7 +425,7 @@ internal sealed partial class VersionStore
     private static void VerifyStaged(SafeFileHandle directory, string token, BatchFile file)
     {
         using var input = WindowsProbeNative.OpenPlainFile(directory, token, FileAccess.Read, FileShare.Read);
-        RequireObject(input, file.RelativePath, file);
+        RequireObject(input, file.RelativePath, file, file.Metadata?.ZoneData is not null);
         file.Metadata?.RequireMatch(input.SafeFileHandle);
     }
 
@@ -512,14 +512,14 @@ internal sealed partial class VersionStore
             if (WindowsProbeNative.PlainFileExists(retired, token))
             {
                 using var known = WindowsProbeNative.OpenPlainFile(retired, token, FileAccess.Read, FileShare.Read);
-                RequireObject(known, token, file);
+                RequireObject(known, token, file, file.Metadata?.ZoneData is not null);
                 file.Metadata?.RequireMatch(known.SafeFileHandle);
                 continue;
             }
             string path = Path.Combine(MirrorCurrentPath, file.RelativePath);
             using var parent = new DirectoryFence(MirrorCurrentPath, path);
             using var current = WindowsProbeNative.OpenPlainFile(parent.Parent(path), path, FileAccess.Read, FileShare.None, rename: true);
-            RequireObject(current, file.RelativePath, file);
+            RequireObject(current, file.RelativePath, file, file.Metadata?.ZoneData is not null);
             file.Metadata?.RequireMatch(current.SafeFileHandle);
             WindowsProbeNative.RenameNew(current.SafeFileHandle, retired, token);
             checkpoint?.Invoke(MirrorStep.Retired);
@@ -557,7 +557,7 @@ internal sealed partial class VersionStore
                 throw new InvalidDataException("Una ruta del espejo contiene datos inesperados. No se sobrescriben.");
             using var prepared = WindowsProbeNative.OpenPlainFile(staged, MirrorToken(file.RelativePath), FileAccess.Read, FileShare.None,
                 rename: true, writeAttributes: file.Metadata?.CreationUtc is not null);
-            RequireObject(prepared, file.RelativePath, file);
+            RequireObject(prepared, file.RelativePath, file, file.Metadata?.ZoneData is not null);
             file.Metadata?.RequireMatch(prepared.SafeFileHandle);
             CopyRecovery.PublishData(prepared, parent.Parent(path), path, file.Metadata);
             checkpoint?.Invoke(MirrorStep.Promoted);
@@ -572,7 +572,7 @@ internal sealed partial class VersionStore
         {
             using var parent = new DirectoryFence(MirrorCurrentPath, path);
             using var input = WindowsProbeNative.OpenPlainFile(parent.Parent(path), path, FileAccess.Read, FileShare.Read);
-            RequireObject(input, expected.RelativePath, expected);
+            RequireObject(input, expected.RelativePath, expected, expected.Metadata?.ZoneData is not null);
             expected.Metadata?.RequireMatch(input.SafeFileHandle);
             return true;
         }

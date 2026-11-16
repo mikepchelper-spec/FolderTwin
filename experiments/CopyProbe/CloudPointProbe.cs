@@ -32,6 +32,7 @@ internal static class CloudPointProbe
                 for (int i = 0; i < 2; i++)
                 {
                     File.WriteAllText(sample, $"Synthetic rclone content {i}");
+                    File.WriteAllBytes(sample + ":Zone.Identifier", [0, 255, (byte)i, 13, 10]);
                     var backup = ProductRunner.Run(registry, job.Id);
                     Check(backup is { State: ProductRunState.Confirmed, Generation: not null }, "Could not confirm a local point.");
                     hashes.Add(backup.Generation!, SHA256.HashData(File.ReadAllBytes(sample)));
@@ -51,6 +52,9 @@ internal static class CloudPointProbe
                     await reader.Repository.RestoreAsync(point.Point, output, token);
                     var actual = SHA256.HashData(File.ReadAllBytes(Path.Combine(output, "muestra.txt")));
                     Check(actual.AsSpan().SequenceEqual(hashes[point.Generation]), "The recovered gateway bytes differ.");
+                    byte value = File.ReadAllText(Path.Combine(output, "muestra.txt")).EndsWith('0') ? (byte)0 : (byte)1;
+                    Check(File.ReadAllBytes(Path.Combine(output, "muestra.txt") + ":Zone.Identifier").AsSpan()
+                        .SequenceEqual(new byte[] { 0, 255, value, 13, 10 }), "The recovered rclone gateway lost opaque Zone.Identifier bytes.");
                     Console.WriteLine($"{provider} profile, local rclone backend, SHA-256 {Convert.ToHexStringLower(actual)}");
                 }
             }
@@ -115,6 +119,7 @@ internal static class CloudPointProbe
                 "--clear-ignore", "--ignore-cache-dirs=false", "--ignore-unknown-types=false");
             await writer.RunAsync(token, "policy", "set", "--global", "--remove-dot-ignore", ".kopiaignore");
             string repositoryId = await writer.IdentityAsync(token);
+            await CheckLegacyAsync(fixture, writer, token);
             var different = new KopiaRepository(kopia, Path.Combine(Create("other-writer"), "repository.config"), password);
             await different.RunAsync(token, "repository", "create", "filesystem", "--path", Create("other-repository"), "--no-enable-actions");
             foreach (var mode in Enum.GetValues<ProductBackupMode>())
@@ -125,11 +130,19 @@ internal static class CloudPointProbe
                 using var registry = new ProductJobRegistry(jobs);
                 var job = registry.Create(new($"Synthetic {mode}", mode, null),
                     LocalJobRoots.ReviewDedicatedDestination(source, targets));
-                var published = new List<(Guid Operation, KopiaPoint Point, byte[] Hash, bool KeepsRemovedFile)>();
+                var published = new List<(Guid Operation, KopiaPoint Point, byte[] Hash, byte[] Zone, bool KeepsRemovedFile)>();
                 for (int number = 1; number <= 2; number++)
                 {
                     string sample = Path.Combine(source, "muestra.txt");
                     File.WriteAllText(sample, $"Synthetic point {number}");
+                    byte[] zone = System.Text.Encoding.UTF8.GetBytes($"[ZoneTransfer]\r\nZoneId={number + 2}\r\nHostUrl=https://example.invalid/{number}\r\n");
+                    File.WriteAllBytes(sample + ":Zone.Identifier", zone);
+                    string nested = Directory.CreateDirectory(Path.Combine(source, "nested")).FullName;
+                    File.WriteAllText(Path.Combine(nested, "empty-mark.txt"), "same synthetic body");
+                    File.WriteAllBytes(Path.Combine(nested, "empty-mark.txt") + ":Zone.Identifier", []);
+                    File.WriteAllText(Path.Combine(nested, "maximum-mark.txt"), "same synthetic body");
+                    File.WriteAllBytes(Path.Combine(nested, "maximum-mark.txt") + ":Zone.Identifier", new byte[ZoneIdentifierStream.MaximumBytes]);
+                    File.WriteAllText(Path.Combine(nested, "no-mark.txt"), "same synthetic body");
                     File.WriteAllText(Path.Combine(source, ".kopiaignore"), "*.txt");
                     Directory.CreateDirectory(Path.Combine(source, "empty"));
                     string removed = Path.Combine(source, "retirar.txt");
@@ -194,12 +207,12 @@ internal static class CloudPointProbe
                         () => throw new InvalidOperationException("The retry created a second snapshot."));
                     Check(remote is { State: CloudTransferState.Available, Point: not null } &&
                         reopened.ReadCloudTransfer(ticket) == remote, "A reopened queue lost the remote point.");
-                    published.Add((ticket.Operation, remote.Point!, hash, number == 1 || mode == ProductBackupMode.Accumulative));
+                    published.Add((ticket.Operation, remote.Point!, hash, zone, number == 1 || mode == ProductBackupMode.Accumulative));
                 }
                 var reader = new KopiaRepository(kopia, Path.Combine(Create($"{mode}-reader"), "repository.config"), password, s3);
                 await reader.RunAsync(token, ["repository", "connect", .. backend, "--readonly",
                     "--cache-directory", Create($"{mode}-reader-cache")]);
-                foreach (var (operation, expected, hash, keepsRemoved) in published)
+                foreach (var (operation, expected, hash, zone, keepsRemoved) in published)
                 {
                     var observed = await reader.FindAsync(operation, token);
                     Check(observed?.ManifestId == expected.ManifestId, "A fresh reader found a different manifest.");
@@ -210,12 +223,74 @@ internal static class CloudPointProbe
                     Check(restored.AsSpan().SequenceEqual(hash) && File.ReadAllText(Path.Combine(output, ".kopiaignore")) == "*.txt" &&
                         (keepsRemoved ? File.ReadAllText(removed) == "Previous synthetic content" : !File.Exists(removed)) &&
                         Directory.Exists(Path.Combine(output, "empty")), "The recovered tree differs from the confirmed local tree.");
+                    Check(File.ReadAllBytes(Path.Combine(output, "muestra.txt") + ":Zone.Identifier").AsSpan().SequenceEqual(zone),
+                        "Cloud recovery lost or changed Zone.Identifier.");
+                    Check(File.ReadAllBytes(Path.Combine(output, "nested", "empty-mark.txt") + ":Zone.Identifier").Length == 0 &&
+                        File.ReadAllBytes(Path.Combine(output, "nested", "maximum-mark.txt") + ":Zone.Identifier").AsSpan().SequenceEqual(new byte[ZoneIdentifierStream.MaximumBytes]) &&
+                        !File.Exists(Path.Combine(output, "nested", "no-mark.txt") + ":Zone.Identifier") &&
+                        !Directory.Exists(Path.Combine(output, CloudCatalog.RecoveryDirectory)), "Cloud recovery lost empty/maximum/absent metadata or staging cleanup.");
+                    if (expected == published[0].Point)
+                    {
+                        string single = Create($"{mode}-single");
+                        await reader.RestoreAsync(observed!, single, token, selection: new("nested\\maximum-mark.txt", false));
+                        Check(Directory.GetFiles(single, "*", SearchOption.AllDirectories).Length == 1 &&
+                            File.ReadAllBytes(Path.Combine(single, "nested", "maximum-mark.txt") + ":Zone.Identifier").Length == ZoneIdentifierStream.MaximumBytes,
+                            "Selected file recovery lost metadata or included other files.");
+                        string folder = Create($"{mode}-folder");
+                        await reader.RestoreAsync(observed!, folder, token, selection: new("nested", true));
+                        Check(Directory.GetFiles(folder, "*", SearchOption.AllDirectories).Length == 3 &&
+                            File.ReadAllBytes(Path.Combine(folder, "nested", "empty-mark.txt") + ":Zone.Identifier").Length == 0,
+                            "Selected folder recovery differs from the selected catalog subtree.");
+                        using var stop = CancellationTokenSource.CreateLinkedTokenSource(token);
+                        string cancelled = Create($"{mode}-cancelled");
+                        bool stopped = false;
+                        try { await reader.RestoreAsync(observed!, cancelled, stop.Token, progress => { if (progress.Phase == WorkPhase.Verifying) stop.Cancel(); }); }
+                        catch (OperationCanceledException) when (stop.IsCancellationRequested) { stopped = true; }
+                        Check(stopped && Directory.GetFiles(cancelled).Length == 0 &&
+                            Directory.Exists(Path.Combine(cancelled, CloudCatalog.RecoveryDirectory)), "Cancelled recovery exposed unverified files or discarded its partial staging.");
+                        string corrupt = Create($"{mode}-wrong-catalog");
+                        bool rejected = false;
+                        try { await reader.RestoreAsync(observed! with { CatalogHash = new string('0', 64) }, corrupt, token); }
+                        catch (InvalidDataException) { rejected = true; }
+                        Check(rejected && Directory.GetFiles(corrupt).Length == 0, "An unverified catalog exposed restored files.");
+                        if (mode == ProductBackupMode.Versions)
+                        {
+                            var entries = System.Text.Json.Nodes.JsonNode.Parse(await reader.RunAsync(token, "snapshot", "list", "--all", "--show-identical", "--json"))!.AsArray();
+                            var original = entries.Single(entry => entry!["id"]!.GetValue<string>() == expected.ManifestId)!;
+                            foreach (Action<System.Text.Json.Nodes.JsonNode> mutate in new Action<System.Text.Json.Nodes.JsonNode>[]
+                            {
+                                value => value["rootEntry"]!["summ"]!["files"] = -1,
+                                value => value["rootEntry"]!["summ"]!["dirs"] = 0,
+                                value => value["rootEntry"]!["summ"]!["size"] = -1,
+                                value => value["rootEntry"]!["summ"]!["files"] = BatchCatalog.VersionMaximumEntries + 1,
+                                value => value["tags"]!["tag:ft-job"] = job.Id.ToString("N"),
+                                value => value["tags"]!["tag:ft-catalog"] = "invalid-hash",
+                                value => value["tags"]!.AsObject().Remove("tag:ft-catalog-bytes"),
+                                value => value["tags"]!["tag:ft-catalog-bytes"] = 20,
+                                value => value["tags"] = null
+                            })
+                            {
+                                var invalid = original.DeepClone();
+                                mutate(invalid);
+                                using var json = System.Text.Json.JsonDocument.Parse(invalid.ToJsonString());
+                                bool refusedPoint = false;
+                                try { _ = KopiaRepository.ReadPoint(json.RootElement); }
+                                catch (InvalidDataException) { refusedPoint = true; }
+                                Check(refusedPoint, "A malformed remote inventory or mixed-format tag set was accepted.");
+                            }
+                            string downgraded = Create("downgraded-envelope");
+                            bool refused = false;
+                            try { await reader.RestoreAsync(observed! with { Layout = 0, CatalogHash = null, CatalogBytes = 0, Generation = null }, downgraded, token); }
+                            catch (InvalidDataException) { refused = true; }
+                            Check(refused, "A catalog envelope was accepted as a complete metadata-free legacy recovery.");
+                        }
+                    }
                     Console.WriteLine($"{mode} restored {expected.ManifestId}, SHA-256 {Convert.ToHexStringLower(restored)}");
                 }
             }
             if (endpoint is not null) await CheckProductDispatchAsync(fixture, kopia, endpoint, writer, s3!, password, token);
             completed = true;
-            Console.WriteLine("PASS all local modes published two complete points and recovered them from a separate Kopia connection.");
+            Console.WriteLine("PASS all local modes published two complete points and recovered them from a separate Kopia connection, including opaque/empty/absent/16 KiB Zone.Identifier, file/folder selection, cancellation and catalog hash rejection.");
             return 0;
         }
         finally
@@ -229,6 +304,34 @@ internal static class CloudPointProbe
         }
 
         string Create(string name) => Directory.CreateDirectory(Path.Combine(fixture.Root, name)).FullName;
+    }
+
+    private static async Task CheckLegacyAsync(LabWorkspace fixture, KopiaRepository repository, CancellationToken token)
+    {
+        var old = new KopiaPoint(new string('a', 32), "k" + new string('b', 32), DateTimeOffset.UnixEpoch, 7, 1, 1);
+        string expected = "{\"ManifestId\":\"" + old.ManifestId + "\",\"RootId\":\"" + old.RootId +
+            "\",\"Finished\":\"1970-01-01T00:00:00+00:00\",\"Bytes\":7,\"Files\":1,\"Directories\":1}";
+        Check(System.Text.Json.JsonSerializer.Serialize(old) == expected, "New optional fields changed the legacy durable revision hash bytes.");
+        var restored = System.Text.Json.JsonSerializer.Deserialize<KopiaPoint>(expected,
+            new System.Text.Json.JsonSerializerOptions { RespectRequiredConstructorParameters = true })!;
+        Check(restored == old, "An old durable point no longer decodes with its original values.");
+        string source = Folder("legacy-source"), targets = Folder("legacy-targets"), jobs = Folder("legacy-jobs");
+        File.WriteAllText(Path.Combine(source, "old.txt"), "legacy snapshot bytes");
+        using var registry = new ProductJobRegistry(jobs);
+        var job = registry.Create(new("Legacy remote format", ProductBackupMode.Versions, null),
+            LocalJobRoots.ReviewDedicatedDestination(source, targets));
+        var run = ProductRunner.Run(registry, job.Id);
+        Check(run is { State: ProductRunState.Confirmed, Generation: not null }, "Legacy compatibility fixture failed to confirm.");
+        string payload = Folder("legacy-payload");
+        var point = VersionStore.ExportConfirmedPoint(registry, job.Id, run.Generation!, payload, token, layout: 0);
+        var remote = await repository.PublishAsync(Guid.NewGuid(), point, payload, token);
+        var found = (await repository.ListAsync(token)).Single(item => item.Job == job.Id);
+        Check(remote == found.Point && remote.Layout == 0, "New reader did not retain the legacy tags and inventory.");
+        string output = Folder("legacy-restored");
+        await repository.RestoreAsync(found.Point, output, token);
+        Check(File.ReadAllText(Path.Combine(output, "old.txt")) == "legacy snapshot bytes", "Legacy snapshot no longer restores.");
+        Console.WriteLine("PASS legacy snapshot format and exact durable point serialization remain readable.");
+        string Folder(string name) => Directory.CreateDirectory(Path.Combine(fixture.Root, name)).FullName;
     }
 
     private static async Task CheckProductDispatchAsync(LabWorkspace fixture, string kopia, string endpoint, KopiaRepository writer,

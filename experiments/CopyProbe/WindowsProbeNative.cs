@@ -185,7 +185,18 @@ internal static class WindowsProbeNative
         return identity;
     }
 
-    internal static unsafe void RequireSupportedData(SafeFileHandle handle, string label)
+    internal static void RequireDataWriteAccess(SafeFileHandle file)
+    {
+        RequirePlain(file, directory: false);
+        const int fileAccessInformation = 8;
+        int status = NtQueryInformationFile(file, out var result, out uint access, sizeof(uint), fileAccessInformation);
+        if (status != 0)
+            throw new IOException("No se pudieron comprobar los permisos del archivo temporal.", new Win32Exception(RtlNtStatusToDosError(status)));
+        if (result.Information != sizeof(uint) || (access & 0x02) == 0)
+            throw new UnauthorizedAccessException("La escritura de metadatos requiere un handle de datos con permiso de escritura.");
+    }
+
+    internal static unsafe void RequireSupportedData(SafeFileHandle handle, string label, bool allowZoneIdentifier = false)
     {
         RequirePlain(handle);
         const int fileEaInformation = 7; // NT FILE_INFORMATION_CLASS.
@@ -198,28 +209,57 @@ internal static class WindowsProbeNative
         if (eaSize != 0)
             throw new InvalidDataException($"«{label}» tiene atributos extendidos de NTFS. Requiere revisión.");
 
+        _ = ReadSupportedStreams(handle, label, allowZoneIdentifier);
+    }
+
+    internal static bool HasZoneIdentifier(SafeFileHandle file) => ReadSupportedStreams(file, "archivo", allowZoneIdentifier: true);
+
+    private static unsafe bool ReadSupportedStreams(SafeFileHandle handle, string label, bool allowZoneIdentifier)
+    {
         const int fileStreamInfo = 7;
         const int headerSize = 24;
         var defaultStream = MemoryMarshal.AsBytes("::$DATA".AsSpan());
-        // Only the unnamed data stream is supported. A larger response is not needed to authorize a copy.
+        bool directory = File.GetAttributes(handle).HasFlag(FileAttributes.Directory);
         Span<byte> buffer = stackalloc byte[4096];
-        buffer[..(headerSize + defaultStream.Length)].Clear();
+        buffer.Clear();
         fixed (byte* data = buffer)
         {
             if (!GetFileInformation(handle, fileStreamInfo, data, buffer.Length))
             {
                 int error = Marshal.GetLastPInvokeError();
                 if (error == 38) // ERROR_HANDLE_EOF: no streams, as on a plain directory.
-                    return;
+                    return false;
                 throw new IOException($"No se pudieron comprobar los flujos NTFS de «{label}».", new Win32Exception(error));
             }
         }
 
-        uint nameBytes = BitConverter.ToUInt32(buffer[4..]);
-        if (BitConverter.ToUInt32(buffer) != 0 ||
-            nameBytes != defaultStream.Length ||
-            !buffer.Slice(headerSize, (int)nameBytes).SequenceEqual(defaultStream))
-            throw new InvalidDataException($"«{label}» tiene flujos de datos alternativos. Requiere revisión.");
+        int offset = 0;
+        bool unnamed = false, zone = false;
+        while (true)
+        {
+            var entry = buffer[offset..];
+            uint next = BitConverter.ToUInt32(entry);
+            uint nameBytes = BitConverter.ToUInt32(entry[4..]);
+            long size = BitConverter.ToInt64(entry[8..]);
+            if (size < 0 || nameBytes == 0 || (nameBytes & 1) != 0 || nameBytes > entry.Length - headerSize)
+                throw new InvalidDataException("La lista de flujos NTFS no es válida.");
+            var name = entry.Slice(headerSize, (int)nameBytes);
+            if (name.SequenceEqual(defaultStream) && !unnamed) unnamed = true;
+            else if (allowZoneIdentifier && !directory && !zone &&
+                DirectoryNameEncoding.GetString(name).Equals(":Zone.Identifier:$DATA", StringComparison.OrdinalIgnoreCase))
+            {
+                if (size > ZoneIdentifierStream.MaximumBytes)
+                    throw new InvalidDataException($"Zone.Identifier de «{label}» supera el límite de 16 KiB.");
+                zone = true;
+            }
+            else throw new InvalidDataException($"«{label}» tiene flujos de datos alternativos no admitidos. Requiere revisión.");
+            if (next == 0) break;
+            if ((next & 7) != 0 || next < headerSize + nameBytes || next > entry.Length - headerSize)
+                throw new InvalidDataException("La lista de flujos NTFS está incompleta.");
+            offset += (int)next;
+        }
+        if (!directory && !unnamed) throw new InvalidDataException("Falta el flujo principal del archivo.");
+        return zone;
     }
 
     internal static unsafe FileMetadata ReadFileMetadata(SafeFileHandle handle)

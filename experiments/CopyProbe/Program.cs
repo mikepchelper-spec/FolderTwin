@@ -19,6 +19,10 @@ if (args is ["--prefix-resume"])
     return PrefixResumeProbe.Run();
 if (args is ["--paths"])
     return PathProbe.Run();
+if (args is ["--zone-native"])
+    return ZoneIdentifierNativeProbe.Run();
+if (args is ["--zone-local"])
+    return ZoneIdentifierProbe.Run();
 if (args is ["--product-roots"])
     return LocalJobRootsProbe.Run();
 if (args is ["--product-jobs"])

@@ -17,6 +17,8 @@ La candidata de correcciones introduce eventos de registro de versión 3 cuando 
 
 ## Demostraciones iniciales
 
+Los catálogos v4 de la candidata de correcciones conservan `Zone.Identifier` por ruta. El lector actual admite v1/v2/v3/v4 y no convierte puntos anteriores. Los lectores anteriores rechazan v4; conserva una copia del paquete compatible. Los envíos remotos nuevos usan `ft-v2-job` y `ft-v2-generation`, un catálogo cifrado y `data/`: los paquetes antiguos no enumeran esas fechas. Los puntos remotos con las etiquetas anteriores siguen admitiendo recuperación completa. [Formato y límites](experiments/CopyProbe/ZONE-IDENTIFIER.md).
+
 Para las demostraciones anteriores `FolderTwin-Batch-…`, usa **Abrir demostración anterior** en la ventana de compatibilidad. El catálogo confirmado habilita **Verificar respaldo** y **Restaurar y verificar** sin el origen. La restauración escribe en una sesión nueva y muestra su ruta completa al terminar. Esa salida recuperada se conserva al cerrar; copia los archivos necesarios a la ubicación elegida antes de retirar manualmente la sesión desechable.
 
 Una demostración pendiente se puede reintentar con su plan original. Cambiar el origen no autoriza completar un contenido distinto del analizado. Los temporales y registros no se deben borrar para forzar el reintento.

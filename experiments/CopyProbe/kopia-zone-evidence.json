@@ -1,0 +1,52 @@
+{
+  "SchemaVersion": 1,
+  "KopiaVersion": "0.23.1",
+  "KopiaSha256": "96C0946314B50DCC7C5AE9D3EC7E3763E742FCEBF7D5CBEBDAAC3CEEE5FB3BD7",
+  "Backend": "Disposable local filesystem repository",
+  "ReadOnlyRecovery": true,
+  "EmptyRecoveryCache": true,
+  "SourceApart": true,
+  "Results": [
+    {
+      "Name": "internet.txt",
+      "MainSha256": "234A85E1BE0C7AF2CC6A2BD2DCFF13C15A150864B936416A8E1F793723BFF8BE",
+      "MainMatches": true,
+      "ExpectedZonePresent": true,
+      "ActualZonePresent": false,
+      "ExpectedZoneBytes": 67,
+      "ActualZoneBytes": null,
+      "ZoneMatches": false
+    },
+    {
+      "Name": "restricted.txt",
+      "MainSha256": "234A85E1BE0C7AF2CC6A2BD2DCFF13C15A150864B936416A8E1F793723BFF8BE",
+      "MainMatches": true,
+      "ExpectedZonePresent": true,
+      "ActualZonePresent": false,
+      "ExpectedZoneBytes": 69,
+      "ActualZoneBytes": null,
+      "ZoneMatches": false
+    },
+    {
+      "Name": "empty-zone.txt",
+      "MainSha256": "234A85E1BE0C7AF2CC6A2BD2DCFF13C15A150864B936416A8E1F793723BFF8BE",
+      "MainMatches": true,
+      "ExpectedZonePresent": true,
+      "ActualZonePresent": false,
+      "ExpectedZoneBytes": 0,
+      "ActualZoneBytes": null,
+      "ZoneMatches": false
+    },
+    {
+      "Name": "unmarked.txt",
+      "MainSha256": "234A85E1BE0C7AF2CC6A2BD2DCFF13C15A150864B936416A8E1F793723BFF8BE",
+      "MainMatches": true,
+      "ExpectedZonePresent": false,
+      "ActualZonePresent": false,
+      "ExpectedZoneBytes": null,
+      "ActualZoneBytes": null,
+      "ZoneMatches": true
+    }
+  ],
+  "AllZoneIdentifiersPreserved": false
+}

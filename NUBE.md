@@ -49,6 +49,8 @@ Para recuperar con Kopia independiente, conecta el repositorio S3 en modo de lec
 
 ## Proveedores y validación externa
 
+La candidata de correcciones usa un sobre remoto layout 2 con el catálogo confirmado y `data/`, enlazado mediante `ft-v2-job`, `ft-v2-generation`, `ft-catalog` y `ft-catalog-bytes`. El lector actual recupera también las fechas antiguas con `ft-job` y `ft-generation`. Para las nuevas, la recuperación descarga y verifica el catálogo, comprueba los contenidos y aplica `Zone.Identifier` antes de promoverlos a la salida. Kopia independiente permite descargar el sobre, pero no vuelve a aplicar esa marca: no abras ejecutables desde `data/` ni consideres completos sus metadatos sin el lector compatible. [Contrato, compatibilidad y pruebas de desarrollo](experiments/CopyProbe/ZONE-IDENTIFIER.md). La selección por archivo/carpeta ya está probada en el motor; su interfaz y el seguimiento durable de A14-08 siguen pendientes.
+
 | Perfil | Vía de conexión | Ensayo pendiente con el proveedor |
 | --- | --- | --- |
 | Backblaze B2 | API S3 regional y bucket privado | Clave restringida, límites, retención y recuperación de una versión oculta. [Permisos B2](https://www.backblaze.com/docs/cloud-storage-map-iam-policies-and-s3-acls-to-backblaze-b2-access-controls) |

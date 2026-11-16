@@ -312,13 +312,15 @@ internal sealed partial class VersionStore
                         {
                             using var parent = new DirectoryFence(plan.Source, input);
                             using var observed = WindowsProbeNative.OpenPlainFile(parent.Parent(input), input, FileAccess.Read, FileShare.Read);
-                            WindowsProbeNative.RequireSupportedData(observed.SafeFileHandle, file.RelativePath);
+                            WindowsProbeNative.RequireSupportedData(observed.SafeFileHandle, file.RelativePath, file.Metadata?.ZoneData is not null);
+                            file.Metadata?.RequireMatch(observed.SafeFileHandle);
                             if (observed.Length != file.Length || !SHA256.HashData(observed).AsSpan().SequenceEqual(file.Hash))
                             {
                                 string message = $"El contenido de «{file.RelativePath}» cambió desde el análisis.";
                                 throw retrySourceChanges ? new SourceChangedDuringBackupException(message) : new InvalidDataException(message);
                             }
-                            workspace.Copy(plan.Source, Destination, input, final, temporary, binding, file.Hash, objectCheckpoint);
+                            workspace.Copy(plan.Source, Destination, input, final, temporary, binding, file.Hash, objectCheckpoint,
+                                sourceMetadata: file.Metadata);
                         }
                         catch (Exception error) when (retrySourceChanges && VersionJob.Unavailable(error))
                         {

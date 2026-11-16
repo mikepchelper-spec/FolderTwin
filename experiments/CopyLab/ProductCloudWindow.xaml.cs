@@ -10,7 +10,7 @@ public partial class ProductCloudWindow : Window
 {
     private sealed record DateChoice(CloudRecoveryPoint Recovery)
     {
-        public string Label => $"{VersionStore.GenerationTime(Recovery.Generation).ToLocalTime():g} · {Recovery.Point.Files} archivos · {Recovery.Job.ToString("N")[..8]}";
+        public string Label => $"{VersionStore.GenerationTime(Recovery.Generation).ToLocalTime():g} · {Recovery.Point.UserFiles} archivos · {Recovery.Job.ToString("N")[..8]}";
     }
 
     private sealed record TransferChoice(CloudTransfer Transfer)

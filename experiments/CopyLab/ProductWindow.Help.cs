@@ -15,6 +15,7 @@ public partial class ProductWindow
         ["ReturnToJobsButton"] = ("Regresa a la lista y conserva el trabajo seleccionado.", "Espera a que termine la comprobación de esta pantalla."),
         ["FirstBackupButton"] = ("Empieza el asistente de cuatro pasos. Elige origen, destino, modo y revisa antes de guardar.", ""),
         ["NewJobButton"] = ("Crea otra configuración con su propia carpeta de respaldo.", ""),
+        ["MoreJobActions"] = ("Despliega las acciones de aplicación, nube, bandeja, importación y apertura de un respaldo existente. En ventanas pequeñas puedes plegarlas para ver más detalles del trabajo.", ""),
         ["RefreshJobsButton"] = ("Vuelve a leer los trabajos guardados y los registros pendientes.", ""),
         ["ImportConfigurationButton"] = ("Abre una configuración exportada y comprueba sus carpetas antes de guardarla deshabilitada.", ""),
         ["OpenExistingBackupButton"] = ("Abre la carpeta de un respaldo para recuperar sus fechas sin el origen ni la configuración anterior. Comprueba el contenido y lo recupera en una carpeta nueva.", ""),

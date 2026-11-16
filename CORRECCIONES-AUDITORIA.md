@@ -10,11 +10,11 @@ El goal activo cubre los trece hallazgos y las mejoras propuestas en [AUDITORIA-
 | A14-04 | Elegir envío y ligar pausa, cancelación y reintento a su identidad | Implementado, prueba WPF con primera fecha cancelada y segunda controlada |
 | A14-05 | Estado remoto, antigüedad, atraso e incidencias en Ruta y bandeja | Implementado y probado. Ruta consulta nube cada diez segundos |
 | A14-06 | Acotar catálogos y descriptores tras gracia y purga | Implementado y probado en desarrollo; medición de 4.096 archivos, tres modos, interrupciones y WPF |
-| A14-07 | Conservar y restaurar Zone.Identifier con límites y hash, también a través de nube | Pendiente |
-| A14-08 | Recuperación remota con seguimiento, progreso, cancelación y selección de archivo/carpeta | Pendiente |
+| A14-07 | Conservar y restaurar Zone.Identifier con límites y hash, también a través de nube | Implementado y probado en desarrollo: tres modos, catálogos v4, S3/rclone sintéticos y compatibilidad |
+| A14-08 | Recuperación remota con seguimiento, progreso, cancelación y selección de archivo/carpeta | Motor probado para selección, fases y cancelación; pendiente seguimiento durable, trabajador y WPF |
 | A14-09 | Confirmar contraseña y reabrir conexión de lectura antes de activar | Implementado y probado |
 | A14-10 | CI de nube con herramientas fijadas, dos ZIP idénticos y pruebas desde extracción | Workflow añadido, validación estática aprobada. Ejecución GitHub pendiente de integrar la rama |
-| A14-11 | Coherencia de Ruta/nube, temas, espacio compacto, ayuda y teclado | Paleta común dinámica y pruebas claro/oscuro/alto contraste; escritorio oscuro observado. Pendiente completar agrupación y ayuda remota y mejorar disposición compacta |
+| A14-11 | Coherencia de Ruta/nube, temas, espacio compacto, ayuda y teclado | Ayuda y grupos de nube, acciones secundarias plegables y teclado/foco probados en desarrollo. Paleta común claro/oscuro y alto contraste sintético; pendiente revisión del conjunto tras A14-08 |
 | A14-12 | Lecturas remotas acotadas y páginas/filtro de historial | Implementado: salida acotada, cancelación, páginas locales y remotas y filtro de incidencias antiguas probados |
 | A14-13 | Identificar paquete abierto/ejecutor y entregar guías coherentes | Pendiente |
 
@@ -54,6 +54,16 @@ Una fase interrumpida aparece como purga pendiente y bloquea nuevas escrituras y
 
 ## Evidencia de desarrollo
 
+El cuarto hito conserva `Zone.Identifier` como metadato de ruta en catálogo v4 y mantiene CAS sin ADS. `--zone-native`, `--zone-local` y `--product-watch` probaron los límites, vacío/ausencia, bytes arbitrarios, un único objeto para marcas distintas, cambios exclusivos de marca, interrupción/reanudación con origen apartado, retención y rechazo de catálogos alterados. El ensayo nativo detectó que BackupWrite puede escribir desde un handle base de lectura; el adaptador ahora exige permiso efectivo de escritura antes de usarlo. [Contrato y evidencia de Kopia](experiments/CopyProbe/ZONE-IDENTIFIER.md).
+
+Kopia 0.23.1 perdió las marcas en su restauración directa. Los envíos nuevos incluyen el catálogo confirmado dentro del repositorio cifrado, usan etiquetas que los lectores antiguos no enumeran y preservan los puntos remotos anteriores. La recuperación comprueba catálogo, inventario, SHA-256 y marca antes de promover cada archivo. `--cloud-point`, S3 de loopback y los perfiles rclone aprobaron marcas vacías, ausentes, distintas y de 16 KiB, selección por archivo/carpeta, cancelación, catálogo incorrecto y compatibilidad. El motor ya informa fases y recuentos; la interfaz persistente de A14-08 continúa abierta.
+
+Ruta agrupa las acciones secundarias en **Más acciones** y conserva su expansión si contiene el foco durante un cambio de tamaño. La prueba espera el cierre animado de Fluent antes de medir: obtuvo 131,9 DIP de detalles en 600×500 y 1040×500, y 251,9 DIP en 760×620. Los mensajes de operación tienen desplazamiento acotado. Nube agrupa ubicación, acceso y clave de recuperación, añade ayuda contextual y devuelve el foco al cerrar su ayuda. `--product-usability-smoke` aprobó cien controles de Ruta, ambos temas y el recorrido de los tres modos. `--product-cloud-smoke` aprobó la ayuda remota y sus recorridos existentes. Estos resultados no acreditan DPI real ni lector de pantalla.
+
+Las regresiones `--batch`, `--accumulative`, `--mirror`, `--resume`, `--reader-audit`, `--product-backup-recovery` y `AutomationAcceptance --cloud-faults` pasaron durante este hito. El paquete final sigue pendiente. La revisión automática rechazó por política retirar una carpeta temporal del ensayo S3; se conserva fuera del repositorio como `FolderTwin-CloudS3-5yw1wsdp.fff` bajo la carpeta temporal. No se volvió a intentar su borrado.
+
+[Salida compacta de los ensayos del cuarto hito](experiments/CopyProbe/zone-support-evidence.txt). Incluye recuperación remota anterior y nueva, límites, incidencias, procesos y medidas de interfaz. La revisión semántica rechaza totales remotos negativos o excesivos, etiquetas mezcladas y un sobre nuevo presentado como recuperación antigua sin metadatos.
+
 - Compilación WPF y motor con SDK 10.0.403, sin errores ni avisos.
 - `CopyProbe --product-backup-recovery` aprobó dos fechas de los tres modos con origen y registro apartados, escritura denegada por ACL en el respaldo, comparación de bytes del respaldo, réplica dañada, registro de generaciones dañado, objeto corrupto, marcador sustituido y salida ocupada.
 - `FolderTwin --product-monitor-smoke` aprobó los tres modos, cambios, destino ausente/reconectado, pausa, restauración sin origen y dos confirmaciones locales después de dañar la pausa remota. La incidencia de nube permaneció visible.
@@ -71,8 +81,8 @@ La aceptación desde el ZIP reproducible final sigue pendiente.
 
 ## Continuación
 
-1. Incorporar Zone.Identifier y completar la recuperación remota. El [siguiente hito](experiments/CopyProbe/ZONE-IDENTIFIER.md) fija el ensayo nativo, la prueba con Kopia fijado y los criterios de formato/aceptación antes de habilitarlo.
-2. Completar espacio compacto, ayuda remota y guías.
+1. Completar A14-08: registro durable de recuperación, trabajador controlable, progreso/salida parcial visible después de cerrar o reabrir, consulta del catálogo y selección WPF de archivo/carpeta. Reutilizar el catálogo y la promoción verificable implementados. Completar el procedimiento independiente para el sobre remoto con metadatos.
+2. Revisar interfaz y guía del recorrido completo; comprobar identidad de paquete y ejecutor de A14-13.
 3. Revisar dependencias y firma, producir inventario de componentes, compilar dos distribuciones reproducibles y aceptar el paquete extraído.
 
 Las pruebas externas conservan sus procedimientos pendientes. Incluyen AWS, B2, Filen y MEGA reales, cuotas y revocación reales, Object Lock, otra cuenta/equipo, piloto de 7–14 días, USB físico, ciclos de Windows y lector de pantalla. El goal exige el alcance autónomo implementado y verificado junto con esa matriz explícita.

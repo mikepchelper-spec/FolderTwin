@@ -43,6 +43,8 @@ internal static class BatchCatalog
     private sealed record DatedFileRecord(string Kind, string Path, long Size, byte[] Hash, DateTime LastWriteUtc);
     private sealed record FileRecordV3(string Kind, string Path, long Size, byte[] Hash,
         DateTime LastWriteUtc, DateTime CreationUtc, bool Hidden);
+    private sealed record FileRecordV4(string Kind, string Path, long Size, byte[] Hash,
+        DateTime LastWriteUtc, DateTime CreationUtc, bool Hidden, string? ZoneData, string? ZoneHash);
     private sealed record Footer(string Kind, int Files, int Directories, byte[] Hash);
 
     private static int EntryLimit(string generation) => generation == "initial" ? FolderInventory.DefaultMaximumEntries : VersionMaximumEntries;
@@ -238,7 +240,7 @@ internal static class BatchCatalog
         using var body = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using var document = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         int total = 0;
-        int version = plan.Files.FirstOrDefault()?.CatalogVersion ?? 1;
+        int version = plan.Files.Length == 0 ? 1 : plan.Files.Max(file => file.CatalogVersion);
         Line(new Header("header", version, plan.Target.Marker, generation, plan.Target.Identity));
         foreach (string directory in plan.Directories.Order(StringComparer.Ordinal))
             Line(new DirectoryRecord("directory", directory));
@@ -246,6 +248,8 @@ internal static class BatchCatalog
         {
             if (file.Metadata is not { } metadata)
                 Line(new FileRecord("file", file.RelativePath, file.Length, file.Hash));
+            else if (version == 4 && metadata.CreationUtc is { } zoneCreation && metadata.Hidden is { } zoneHidden)
+                Line(new FileRecordV4("file", file.RelativePath, file.Length, file.Hash, metadata.LastWriteUtc, zoneCreation, zoneHidden, metadata.ZoneData, metadata.ZoneHash));
             else if (metadata.CreationUtc is { } creation && metadata.Hidden is { } hidden)
                 Line(new FileRecordV3("file", file.RelativePath, file.Length, file.Hash, metadata.LastWriteUtc, creation, hidden));
             else
@@ -286,7 +290,7 @@ internal static class BatchCatalog
         int position = 0, available = 0;
         byte[] headerLine = Line() ?? throw new InvalidDataException("Falta la cabecera.");
         var header = Decode<Header>(headerLine);
-        if (header.Kind != "header" || header.Version is not (1 or 2 or 3) || header.GenerationId != generation || header.JobId == Guid.Empty ||
+        if (header.Kind != "header" || header.Version is not (1 or 2 or 3 or 4) || header.GenerationId != generation || header.JobId == Guid.Empty ||
             header.Identity is not { Length: 24 })
             throw new InvalidDataException("Cabecera no soportada.");
         HashBody(headerLine);
@@ -322,10 +326,15 @@ internal static class BatchCatalog
                         var entry = Decode<DatedFileRecord>(line);
                         file = new(entry.Path, entry.Size, entry.Hash, new(entry.LastWriteUtc));
                     }
-                    else
+                    else if (header.Version == 3)
                     {
                         var entry = Decode<FileRecordV3>(line);
                         file = new(entry.Path, entry.Size, entry.Hash, new(entry.LastWriteUtc, entry.CreationUtc, entry.Hidden));
+                    }
+                    else
+                    {
+                        var entry = Decode<FileRecordV4>(line);
+                        file = new(entry.Path, entry.Size, entry.Hash, new(entry.LastWriteUtc, entry.CreationUtc, entry.Hidden, entry.ZoneData, entry.ZoneHash));
                     }
                     if (file.RelativePath is null || lastFile is not null && string.CompareOrdinal(lastFile, file.RelativePath) >= 0)
                         throw new InvalidDataException("Orden de archivos no válido.");
@@ -439,7 +448,7 @@ internal static class BatchCatalog
         string path = Path.Combine(backup, item.RelativePath);
         using var parent = new DirectoryFence(backup, path);
         using var file = WindowsProbeNative.OpenPlainFile(parent.Parent(path), path, FileAccess.Read, FileShare.Read);
-        WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, item.RelativePath);
+        WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, item.RelativePath, item.Metadata?.ZoneData is not null);
         if (file.Length != item.Length || !SHA256.HashData(file).AsSpan().SequenceEqual(item.Hash))
             throw new InvalidDataException("El contenido del respaldo no coincide con el catálogo.");
         item.Metadata?.RequireMatch(file.SafeFileHandle);

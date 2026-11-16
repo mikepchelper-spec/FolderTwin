@@ -14,6 +14,16 @@ public partial class ProductWindow
         {
             Width = size.Width; Height = size.Height;
             await Dispatcher.InvokeAsync(() => { UpdateWorkspaceLayout(); UpdateLayout(); }, DispatcherPriority.ApplicationIdle);
+            // Fluent animates Expander collapse; an idle dispatcher turn alone
+            // can still observe its old, expanded footer height.
+            if (!MoreJobActions.IsExpanded)
+            {
+                for (int attempt = 0; attempt < 25 && MoreJobActions.ActualHeight > 50; attempt++)
+                {
+                    await Task.Delay(20);
+                    await Dispatcher.InvokeAsync(UpdateLayout, DispatcherPriority.ApplicationIdle);
+                }
+            }
             var first = JobList.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem;
             Check(first is not null && JobList.ActualHeight >= first.ActualHeight && first.ActualHeight > 0,
                 $"The dashboard collapsed its job list below one complete row at {size}: list={JobList.ActualHeight}, row={first?.ActualHeight}.");
@@ -29,8 +39,14 @@ public partial class ProductWindow
                     "The route scrolls out of view in the desktop layout.");
             }
             else
+            {
+                Console.Error.WriteLine($"Compact metrics {size}: window={ActualHeight:F1}, rows={string.Join('/', ((Grid)Content).RowDefinitions.Select(row => row.ActualHeight.ToString("F1")))}, heading={RouteHeading.ActualHeight:F1}, workspace={JobWorkspace.ActualHeight:F1}, workspaceRows={string.Join('/', JobWorkspace.RowDefinitions.Select(row => row.ActualHeight.ToString("F1")))}, actions={PrimaryJobActions.ActualHeight:F1}, details={JobDetailsPanel.ActualHeight:F1}, secondary={MoreJobActions.ActualHeight:F1}.");
                 Check(JobList.TranslatePoint(new Point(), JobWorkspace).Y < JobDetailsScroll.TranslatePoint(new Point(), JobWorkspace).Y,
                     "The compact layout did not stack jobs and scrollable details.");
+                Check(MoreJobActions.IsExpanded || JobDetailsScroll.ActualHeight >= 96,
+                    $"Compact details provide less than 96 device-independent pixels at {size}: {JobDetailsScroll.ActualHeight}; operation status={OperationStatusText.ActualHeight}; status={StatusText.ActualHeight}.");
+                Console.Error.WriteLine($"Compact layout {size}: details viewport {JobDetailsScroll.ActualHeight:F1} DIP, secondary actions expanded={MoreJobActions.IsExpanded}.");
+            }
         }
         JobList.SelectedIndex = JobList.Items.Count - 1;
         Guid selected = ((JobRow)JobList.SelectedItem).Id;

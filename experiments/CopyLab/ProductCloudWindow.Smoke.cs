@@ -42,6 +42,7 @@ public partial class ProductCloudWindow
             window = new ProductCloudWindow(Open, job, () => kopia, _ => { }, Session,
                 (registry, token) => ProductCloudDispatch.RunPassAsync(registry, kopia, token, lab: true, () => rclone, remote));
             window.Show();
+            await CheckHelpAsync(window);
             Fill(window, CloudProvider.Mega);
             Check(window.SessionToken.Visibility == Visibility.Collapsed, "MEGA exposed the Filen-only field.");
             Fill(window, CloudProvider.Filen);
@@ -166,6 +167,24 @@ public partial class ProductCloudWindow
             }
             finally { controls.Close(); }
         }
+    }
+
+    private static async Task CheckHelpAsync(ProductCloudWindow window)
+    {
+        await window.Dispatcher.InvokeAsync(window.UpdateLayout, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        foreach (var name in window.cloudHelp.Keys)
+        {
+            var control = window.FindName(name) as Control ?? throw new InvalidOperationException("Missing named cloud help control: " + name);
+            Check(control.ToolTip is ToolTip && ToolTipService.GetShowOnDisabled(control) &&
+                System.Windows.Automation.AutomationProperties.GetHelpText(control).Length > 10, "Cloud help did not reach " + name);
+        }
+        window.Bucket.BringIntoView();
+        window.Bucket.Focus();
+        window.CloudHelpClick(window, new RoutedEventArgs());
+        Check(window.cloudHelpWindow is { IsVisible: true }, "Cloud help did not open.");
+        window.cloudHelpWindow!.Close();
+        await window.Dispatcher.InvokeAsync(window.UpdateLayout, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        Check(System.Windows.Input.FocusManager.GetFocusedElement(window) == window.Bucket, "Closing cloud help lost the prior keyboard focus.");
     }
 
     private static async Task ClickAsync(ProductCloudWindow window, Button button)

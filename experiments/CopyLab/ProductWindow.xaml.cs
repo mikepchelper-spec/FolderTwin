@@ -100,10 +100,17 @@ public partial class ProductWindow : Window
         runtimeTimer.Start();
     }
 
+    private bool? wideWorkspace;
+
     private void UpdateWorkspaceLayout()
     {
         bool wide = (ActualWidth > 0 ? ActualWidth : Width) >= 900 &&
             (ActualHeight > 0 ? ActualHeight : Height) >= 650;
+        if (wideWorkspace != wide)
+        {
+            wideWorkspace = wide;
+            MoreJobActions.IsExpanded = wide || MoreJobActions.IsKeyboardFocusWithin;
+        }
         JobWorkspace.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
         JobWorkspace.ColumnDefinitions[1].Width = new GridLength(wide ? 16 : 0);
         JobWorkspace.ColumnDefinitions[2].Width = new GridLength(wide ? 294 : 0);

@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:CopyLab" local:RouteTheme.UsePalette="True"
         Title="FolderTwin · Copia en nube" Width="620" Height="740" MinWidth="450" MinHeight="520"
-        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Loaded="InitializeCloudHelp" PreviewKeyDown="CloudHelpKeyDown">
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="ProductRoute.xaml" /></ResourceDictionary.MergedDictionaries>
@@ -11,12 +11,16 @@
     </Window.Resources>
     <DockPanel Margin="20" LastChildFill="True">
         <WrapPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-            <Button Content="_Cerrar" IsCancel="True" Padding="12,4" />
+            <Button x:Name="CloseCloudButton" Content="_Cerrar" IsCancel="True" Padding="12,4" />
+            <Button x:Name="CloudHelpButton" Content="ⓘ _Ayuda" Click="CloudHelpClick" Margin="8,0,0,0" Padding="12,4" />
         </WrapPanel>
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel x:Name="Actions">
                 <TextBlock x:Name="CloudHeading" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
                 <TextBlock x:Name="ProviderHelp" Text="Vista previa para carpetas sintéticas. Usa un bucket privado y guarda la contraseña del repositorio fuera de este equipo." TextWrapping="Wrap" Margin="0,8" />
+                <Border Style="{StaticResource RouteCard}" Margin="0,0,0,10">
+                <StackPanel>
+                <TextBlock Text="1 · Ubicación de la copia" FontSize="16" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
                 <Label Content="_Proveedor" Target="{Binding ElementName=Provider}" />
                 <ComboBox x:Name="Provider" SelectedIndex="0" SelectionChanged="ProviderChanged">
                     <ComboBoxItem Content="AWS S3" />
@@ -33,12 +37,24 @@
                 <TextBox x:Name="Bucket" MaxLength="63" />
                 <Label x:Name="PrefixLabel" Content="Carpeta del repositorio (opcional)" Target="{Binding ElementName=Prefix}" />
                 <TextBox x:Name="Prefix" MaxLength="200" />
+                </StackPanel>
+                </Border>
+                <Border Style="{StaticResource RouteCard}" Margin="0,0,0,10">
+                <StackPanel>
+                <TextBlock Text="2 · Acceso al proveedor" FontSize="16" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
+                <TextBlock x:Name="ProviderAccessHelp" TextWrapping="Wrap" Margin="0,6,0,4" />
                 <Label x:Name="AccessKeyLabel" Content="_Identificador de acceso" Target="{Binding ElementName=AccessKey}" />
                 <TextBox x:Name="AccessKey" MaxLength="1024" />
                 <Label x:Name="SecretKeyLabel" Content="_Clave de acceso" Target="{Binding ElementName=SecretKey}" />
                 <PasswordBox x:Name="SecretKey" MaxLength="2048" />
                 <Label x:Name="SessionTokenLabel" Content="Token de sesión (opcional)" Target="{Binding ElementName=SessionToken}" />
                 <PasswordBox x:Name="SessionToken" MaxLength="16384" />
+                </StackPanel>
+                </Border>
+                <Border Style="{StaticResource RouteCard}" Margin="0,0,0,10">
+                <StackPanel>
+                <TextBlock Text="3 · Clave para recuperar" FontSize="16" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
+                <TextBlock Text="Esta contraseña abre tu respaldo cifrado. Guárdala junto a la ubicación del repositorio para poder recuperar desde otro equipo." TextWrapping="Wrap" Margin="0,6,0,4" />
                 <Label Content="_Contraseña del repositorio" Target="{Binding ElementName=RepositoryPassword}" />
                 <PasswordBox x:Name="RepositoryPassword" MaxLength="1024" PasswordChanged="RecoveryPasswordChanged" />
                 <Expander x:Name="NewRepositoryReview" Header="Al crear un repositorio nuevo" IsExpanded="True" Margin="0,8,0,0">
@@ -51,12 +67,15 @@
                         </CheckBox>
                     </StackPanel>
                 </Expander>
+                </StackPanel>
+                </Border>
                 <WrapPanel Margin="0,12,0,0">
                     <Button x:Name="CreateCloud" Content="Crear y activar copia" Click="CreateClick" Margin="0,0,6,5" />
                     <Button x:Name="ConnectCloud" Content="Conectar y activar copia" Click="ConnectClick" Margin="0,0,6,5" />
                     <Button x:Name="ListCloud" Content="Consultar fechas de nube" Click="ListClick" Margin="0,0,6,5" />
                 </WrapPanel>
                 <TextBlock x:Name="CloudStatus" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" Margin="0,8" />
+                <TextBlock Text="Estado de los envíos" FontSize="16" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" Margin="0,8,0,4" />
                 <Label Content="_Envío que quieres controlar" Target="{Binding ElementName=CloudTransfers}" />
                 <ComboBox x:Name="CloudTransfers" DisplayMemberPath="Label" SelectionChanged="TransferSelected" />
                 <WrapPanel Margin="0,4,0,4">
@@ -71,6 +90,7 @@
                     <Button x:Name="CancelCloud" Content="Cancelar envío" Click="CancelClick" Margin="0,0,6,5" />
                     <Button x:Name="RetryCloud" Content="Reintentar envío" Click="RetryClick" Margin="0,0,6,5" />
                 </WrapPanel>
+                <TextBlock Text="Recuperar desde la nube" FontSize="16" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" Margin="0,8,0,4" />
                 <Label Content="_Fecha en nube" Target="{Binding ElementName=CloudDates}" />
                 <ComboBox x:Name="CloudDates" DisplayMemberPath="Label" />
                 <Button x:Name="RestoreCloud" Content="Recuperar en carpeta _nueva" HorizontalAlignment="Left" Click="RestoreClick" Margin="0,8,0,0" />

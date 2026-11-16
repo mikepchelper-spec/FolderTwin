@@ -92,12 +92,13 @@ internal sealed class VersionScope
         PendingBatch.ReadProductRegisteredSource(job!, scope, files, documentHash);
 
     internal void Copy(string sourceRoot, string destinationRoot, string input, string final, string temporary,
-        DestinationBinding target, byte[] hash, Action<CopyStep, string>? checkpoint = null, FileMetadata? metadata = null)
+        DestinationBinding target, byte[] hash, Action<CopyStep, string>? checkpoint = null, FileMetadata? metadata = null,
+        FileMetadata? sourceMetadata = null)
     {
         if (lab is not null)
         {
             VerifiedCopy.Run(input, final, temporary, checkpoint, expectedHash: hash, recoveryRoot: Root, metadata: metadata,
-                resumeUnverifiedPrefix: true);
+                resumeUnverifiedPrefix: true, sourceMetadata: sourceMetadata);
             return;
         }
         using var roots = new LocalJobRoots(sourceRoot, destinationRoot);
@@ -106,7 +107,7 @@ internal sealed class VersionScope
         else job.Destination.RequireDirectoryIdentity(roots.SourceHandle);
         VerifiedCopy.RunBound(roots, target, Path.GetRelativePath(sourceRoot, input),
             Path.GetRelativePath(destinationRoot, final), Path.GetRelativePath(destinationRoot, temporary),
-            hash, checkpoint, metadata: metadata, resumeUnverifiedPrefix: true);
+            hash, checkpoint, metadata: metadata, resumeUnverifiedPrefix: true, sourceMetadata: sourceMetadata);
     }
 
     private static bool Same(string first, string second) => first.Equals(second, StringComparison.OrdinalIgnoreCase);

@@ -11,7 +11,7 @@ internal sealed class SourceChangedDuringBackupException(string message, Excepti
 
 internal sealed record BatchFile(string RelativePath, long Length, byte[] Hash, FileMetadata? Metadata = null)
 {
-    internal int CatalogVersion => Metadata is null ? 1 : Metadata.CreationUtc is null ? 2 : 3;
+    internal int CatalogVersion => Metadata is null ? 1 : Metadata.CreationUtc is null ? 2 : Metadata.ZoneData is null ? 3 : 4;
 }
 internal sealed record BatchPlan(string FixtureRoot, string Source, string Destination, byte[] SourceIdentity,
     DestinationBinding Target, string[] Directories, BatchFile[] Files, DestinationBinding? SourceBinding = null)
@@ -158,7 +158,7 @@ internal static class FolderBatch
     internal static BatchFile ReadFile(SafeFileHandle parent, string relativePath, long? expectedLength = null, bool retrySourceChanges = false)
     {
         using var file = WindowsProbeNative.OpenPlainFile(parent, relativePath, FileAccess.Read, FileShare.Read);
-        WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, relativePath);
+        WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, relativePath, allowZoneIdentifier: true);
         long length = file.Length;
         if (expectedLength is not null && length != expectedLength)
         {
@@ -244,7 +244,7 @@ internal static class FolderBatch
                         var item = expectedFiles[entry.RelativePath];
                         using var fence = new DirectoryFence(plan.Destination, output);
                         using var file = WindowsProbeNative.OpenPlainFile(fence.Parent(output), output, FileAccess.Read, FileShare.Read);
-                        WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath);
+                        WindowsProbeNative.RequireSupportedData(file.SafeFileHandle, entry.RelativePath, item.Metadata?.ZoneData is not null);
                         if (file.Length != item.Length || !SHA256.HashData(file).AsSpan().SequenceEqual(item.Hash))
                             throw new InvalidDataException("La copia cambió antes de terminar el lote.");
                         item.Metadata?.RequireMatch(file.SafeFileHandle);
@@ -293,7 +293,7 @@ internal static class FolderBatch
                 EnsureSource();
                 using var sourceFileFence = new DirectoryFence(plan.Source, input);
                 using var sourceFile = WindowsProbeNative.OpenPlainFile(sourceFileFence.Parent(input), input, FileAccess.Read, FileShare.Read);
-                WindowsProbeNative.RequireSupportedData(sourceFile.SafeFileHandle, item.RelativePath);
+                WindowsProbeNative.RequireSupportedData(sourceFile.SafeFileHandle, item.RelativePath, item.Metadata?.ZoneData is not null);
                 if (sourceFile.Length != item.Length || !SHA256.HashData(sourceFile).AsSpan().SequenceEqual(item.Hash))
                     throw new InvalidDataException("El contenido cambió desde el análisis. Revisa el archivo.");
                 if (!resume)
@@ -306,7 +306,7 @@ internal static class FolderBatch
                     (step, path) => checkpoint?.Invoke(item.RelativePath, step, path), expectedHash: item.Hash,
                     recoveryRoot: plan.FixtureRoot,
                     cancellationToken: finishCurrentFileOnCancel ? CancellationToken.None : cancellationToken,
-                    metadata: item.Metadata);
+                    metadata: item.Metadata, sourceMetadata: plan.SourceBinding is null ? item.Metadata : FileMetadata.Read(sourceFile.SafeFileHandle));
                 return BatchStatus.Copied;
 
                 BatchStatus? RecoverKnown()
@@ -515,14 +515,14 @@ internal static class FolderBatch
         }
         if (files.Any(file => file.Hash is not { Length: SHA256.HashSizeInBytes } || file.Length < 0))
             throw new ArgumentException("Hash o tamaño de lote no válido.");
-        if (files.Length != 0 && files.Any(file => file.CatalogVersion != files[0].CatalogVersion ||
+        if (files.Length != 0 && files.Any(file => (file.CatalogVersion < 3 || files[0].CatalogVersion < 3) && file.CatalogVersion != files[0].CatalogVersion ||
             file.Metadata is { } metadata && !metadata.IsValid()))
             throw new InvalidDataException("Los archivos del lote tienen metadatos inválidos o de versiones distintas.");
         try { _ = files.Sum(file => file.Length); }
         catch (OverflowException error) { throw new ArgumentException("El tamaño total del lote no es válido.", error); }
     }
 
-    private static bool IsControl(string relative) => relative.Split(Path.DirectorySeparatorChar)
+    internal static bool IsControl(string relative) => relative.Split(Path.DirectorySeparatorChar)
         .Any(name => name.StartsWith(ControlPrefix, StringComparison.OrdinalIgnoreCase));
     private static bool IsExpectedFailure(Exception error) =>
         error is IOException or InvalidDataException or UnauthorizedAccessException or Win32Exception or ArgumentException;

@@ -255,12 +255,12 @@ internal sealed partial class VersionStore
         _ = GenerationRegistry.Read(root, binding);
     }
 
-    private static void RequireObject(FileStream input, string digest, BatchFile expected)
+    private static void RequireObject(FileStream input, string digest, BatchFile expected, bool allowZoneIdentifier = false)
     {
-        WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, digest);
+        WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, digest, allowZoneIdentifier);
         if (input.Length != expected.Length || !SHA256.HashData(input).AsSpan().SequenceEqual(expected.Hash))
             throw new InvalidDataException("El objeto de cuarentena no coincide con el catálogo.");
-        WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, digest);
+        WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, digest, allowZoneIdentifier);
     }
 
     private static void ReturnObject(SafeFileHandle root, SafeFileHandle directory, string digest, BatchFile expected)

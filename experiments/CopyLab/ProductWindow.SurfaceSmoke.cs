@@ -43,6 +43,9 @@ public partial class ProductWindow
                 window.ThemeMode = theme;
 #pragma warning restore WPF0001
                 window.Width = 600; window.Height = 500;
+                await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
+                if (theme == ThemeMode.Light)
+                    Check(!window.MoreJobActions.IsExpanded, "Compact Ruta did not fold its secondary actions.");
                 await Click(window, window.NewJobButton);
                 await FocusIs(window.ChooseOriginButton);
                 picks.Enqueue(source); picks.Enqueue(parent);
@@ -71,12 +74,14 @@ public partial class ProductWindow
                     "An empty point bypassed destination review.");
                 await ReturnThroughHeaderAsync();
 
+                window.MoreJobActions.IsExpanded = true;
                 await Click(window, window.ManageApplicationButton);
                 await FocusIs(window.AcceptApplicationUpdate);
                 Check(!window.InstallApplicationButton.IsEnabled && !window.RemoveInstalledVersionButton.IsEnabled,
                     "Application management bypassed its review.");
                 await ReturnThroughHeaderAsync();
 
+                window.MoreJobActions.IsExpanded = true;
                 await Click(window, window.ImportConfigurationButton);
                 await FocusIs(window.ChooseImportDestinationButton);
                 Check(!window.SaveImportButton.IsEnabled, "An unreviewed import could be saved.");

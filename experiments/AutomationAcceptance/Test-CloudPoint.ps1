@@ -3,7 +3,7 @@
 param(
     [Parameter(Mandatory)][string]$Kopia,
     [Parameter(Mandatory)][string]$Rclone,
-    [string]$Dotnet = (Get-Command dotnet).Source,
+    [string]$Dotnet,
     [string]$PackageDirectory
 )
 $ErrorActionPreference = 'Stop'
@@ -24,6 +24,7 @@ if ($PackageDirectory) {
     if (!(Test-Path -LiteralPath $program -PathType Leaf)) { throw 'CopyProbe.exe is missing from the verified package.' }
     $prefix = @()
 } else {
+    if (!$Dotnet) { $Dotnet = (Get-Command dotnet -ErrorAction Stop).Source }
     $project = Join-Path $PSScriptRoot '../CopyProbe/CopyProbe.csproj'
     $artifacts = Join-Path $fixture 'build'
     & $Dotnet build $project --artifacts-path $artifacts --nologo
@@ -51,6 +52,7 @@ $process = [Diagnostics.Process]::Start($server)
 $savedAccess = [Environment]::GetEnvironmentVariable('AWS_ACCESS_KEY_ID')
 $savedSecret = [Environment]::GetEnvironmentVariable('AWS_SECRET_ACCESS_KEY')
 $savedToken = [Environment]::GetEnvironmentVariable('AWS_SESSION_TOKEN')
+$completed = $false
 try {
     $clock = [Diagnostics.Stopwatch]::StartNew()
     do {
@@ -65,10 +67,19 @@ try {
     [Environment]::SetEnvironmentVariable('AWS_SESSION_TOKEN', $null)
     & $program @prefix --cloud-point $Kopia --s3-lab $endpoint
     if ($LASTEXITCODE -ne 0) { throw 'Synthetic S3 acceptance failed.' }
+    $completed = $true
 } finally {
     [Environment]::SetEnvironmentVariable('AWS_ACCESS_KEY_ID', $savedAccess)
     [Environment]::SetEnvironmentVariable('AWS_SECRET_ACCESS_KEY', $savedSecret)
     [Environment]::SetEnvironmentVariable('AWS_SESSION_TOKEN', $savedToken)
     if (!$process.HasExited) { $process.Kill(); $process.WaitForExit() }
     $process.Dispose()
+    if ($completed) {
+        $resolved = (Resolve-Path -LiteralPath $fixture).ProviderPath
+        if ([IO.Path]::GetDirectoryName($resolved) -ne [IO.Path]::TrimEndingDirectorySeparator([IO.Path]::GetTempPath()) -or
+            ![IO.Path]::GetFileName($resolved).StartsWith('FolderTwin-CloudS3-', [StringComparison]::Ordinal)) {
+            throw 'Synthetic cleanup target left the owned temporary scope.'
+        }
+        Remove-Item -LiteralPath $resolved -Recurse -Force
+    } else { Write-Warning "Synthetic S3 fixture preserved at $fixture" }
 }

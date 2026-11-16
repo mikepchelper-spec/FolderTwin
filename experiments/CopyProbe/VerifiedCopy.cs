@@ -10,17 +10,18 @@ internal static class VerifiedCopy
         string source, string destination, string temporary,
         Action<CopyStep, string>? checkpoint = null, byte[]? expectedHash = null, string? recoveryRoot = null,
         CancellationToken cancellationToken = default, DestinationBinding? binding = null, FileMetadata? metadata = null,
-        bool resumeUnverifiedPrefix = false)
+        bool resumeUnverifiedPrefix = false, FileMetadata? sourceMetadata = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var fence = recoveryRoot is null ? null : new DirectoryFence(recoveryRoot, source, temporary, destination);
         Copy(source, destination, temporary, fence?.Parent(source), fence?.Parent(destination),
-            checkpoint, expectedHash, cancellationToken, binding, metadata, resumeUnverifiedPrefix);
+            checkpoint, expectedHash, cancellationToken, binding, metadata, resumeUnverifiedPrefix, sourceMetadata);
     }
 
     internal static void RunBound(LocalJobRoots roots, DestinationBinding binding, string sourceRelative, string destinationRelative,
         string temporaryRelative, byte[] expectedHash, Action<CopyStep, string>? checkpoint = null,
-        CancellationToken cancellationToken = default, FileMetadata? metadata = null, bool resumeUnverifiedPrefix = false)
+        CancellationToken cancellationToken = default, FileMetadata? metadata = null, bool resumeUnverifiedPrefix = false,
+        FileMetadata? sourceMetadata = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (Path.IsPathRooted(sourceRelative) || Path.IsPathRooted(destinationRelative) || Path.IsPathRooted(temporaryRelative))
@@ -35,7 +36,7 @@ internal static class VerifiedCopy
             throw new InvalidDataException("La raíz de origen cambió desde la revisión.");
         binding.RequireDirectoryIdentity(target.Root);
         Copy(source, destination, temporary, origin.Parent(source), target.Parent(destination),
-            checkpoint, expectedHash, cancellationToken, binding: null, metadata, resumeUnverifiedPrefix);
+            checkpoint, expectedHash, cancellationToken, binding: null, metadata, resumeUnverifiedPrefix, sourceMetadata);
     }
 
     internal static void RunWithinDirectories(SafeFileHandle sourceDirectory, string source, SafeFileHandle destinationDirectory,
@@ -45,13 +46,13 @@ internal static class VerifiedCopy
         DirectoryFence.CheckName(destination);
         DirectoryFence.CheckName(temporary);
         Copy(source, destination, temporary, sourceDirectory, destinationDirectory, checkpoint: null,
-            expectedHash, CancellationToken.None, binding: null, metadata, resumeUnverifiedPrefix: false);
+            expectedHash, CancellationToken.None, binding: null, metadata, resumeUnverifiedPrefix: false, sourceMetadata: null);
     }
 
     private static void Copy(string source, string destination, string temporary,
         SafeFileHandle? sourceDirectory, SafeFileHandle? directory, Action<CopyStep, string>? checkpoint,
         byte[]? expectedHash, CancellationToken cancellationToken, DestinationBinding? binding, FileMetadata? metadata,
-        bool resumeUnverifiedPrefix)
+        bool resumeUnverifiedPrefix, FileMetadata? sourceMetadata)
     {
         if (resumeUnverifiedPrefix && (directory is null || expectedHash is not { Length: 32 }))
             throw new ArgumentException("Continuar un temporal requiere una raíz comprobada y el SHA-256 esperado.");
@@ -65,7 +66,8 @@ internal static class VerifiedCopy
             : WindowsProbeNative.OpenPlainFile(sourceDirectory, source, FileAccess.Read, FileShare.Read))
         {
             if (sourceDirectory is not null)
-                WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, Path.GetFileName(source));
+                WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, Path.GetFileName(source), sourceMetadata?.ZoneData is not null);
+            sourceMetadata?.RequireMatch(input.SafeFileHandle);
             if (partial)
             {
                 // Keep the source handle denying writers throughout prefix validation
@@ -81,7 +83,7 @@ internal static class VerifiedCopy
             byte[] buffer = new byte[64 * 1024];
             if (partial)
             {
-                WindowsProbeNative.RequireSupportedData(output.SafeFileHandle, Path.GetFileName(temporary));
+                WindowsProbeNative.RequireSupportedData(output.SafeFileHandle, Path.GetFileName(temporary), metadata?.ZoneData is not null);
                 if (output.Length > input.Length) throw new InvalidDataException("El temporal excede el contenido esperado; se conserva.");
                 byte[] existing = new byte[buffer.Length];
                 long remaining = output.Length;
@@ -115,7 +117,8 @@ internal static class VerifiedCopy
             }
             output.Flush(flushToDisk: true);
             if (sourceDirectory is not null)
-                WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, Path.GetFileName(source));
+                WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, Path.GetFileName(source), sourceMetadata?.ZoneData is not null);
+            sourceMetadata?.RequireMatch(input.SafeFileHandle);
         }
         checkpoint?.Invoke(CopyStep.Flushed, temporary);
 
@@ -126,7 +129,7 @@ internal static class VerifiedCopy
                 writeAttributes: metadata?.CreationUtc is not null))
         {
             if (directory is not null)
-                WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, Path.GetFileName(temporary));
+                WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, Path.GetFileName(temporary), metadata?.ZoneData is not null);
             if (!SHA256.HashData(input).AsSpan().SequenceEqual(sourceHash) ||
                 (expectedHash is not null && !sourceHash.AsSpan().SequenceEqual(expectedHash)))
                 throw new InvalidDataException("The copy does not match the expected SHA-256.");
@@ -137,7 +140,7 @@ internal static class VerifiedCopy
             checkpoint?.Invoke(CopyStep.Verified, temporary);
             if (directory is not null)
             {
-                WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, Path.GetFileName(temporary));
+                WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, Path.GetFileName(temporary), metadata?.ZoneData is not null);
                 metadata?.RequireMatch(input.SafeFileHandle);
                 CopyRecovery.PublishData(input, directory, destination, metadata);
             }

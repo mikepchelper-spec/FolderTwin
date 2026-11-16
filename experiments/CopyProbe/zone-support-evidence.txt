@@ -1,0 +1,57 @@
+Zone.Identifier and related UI acceptance - development, Windows 11 x64, 2026-11-16.
+Kopia 0.23.1 and rclone 1.76.0 pinned by product SHA-256. Synthetic disposable data only.
+Not final ZIP acceptance, real-provider authentication, physical durability, native DPI or screen-reader certification.
+
+zone-native-overwrite.log
+PASS Zone.Identifier handle read/write: absent, empty, opaque bytes, 16 KiB, oversized/unknown rejection, data and file-position preservation, repeated failures, read-only source and exclusive write-only output.
+
+zone-local-legacy-refusal.log
+PASS marked local mode=Accumulative, points=3, shared_objects=1, SHA256=5fb465e078cf0afe51a9cb37a6ba89e472a6f18cf9b7496a9940f75f4f68aed8, offline resume/restore and retention.
+PASS marked local mode=Versions, points=3, shared_objects=1, SHA256=5fb465e078cf0afe51a9cb37a6ba89e472a6f18cf9b7496a9940f75f4f68aed8, offline resume/restore and retention.
+PASS marked local mode=ProtectedMirror, points=3, shared_objects=1, SHA256=5fb465e078cf0afe51a9cb37a6ba89e472a6f18cf9b7496a9940f75f4f68aed8, offline resume/restore and retention.
+PASS Zone.Identifier in all modes: per-path marks with shared CAS, empty/absent distinction, metadata-only changes, interrupted offline publication, independent restore, quarantine/undo/purge, bounds and other-stream rejection.
+
+cloud-zone-schema.log
+PASS legacy snapshot format and exact durable point serialization remain readable.
+PASS all local modes published two complete points and recovered them from a separate Kopia connection, including opaque/empty/absent/16 KiB Zone.Identifier, file/folder selection, cancellation and catalog hash rejection.
+
+rclone-zone.log
+Filen profile, local rclone backend, SHA-256 ec920d1c6bd929506dc016dff768e67859ebe648ca350ceaafb8449fdde58624
+Filen profile, local rclone backend, SHA-256 2820cef141a8156abba5f7ec9ee8916fb0a400ad04dcc6cac255248f3e2063a8
+Mega profile, local rclone backend, SHA-256 ec920d1c6bd929506dc016dff768e67859ebe648ca350ceaafb8449fdde58624
+Mega profile, local rclone backend, SHA-256 2820cef141a8156abba5f7ec9ee8916fb0a400ad04dcc6cac255248f3e2063a8
+PASS both rclone profiles through the product gateway with a disposable local backend.
+
+s3-zone.log
+PASS legacy snapshot format and exact durable point serialization remain readable.
+PASS product dispatch reopened a protected S3 connection and sent a newly discovered local point.
+PASS all local modes published two complete points and recovered them from a separate Kopia connection, including opaque/empty/absent/16 KiB Zone.Identifier, file/folder selection, cancellation and catalog hash rejection.
+
+fault-zone.log
+PASS bounded Kopia output json, child stopped in 0.162s.
+PASS bounded Kopia output overflow, child stopped in 0.254s.
+PASS bounded Kopia output diagnostic, child stopped in 0.137s.
+PASS bounded Kopia output stderr-flood, child stopped in 2.033s.
+PASS connection reset: requests=10, issue=Repository. Local confirmation preserved.
+PASS SlowDown: requests=10, issue=Repository. Local confirmation preserved.
+PASS QuotaExceeded: requests=1, issue=Quota. Local confirmation preserved.
+PASS InvalidAccessKeyId: requests=1, issue=Credentials. Local confirmation preserved.
+PASS manual deletion preserved the baseline; contradictions and damaged packs were rejected; original bytes restored.
+PASS conflicts, unreadable inventory, interrupted mirror and missing local destination preserved the previous point.
+PASS killing the worker closed the in-flight Kopia request.
+
+cloud-zone.stdout
+PASS packaged Ruta confirms the recovery password, reopens the new repository, controls the selected cloud ticket and recovers two dates from an empty profile.
+PASS Ruta and tray preserve local confirmation and expose remote quota and backlog.
+PASS standalone WPF recovery listed, verified and restored with no source, previous profile or configuration export.
+PASS Ruta light/dark text contrast, dynamic brush changes, shared recovery dialog theme and synthetic high-contrast palette.
+
+surface-zone.stderr
+PASS WPF light/dark, minimum size, wizard steps/error/cancel, empty recovery, visible return in recovery/application/import, history pagination and old incidents, live history preserves selection/focus, settings/retention Tab and review gates. This does not certify a screen reader or real DPI.
+
+usability-compact-stable.stderr
+Compact layout 1040,500: details viewport 131.9 DIP, secondary actions expanded=False.
+Compact layout 760,620: details viewport 251.9 DIP, secondary actions expanded=False.
+Compact layout 600,500: details viewport 131.9 DIP, secondary actions expanded=False.
+PASS WPF dashboard keeps a complete job row and reachable details, recovery actions stay visible at desktop and minimum sizes, job names are accessible and selection survives refresh.
+PASS usability: 100 controls with contextual/disabled help, F1 and click help, safe diagnostic, first-copy guidance, three modes via wizard, verify/restore/open output, sticky primary actions and keyboard focus in both themes. Only synthetic data; no native tasks.

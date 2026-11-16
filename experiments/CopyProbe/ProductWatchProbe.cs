@@ -56,6 +56,16 @@ internal static class ProductWatchProbe
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 while (!signal.TakeDue(TimeSpan.Zero, maximum))
                     await Task.Delay(20, timeout.Token);
+                await Task.Delay(250, timeout.Token);
+                while (signal.TakeDue(TimeSpan.Zero, maximum)) { }
+                string marked = Path.Combine(source, "arrived", "file.txt");
+                DateTime previous = File.GetLastWriteTimeUtc(marked);
+                File.WriteAllBytes(marked + ":Zone.Identifier", [1, 0, 255]);
+                File.SetLastWriteTimeUtc(marked, previous);
+                while (!signal.TakeDue(TimeSpan.Zero, maximum))
+                    await Task.Delay(20, timeout.Token);
+                Check(File.GetLastWriteTimeUtc(marked) == previous && File.ReadAllText(marked) == "synthetic",
+                    "The ADS-only notification fixture altered the primary bytes or timestamp.");
             }
             Directory.Move(source, Path.Combine(workspace.Root, "original"));
             Directory.CreateDirectory(source);
@@ -71,7 +81,7 @@ internal static class ProductWatchProbe
             using (workspace.OpenRegisteredRoot()) { }
             Directory.Delete(workspace.Root, recursive: true);
         }
-        Console.WriteLine("PASS continuous signal groups bursts, preserves trailing work, recovers after watcher failure and sees a real subtree move.");
+        Console.WriteLine("PASS continuous signal groups bursts, preserves trailing work, recovers after watcher failure and sees a real subtree move and an ADS-only edit with the primary timestamp preserved.");
         return 0;
     }
 
