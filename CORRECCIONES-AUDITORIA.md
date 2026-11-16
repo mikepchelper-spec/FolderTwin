@@ -71,7 +71,7 @@ La aceptación desde el ZIP reproducible final sigue pendiente.
 
 ## Continuación
 
-1. Incorporar Zone.Identifier y completar la recuperación remota.
+1. Incorporar Zone.Identifier y completar la recuperación remota. El [siguiente hito](experiments/CopyProbe/ZONE-IDENTIFIER.md) fija el ensayo nativo, la prueba con Kopia fijado y los criterios de formato/aceptación antes de habilitarlo.
 2. Completar espacio compacto, ayuda remota y guías.
 3. Revisar dependencias y firma, producir inventario de componentes, compilar dos distribuciones reproducibles y aceptar el paquete extraído.
 
