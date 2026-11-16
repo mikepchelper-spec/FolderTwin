@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json.Serialization;
 using Microsoft.Win32.SafeHandles;
 
 internal sealed record RetentionPolicy(int DailyDays = 30, int WeeklyWeeks = 8, int MonthlyMonths = 12, int GraceDays = 7)
@@ -46,12 +47,14 @@ internal sealed record RetentionPolicy(int DailyDays = 30, int WeeklyWeeks = 8, 
 }
 
 internal sealed record RetentionPreview(RetentionPolicy Policy, DateTimeOffset ReviewedUtc, byte[] RegistryHash,
-    string[] Keep, string[] Expire, string[] Objects, long QuarantineBytes);
+    string[] Keep, string[] Expire, string[] Objects, long QuarantineBytes,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] long MetadataBytes = 0);
 
 internal sealed partial class VersionStore
 {
     private sealed record RetentionInventory(RegistryState Registry, Dictionary<string, HashSet<string>> References,
-        Dictionary<string, BatchFile> Objects, Dictionary<string, string> Sources, HashSet<string> AbandonedObjects);
+        Dictionary<string, BatchFile> Objects, Dictionary<string, string> Sources, HashSet<string> AbandonedObjects,
+        Dictionary<string, long> MetadataBytes);
 
     internal RetentionPreview PreviewRetention(RetentionPolicy policy, DateTimeOffset? clock = null)
     {
@@ -78,22 +81,23 @@ internal sealed partial class VersionStore
             .Concat(inventory.AbandonedObjects)
             .Distinct(StringComparer.Ordinal).Where(digest => !referenced.Contains(digest)).Order(StringComparer.Ordinal).ToArray();
         return new(policy, now, inventory.Registry.LastHash, active.Where(keep.Contains).ToArray(), expire,
-            candidates, candidates.Sum(digest => inventory.Objects[digest].Length));
+            candidates, candidates.Sum(digest => inventory.Objects[digest].Length), expire.Sum(id => inventory.MetadataBytes[id]));
     }
 
-    private RetentionInventory AuditRetention(SafeFileHandle root)
+    private RetentionInventory AuditRetention(SafeFileHandle root, MetadataPurgePlan? continuing = null, bool allowMetadataPurge = false)
     {
         if (!registeredGenerations)
             throw new InvalidDataException("El almacén anterior no tiene registro durable para retención.");
-        RequireNoAbandonInProgress(root);
+        RequireNoAbandonInProgress(root, allowMetadataPurge: continuing is not null || allowMetadataPurge);
         RequireNoPendingMirror(root);
         var registry = GenerationRegistry.Read(root, binding);
+        var pruning = continuing?.Points.Select(point => point.Generation).ToHashSet(StringComparer.Ordinal) ?? [];
         using var pending = WindowsProbeNative.OpenPlainDirectory(root, PendingDirectory);
         foreach (var entry in WindowsProbeNative.ReadDirectory(pending).Where(entry => entry.Name is not ("." or "..")))
         {
             string? id = entry.Name.EndsWith(LocationSuffix, StringComparison.Ordinal) ? entry.Name[..^LocationSuffix.Length] :
                 entry.Name.EndsWith(".jsonl", StringComparison.Ordinal) ? entry.Name[..^6] : null;
-            if (id is null || !registry.Abandoned.ContainsKey(id) && (!registry.Generations.ContainsKey(id) || !IsCommitted(root, id)))
+            if (id is null || !pruning.Contains(id) && !registry.Abandoned.ContainsKey(id) && (!registry.Generations.ContainsKey(id) || !IsCommitted(root, id)))
                 throw new InvalidDataException("Hay una operación pendiente o desconocida. La limpieza queda suspendida.");
         }
         using var commits = WindowsProbeNative.OpenPlainDirectory(root, CommitDirectory);
@@ -104,24 +108,27 @@ internal sealed partial class VersionStore
             string id = entry.Name[..^7];
             _ = GenerationTime(id);
             return id;
-        }).ToHashSet(StringComparer.Ordinal);
-        if (!observed.SetEquals(registry.Generations.Keys))
+        }).Where(id => !pruning.Contains(id)).ToHashSet(StringComparer.Ordinal);
+        if (!observed.SetEquals(registry.Generations.Keys.Where(id => !pruning.Contains(id))))
             throw new InvalidDataException("Falta o sobra una generación esperada. La limpieza queda suspendida.");
         foreach (string name in new[] { PrimaryDirectory, ReplicaDirectory })
         {
             using var manifests = WindowsProbeNative.OpenPlainDirectory(root, name);
             var names = WindowsProbeNative.ReadDirectory(manifests).Where(entry => entry.Name is not ("." or ".."))
                 .Select(entry => entry.Name).ToHashSet(StringComparer.Ordinal);
-            if (!names.SetEquals(registry.Generations.Keys.Select(id => id + ".jsonl")))
+            names.ExceptWith(pruning.Select(id => id + ".jsonl"));
+            if (!names.SetEquals(registry.Generations.Keys.Where(id => !pruning.Contains(id)).Select(id => id + ".jsonl")))
                 throw new InvalidDataException("El conjunto de manifiestos no coincide con las generaciones esperadas.");
         }
         var references = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         var sources = new Dictionary<string, string>(StringComparer.Ordinal);
         var objects = new Dictionary<string, BatchFile>(StringComparer.Ordinal);
         var abandonedObjects = new HashSet<string>(StringComparer.Ordinal);
+        var metadataBytes = new Dictionary<string, long>(StringComparer.Ordinal);
         using var scope = workspace.OpenRegisteredRoot();
         foreach (var (id, hash) in registry.Generations)
         {
+            if (pruning.Contains(id)) continue;
             var catalog = ReadPoint(root, id, requireBoth: true);
             if (!catalog.DocumentHash.AsSpan().SequenceEqual(hash))
                 throw new InvalidDataException("Un catálogo esperado falta, difiere o está dañado. La limpieza queda suspendida.");
@@ -130,6 +137,7 @@ internal sealed partial class VersionStore
             if (source.Identity.AsSpan().SequenceEqual(binding.Identity))
                 throw new InvalidDataException("La identidad de origen no corresponde al catálogo esperado.");
             sources.Add(id, Convert.ToHexStringLower(source.Identity));
+            metadataBytes.Add(id, MeasureMetadataBytes(root, id));
             var point = new HashSet<string>(StringComparer.Ordinal);
             foreach (var file in catalog.Files)
             {
@@ -154,7 +162,7 @@ internal sealed partial class VersionStore
             }
             references.Add(id, point);
         }
-        var inventory = new RetentionInventory(registry, references, objects, sources, FindStoredObjects(root, abandonedObjects));
+        var inventory = new RetentionInventory(registry, references, objects, sources, FindStoredObjects(root, abandonedObjects), metadataBytes);
         VerifyObjects(root, ActiveReferences(inventory).Select(digest => objects[digest]).ToArray());
         return inventory;
     }

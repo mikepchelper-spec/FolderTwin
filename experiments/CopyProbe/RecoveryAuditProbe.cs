@@ -92,7 +92,7 @@ internal static class RecoveryAuditProbe
             store.PurgeRetention(next, clock: now.AddDays(2));
             Check(store.ListRetention().Single(item => item.Id == next).State == "purged", "The synthetic purge did not finish.");
             Recover(points.Count - 1, "retained after purge");
-            Recover(points.Count - 2, "shared expired after purge");
+            RejectRestore(points.Count - 2, "shared expired metadata purged");
             RejectRestore(0, "purged exclusive unavailable");
 
             // New composition: corrupt shared data after a purge; verification,
@@ -109,7 +109,7 @@ internal static class RecoveryAuditProbe
             Compare(detached, snapshots[^1]);
             Budget();
             Console.WriteLine($"PASS recovery audit seed={Seed}: {calendars} independent calendar selections; 6 points, UTC offset equivalence, independently hashed reference union, offline quarantine/undo/purge, shared-expired rescue and corruption fail-closed; seconds={timer.Elapsed.TotalSeconds:F3}.");
-            Console.WriteLine("LIMIT independent CAS recovery can read an expired point whose objects remain active; this is not permission to bypass the product UI's expiry review or purge missing data.");
+            Console.WriteLine("LIMIT independent CAS recovery can read an expired point during quarantine when its objects remain active. Final purge removes that date's metadata even if all contents are shared; retained dates remain recoverable.");
             return 0;
 
             string Child(string name)

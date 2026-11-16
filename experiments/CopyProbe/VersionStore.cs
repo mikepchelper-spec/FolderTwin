@@ -106,6 +106,7 @@ internal sealed partial class VersionStore
         using var marker = binding.OpenVerifiedMarker(store.Root);
         using var operation = OpenLock(store.Root, FileAccess.ReadWrite);
         RequireNoAbandonInProgress(store.Root);
+        RequireGenerationNotPurged(store.Root, generation);
         if (IsCommitted(store.Root, generation))
             throw new InvalidDataException("La generación ya está confirmada.");
         byte[] identity = WindowsProbeNative.DirectoryIdentity(origin.Root);

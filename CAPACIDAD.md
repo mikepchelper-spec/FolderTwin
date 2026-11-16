@@ -1,5 +1,24 @@
 # Crecimiento y capacidad del respaldo automático
 
+## Purga de metadatos en desarrollo
+
+La corrección de A14-06 añade fin de vida a los catálogos, descriptores y listas auxiliares de las fechas definitivamente purgadas. La cuarentena conserva esos archivos para deshacer. Tras la gracia y la autorización de purga, dos comprobantes y el registro replicado fijan qué metadatos se retiraron. El estado vivo deja de conservar esas generaciones. Los comprobantes, diarios de retención y objetos purgados y pequeños estados de espejo siguen ocupando espacio. Una purga anterior puede completar explícitamente esta limpieza; abrir el respaldo conserva su estado.
+
+La medición de desarrollo usa .NET 10.0.14, Windows 26100 y un espacio sintético en C:. `--retention-scale` crea ocho fechas de 4.096 archivos con contenidos compartidos, aparta el origen, conserva tres fechas y purga cinco. Mantiene los límites y contadores del arnés existente. Los datos siguientes provienen de una ejecución nueva; no sustituyen las mediciones históricas entre C: y D: de las secciones posteriores. [Salida de la medición](experiments/CopyProbe/metadata-retention-evidence.txt).
+
+| Medida | Resultado |
+| --- | ---: |
+| Tamaño lógico antes de cuarentena | 21.842.903 B |
+| Tamaño lógico después de purgar, incluidos comprobantes | 8.221.658 B |
+| Espacio lógico neto liberado | 13.621.245 B |
+| Catálogos y descriptores candidatos | 13.644.005 B |
+| Revisión / cuarentena / purga | 0,265 / 0,767 / 0,690 s |
+| Máximo residente observado del proceso | 60.809.216 B |
+
+`--storage-safety` repitió el recorrido de disco lleno y comprobó la purga de dos fechas por modo, restauración con el origen apartado y siguiente copia automática. Los bytes de metadatos candidatos fueron 5.705 en acumulativo, 4.719 en versionado y 5.561 en espejo. Sus hashes de restauración coinciden con los de la tabla histórica de generaciones reanudadas. En el caso separado de tres fechas con contenidos de 128 KiB, la segunda cuarentena ocupó 540.221 B lógicos y 573.304 B asignados; tras purgar quedaron 411.103 / 437.776 B. Se liberaron 129.118 B lógicos y 135.528 B asignados netos. La asignación excluye MFT, índices y metadatos de volumen. Los nuevos comprobantes pueden costar más que los catálogos de un inventario diminuto; la revisión muestra candidatos, sin prometer ahorro neto exacto.
+
+Las diez transiciones de purga, ocho casos de eventos replicados parciales, pérdida/corrupción y cinco mutaciones semánticas de comprobantes, reanudación sin origen, cambio de reloj y terminación real de trabajador pasaron `--retention`. El registro compactado conservó la prueba de purga cerca de 16 MiB. `--product-retention-smoke` verificó revisión, desglose, cuarentena/deshacer, gracia y purga desde WPF. Esta medición aún corresponde a desarrollo, no al ZIP final. USB, caída física y 329.000 archivos con el nuevo protocolo no se acreditan con este ensayo.
+
 ## Línea base de `335a98a`
 
 Se verificó el paquete de Windows x64 y sus 500 archivos antes de probar. Windows 11, compilación 26100, con origen sintético en SSD NVMe C: y destinos dedicados en HDD SATA D:. El monitor del paquete vigiló los tres modos en un registro nuevo, con la interfaz cerrada y un ejecutor a la vez. Los árboles de acumulativo y espejo se prepararon y verificaron antes de iniciar la vigilancia. Versionado hizo su primera copia en el monitor. Los 4.096 archivos de cada trabajo usan 32 contenidos pequeños repetidos. Las fases se dispararon tras observar vigilancia y se comprimieron a minutos. La comparación periódica fue de 60 s y la espera ordinaria de cambios se mantuvo en 2 s. La ráfaga usó ocho guardados por trabajo, separados por 180 ms.

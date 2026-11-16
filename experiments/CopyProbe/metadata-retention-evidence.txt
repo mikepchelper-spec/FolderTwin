@@ -1,0 +1,15 @@
+Windows 10.0.26100.0; .NET 10.0.14; 8 generations with 4096 files each.
+retention_seed: seconds=2.046; cpu_seconds=1.641; read_bytes=0; write_bytes=6912; peak_working_set_bytes=34299904.
+retention_backup_1: seconds=1.384; cpu_seconds=1.078; read_bytes=3650227; write_bytes=2733899; peak_working_set_bytes=50008064.
+retention_backup_2: seconds=0.736; cpu_seconds=0.891; read_bytes=3654913; write_bytes=2729749; peak_working_set_bytes=53661696.
+retention_backup_3: seconds=0.676; cpu_seconds=0.703; read_bytes=3659761; write_bytes=2729749; peak_working_set_bytes=54136832.
+retention_backup_4: seconds=0.614; cpu_seconds=0.625; read_bytes=3664609; write_bytes=2729749; peak_working_set_bytes=54824960.
+retention_backup_5: seconds=0.600; cpu_seconds=0.531; read_bytes=3669457; write_bytes=2729749; peak_working_set_bytes=55545856.
+retention_backup_6: seconds=0.631; cpu_seconds=0.469; read_bytes=3674305; write_bytes=2729749; peak_working_set_bytes=55545856.
+retention_backup_7: seconds=0.610; cpu_seconds=0.453; read_bytes=3679149; write_bytes=2729746; peak_working_set_bytes=55545856.
+retention_backup_8: seconds=0.640; cpu_seconds=0.516; read_bytes=3684001; write_bytes=2729749; peak_working_set_bytes=56713216.
+retention_preview: seconds=0.265; cpu_seconds=0.250; read_bytes=21866583; write_bytes=0; peak_working_set_bytes=56713216.
+retention_quarantine: seconds=0.767; cpu_seconds=0.844; read_bytes=52971836; write_bytes=5392; peak_working_set_bytes=60809216.
+retention_purge: seconds=0.690; cpu_seconds=0.531; read_bytes=93255211; write_bytes=17428; peak_working_set_bytes=60809216.
+metadata_purge: before_logical=21842903; after_logical=8221658; released_logical=13621245; metadata_candidates=13644005; proof_replicas=2.
+PASS retention across 8 generations, 4096 files each; 3 kept, 5 expired, 5 unshared objects purged; source absent.

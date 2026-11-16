@@ -82,6 +82,8 @@ if (args is ["--differential-audit"])
     return DifferentialAuditProbe.Run();
 if (args is ["--recovery-audit"])
     return RecoveryAuditProbe.Run();
+if (args is ["--interrupt-metadata-child", var metadataFixture, var metadataOperation])
+    return RetentionProbe.InterruptMetadataChild(metadataFixture, metadataOperation);
 if (args is ["--concurrency-audit"])
     return ProductConcurrencyAuditProbe.Run();
 if (args is ["--import-concurrency-audit"])

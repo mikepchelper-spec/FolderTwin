@@ -11,6 +11,10 @@ La ventana de trabajos ofrece **Respaldos de alfa**. Abre las herramientas compa
 
 Los lectores de `FTVERS01` y `FTVERS02` continúan disponibles. `FTVERS01` no declara un registro de generaciones suficiente para habilitar retención; no se añade un registro supuesto. `FTVERS02` conserva su protocolo de expectativas replicadas. Una réplica de catálogo dañada puede usar la otra íntegra con aviso; un recibo ausente o catálogos contradictorios requieren revisión.
 
+Los trabajos de producto `FTVERS03` se abren sin registro ni exportación desde **Trabajos → Abrir respaldo existente**. Este lector permite verificar y recuperar en una salida nueva y puede leer un respaldo protegido contra escritura. Conserva sus límites de identidad y confinamiento.
+
+La candidata de correcciones introduce eventos de registro de versión 3 cuando se autoriza purgar metadatos. Lee los registros anteriores; una purga antigua conserva sus catálogos hasta que se autoriza completar esa limpieza. Después de una purga nueva, usa esta candidata o una posterior para escribir y limpiar ese almacén: los paquetes antiguos rechazan los eventos desconocidos. Una fecha definitivamente purgada pierde sus catálogos aunque comparta todos sus contenidos con otra. Conserva el paquete compatible junto con el respaldo y comprueba la recuperación de las fechas retenidas antes de retirar una versión instalada.
+
 ## Demostraciones iniciales
 
 Para las demostraciones anteriores `FolderTwin-Batch-…`, usa **Abrir demostración anterior** en la ventana de compatibilidad. El catálogo confirmado habilita **Verificar respaldo** y **Restaurar y verificar** sin el origen. La restauración escribe en una sesión nueva y muestra su ruta completa al terminar. Esa salida recuperada se conserva al cerrar; copia los archivos necesarios a la ubicación elegida antes de retirar manualmente la sesión desechable.

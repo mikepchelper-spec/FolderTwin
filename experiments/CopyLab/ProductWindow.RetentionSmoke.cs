@@ -6,7 +6,7 @@ namespace CopyLab;
 
 public partial class ProductWindow
 {
-    private static async Task RunProductRetentionSmokeAsync()
+    internal static async Task RunProductRetentionSmokeAsync()
     {
         var fixture = LabWorkspace.Create();
         ProductWindow? window = null;
@@ -36,7 +36,8 @@ public partial class ProductWindow
             window.ProductRetentionDays.Text = window.ProductRetentionGrace.Text = "1";
             window.ProductRetentionWeeks.Text = window.ProductRetentionMonths.Text = "0";
             await Click(window, window.PreviewProductRetentionButton);
-            Check(window.productRetentionReview is { Expire.Length: 2, Keep.Length: 1, Objects.Length: 2 } &&
+            Check(window.productRetentionReview is { Expire.Length: 2, Keep.Length: 1, Objects.Length: 2, MetadataBytes: > 0 } &&
+                window.ProductRetentionText.Text.Contains("catálogos y descriptores", StringComparison.Ordinal) &&
                 !window.ApplyProductRetentionButton.IsEnabled, window.StatusText.Text);
             window.AcceptProductRetention.IsChecked = true;
             window.ProductRetentionGrace.Text = "2";
@@ -100,7 +101,8 @@ public partial class ProductWindow
             await window.activeTask;
             window.AcceptProductPurge.IsChecked = true;
             await Click(window, window.PurgeProductRetentionButton);
-            Check(oldStore.ListRetention().Single().State == "purged" &&
+            Check(oldStore.ListRetention().Single() is { State: "purged", MetadataCleaned: true, MetadataBytes: > 0 } &&
+                oldStore.ListPoints().Length == 1 && !window.PurgeProductRetentionButton.IsEnabled &&
                 oldStore.ListPoints().Where(point => !point.Expired).All(point => !oldStore.Verify(point.Id)),
                 "WPF did not purge an old synthetic quarantine or damaged the retained point.");
             window.SelectJob(job.Id);

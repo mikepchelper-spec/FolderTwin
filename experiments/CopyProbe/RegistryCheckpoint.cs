@@ -56,11 +56,13 @@ internal static partial class GenerationRegistry
         }
         if (state.MirrorGeneration is { } mirror) Add("mirror", mirror, state.Generations[mirror]);
         if (state.PendingMirrorGeneration is { } pending) Add("mirror-begin", pending, state.Generations[pending]);
+        foreach (var (id, hash) in state.PurgeProofs.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+            Add("purge-proof", id, hash);
         return bytes.ToArray();
 
         void Add(string kind, string id, byte[] hash)
         {
-            byte[] line = Encode(new(kind == "abandon" ? 2 : 1, sequence++, kind, id, hash, binding.Marker, binding.Identity, previous));
+            byte[] line = Encode(new(EventVersion(kind), sequence++, kind, id, hash, binding.Marker, binding.Identity, previous));
             bytes.Write(line);
             previous = JsonSerializer.Deserialize<Envelope>(line.AsSpan(0, line.Length - 1), Json)!.Checksum;
         }

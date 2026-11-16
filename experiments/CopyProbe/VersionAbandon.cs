@@ -293,8 +293,9 @@ internal sealed partial class VersionStore
             throw new InvalidDataException("La confirmación del abandono está dañada.");
         return true;
     }
-    private void RequireNoAbandonInProgress(SafeFileHandle root)
+    private void RequireNoAbandonInProgress(SafeFileHandle root, bool allowMetadataPurge = false)
     {
+        RequireMetadataPurgeProofs(root, allowMetadataPurge);
         SafeFileHandle all;
         try { all = WindowsProbeNative.OpenPlainDirectory(root, AbandonDirectory); }
         catch (FileNotFoundException)

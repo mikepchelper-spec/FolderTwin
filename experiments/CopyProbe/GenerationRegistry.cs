@@ -7,7 +7,10 @@ using Microsoft.Win32.SafeHandles;
 internal enum RegistryStep { PrimaryPartial, PrimaryFlushed, ReplicaPartial, ReplicaFlushed }
 internal sealed record RegistryState(Dictionary<string, byte[]> Generations, HashSet<string> Expired,
     long NextSequence, byte[] LastHash, string[] RegistrationOrder, string? MirrorGeneration, string? PendingMirrorGeneration,
-    Dictionary<string, byte[]> Abandoned);
+    Dictionary<string, byte[]> Abandoned)
+{
+    internal Dictionary<string, byte[]> PurgeProofs { get; init; } = new(StringComparer.Ordinal);
+}
 
 // Replicated append-only expectations, separate from the manifests being retained.
 // Repair only an exact prefix of the event supplied by the caller's durable plan.
@@ -81,6 +84,12 @@ internal static partial class GenerationRegistry
     internal static void Abandon(SafeFileHandle root, DestinationBinding binding, string generation, byte[] hash,
         Action<RegistryStep>? checkpoint = null) => Append(root, binding, "abandon", generation, hash, checkpoint);
 
+    internal static void RecordPurgeProof(SafeFileHandle root, DestinationBinding binding, string operation, byte[] hash,
+        Action<RegistryStep>? checkpoint = null) => Append(root, binding, "purge-proof", operation, hash, checkpoint);
+
+    internal static void ForgetPurged(SafeFileHandle root, DestinationBinding binding, string generation, byte[] hash,
+        Action<RegistryStep>? checkpoint = null) => Append(root, binding, "forget", generation, hash, checkpoint);
+
     // Only a durable journal may supply the missing transitions. This prefix is
     // never sufficient authority for copying, retention selection or deletion.
     internal static RegistryState ReadCommonPrefix(SafeFileHandle root, DestinationBinding binding)
@@ -100,7 +109,9 @@ internal static partial class GenerationRegistry
     private static RegistryState Append(SafeFileHandle root, DestinationBinding binding, string kind, string generation, byte[] hash,
         Action<RegistryStep>? checkpoint, bool legacyMirror = false, bool validateOnly = false)
     {
-        _ = VersionStore.GenerationTime(generation);
+        bool purgeProof = kind == "purge-proof";
+        if (purgeProof) RetentionJournal.CheckId(generation);
+        else _ = VersionStore.GenerationTime(generation);
         if (hash.Length != 32)
             throw new InvalidDataException("Hash de generación no válido.");
         if (!validateOnly) Reserve(root, binding, kind == "register" ? 3 : kind == "mirror-begin" ? 2 : 1);
@@ -117,6 +128,12 @@ internal static partial class GenerationRegistry
             shared++;
         }
         var state = Parse(first.AsSpan(0, prefix), binding);
+        if (purgeProof && state.PurgeProofs.TryGetValue(generation, out var proof))
+        {
+            if (!proof.AsSpan().SequenceEqual(hash) || prefix != first.Length || prefix != second.Length)
+                throw new InvalidDataException("La prueba de purga registrada difiere o hay otra transición pendiente.");
+            return state;
+        }
         if (state.Abandoned.TryGetValue(generation, out var abandoned))
         {
             if (kind != "abandon" || !abandoned.AsSpan().SequenceEqual(hash) || prefix != first.Length || prefix != second.Length)
@@ -137,7 +154,7 @@ internal static partial class GenerationRegistry
                 return state;
             }
         }
-        else if (kind != "register")
+        else if (kind != "register" && !purgeProof)
             throw new InvalidDataException("La generación que se quiere expirar no está registrada.");
         if (kind == "expire" && (state.MirrorGeneration == generation || state.PendingMirrorGeneration == generation) ||
             kind is "mirror" or "mirror-begin" && state.Expired.Contains(generation))
@@ -147,7 +164,9 @@ internal static partial class GenerationRegistry
             throw new InvalidDataException("La actualización del espejo no coincide con el registro replicado.");
         if (kind == "abandon" && (state.MirrorGeneration == generation || state.PendingMirrorGeneration == generation || state.Expired.Contains(generation)))
             throw new InvalidDataException("La generación está vinculada a otra operación y no se puede abandonar.");
-        byte[] expected = Encode(new(kind == "abandon" ? 2 : 1, state.NextSequence, kind, generation, hash,
+        if (kind == "forget" && (!state.Expired.Contains(generation) || state.MirrorGeneration == generation || state.PendingMirrorGeneration == generation))
+            throw new InvalidDataException("Solo se pueden retirar del registro las generaciones expiradas y purgadas.");
+        byte[] expected = Encode(new(EventVersion(kind), state.NextSequence, kind, generation, hash,
             binding.Marker, binding.Identity, state.LastHash));
         if (prefix + expected.Length > MaximumBytes)
             throw new InvalidDataException("El registro de generaciones alcanzó su límite.");
@@ -202,6 +221,8 @@ internal static partial class GenerationRegistry
         return [.. line, 10];
     }
 
+    private static int EventVersion(string kind) => kind is "forget" or "purge-proof" ? 3 : kind == "abandon" ? 2 : 1;
+
     private static RegistryState Parse(ReadOnlySpan<byte> bytes, DestinationBinding binding)
     {
         if (bytes.Length == 0 || bytes[^1] != 10)
@@ -209,6 +230,7 @@ internal static partial class GenerationRegistry
         var generations = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         var expired = new HashSet<string>(StringComparer.Ordinal);
         var abandoned = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        var purgeProofs = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         var registrationOrder = new List<string>();
         string? mirror = null;
         string? pendingMirror = null;
@@ -223,7 +245,7 @@ internal static partial class GenerationRegistry
             var envelope = JsonSerializer.Deserialize<Envelope>(bytes[..end], Json)
                 ?? throw new InvalidDataException("Falta un registro de generación.");
             var payload = envelope.Payload;
-            if (payload is null || payload.Version != (payload.Kind == "abandon" ? 2 : 1) || payload.Sequence != sequence ||
+            if (payload is null || payload.Version != EventVersion(payload.Kind) || payload.Sequence != sequence ||
                 payload.JobId != binding.Marker || payload.Identity is not { Length: 24 } ||
                 !payload.Identity.AsSpan().SequenceEqual(binding.Identity) ||
                 payload.DocumentHash is not { Length: 32 } || payload.PreviousHash is not { Length: 32 } ||
@@ -237,19 +259,33 @@ internal static partial class GenerationRegistry
             }
             else
             {
-                _ = VersionStore.GenerationTime(payload.Generation);
-                if (payload.Kind == "register")
+                if (payload.Kind == "purge-proof")
                 {
+                    RetentionJournal.CheckId(payload.Generation);
+                    if (!purgeProofs.TryAdd(payload.Generation, payload.DocumentHash))
+                        throw new InvalidDataException("Una prueba de purga está registrada dos veces.");
+                }
+                else if (payload.Kind == "register")
+                {
+                    _ = VersionStore.GenerationTime(payload.Generation);
                     if (abandoned.ContainsKey(payload.Generation) || !generations.TryAdd(payload.Generation, payload.DocumentHash))
                         throw new InvalidDataException("Una generación está registrada dos veces.");
                     registrationOrder.Add(payload.Generation);
                 }
                 else
                 {
+                    _ = VersionStore.GenerationTime(payload.Generation);
                     if (!generations.TryGetValue(payload.Generation, out var hash) ||
                         !hash.AsSpan().SequenceEqual(payload.DocumentHash))
                         throw new InvalidDataException("La transición no corresponde al catálogo registrado.");
-                    if (payload.Kind == "abandon")
+                    if (payload.Kind == "forget")
+                    {
+                        if (purgeProofs.Count == 0 || mirror == payload.Generation || pendingMirror == payload.Generation || !expired.Remove(payload.Generation))
+                            throw new InvalidDataException("La retirada de metadatos no corresponde a una generación expirada.");
+                        generations.Remove(payload.Generation);
+                        registrationOrder.Remove(payload.Generation);
+                    }
+                    else if (payload.Kind == "abandon")
                     {
                         if (mirror == payload.Generation || pendingMirror == payload.Generation || expired.Contains(payload.Generation) ||
                             !abandoned.TryAdd(payload.Generation, payload.DocumentHash))
@@ -285,6 +321,7 @@ internal static partial class GenerationRegistry
             sequence++;
             bytes = bytes[(end + 1)..];
         }
-        return new(generations, expired, sequence, previous, registrationOrder.ToArray(), mirror, pendingMirror, abandoned);
+        return new(generations, expired, sequence, previous, registrationOrder.ToArray(), mirror, pendingMirror, abandoned)
+        { PurgeProofs = purgeProofs };
     }
 }

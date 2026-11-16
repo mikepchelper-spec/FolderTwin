@@ -74,6 +74,24 @@ internal static class StorageSafetyProbe
                 CheckOffline(job, source, resumed.Generation!, SHA256.HashData(next), "resumed");
             }
 
+            foreach (var (job, source, _) in jobs)
+            {
+                var store = VersionStore.OpenProduct(job);
+                var clock = DateTimeOffset.UtcNow.AddDays(2);
+                var review = store.PreviewRetention(new(1, 0, 0, 1), clock);
+                Check(review.Expire.Length > 0 && review.MetadataBytes > 0, "The product metadata scenario did not expire any history.");
+                string operation = store.BeginRetention(review, clock: clock);
+                store.PurgeRetention(operation, clock: clock.AddDays(2));
+                Check(store.ListPoints().Length == 1 && store.ListRetention().Single().MetadataCleaned &&
+                    store.RegisteredGenerations().Generations.Count == 1, "Product metadata cleanup kept expired catalogs live.");
+                byte[] expected = SHA256.HashData(File.ReadAllBytes(Path.Combine(source, FileName)));
+                CheckOffline(job, source, review.Keep.Single(), expected, "metadata-purged");
+                File.WriteAllBytes(Path.Combine(source, FileName), Payload(100 + (int)job.Options.Mode));
+                var next = ProductRunner.Run(registry, job.Id, automatic: true);
+                Check(next.State == ProductRunState.Confirmed && !store.Verify(next.Generation!), "Product backup did not continue after metadata purge.");
+                Console.WriteLine($"PASS metadata product={job.Options.Mode} retired_dates={review.Expire.Length} metadata_bytes={review.MetadataBytes}, offline restore and next automatic backup.");
+            }
+
             string retentionSource = Folder("retention-source");
             var retentionJob = registry.Create(new("Synthetic retention footprint", ProductBackupMode.Versions, null),
                 LocalJobRoots.ReviewDedicatedDestination(retentionSource, destinations));

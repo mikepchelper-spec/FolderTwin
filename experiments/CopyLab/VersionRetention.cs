@@ -36,6 +36,7 @@ public partial class VersionWindow
             retentionReview = preview;
             RetentionText.Text = $"Se conservarán {preview.Keep.Length:N0} fechas y expirarán {preview.Expire.Length:N0}. " +
                 $"{preview.Objects.Length:N0} objetos ({preview.QuarantineBytes:N0} bytes) irán a cuarentena. " +
+                $"Tras la gracia, la purga retirará además {preview.MetadataBytes:N0} bytes de catálogos y descriptores y conservará comprobantes. " +
                 $"Gracia: {policy.GraceDays} días desde que terminen los movimientos. Calendario UTC.\n" +
                 string.Join("\n", preview.Expire.Take(10).Select(id => VersionStore.GenerationTime(id).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"))) +
                 (preview.Expire.Length > 10 ? $"\nY {preview.Expire.Length - 10:N0} fechas adicionales." : "");

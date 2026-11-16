@@ -39,6 +39,7 @@ internal sealed partial class VersionStore
     private MirrorPreview BuildMirrorPreview(SafeFileHandle scope, SafeFileHandle root, string source, int maximumChangePercent,
         string? generation = null, bool captureAffectedPaths = false, bool automatic = false)
     {
+        RequireMetadataPurgeProofs(root);
         using var mirror = MirrorJournal.Open(root, binding, out var currentIdentity);
         RequireNoPendingMirror(root);
         if (maximumChangePercent is < 1 or > 100)
@@ -48,6 +49,7 @@ internal sealed partial class VersionStore
         workspace.RequireSourceIdentity(source, origin.Root);
         byte[] sourceIdentity = WindowsProbeNative.DirectoryIdentity(origin.Root);
         generation ??= NewGenerationId();
+        RequireGenerationNotPurged(root, generation);
         var before = MirrorPrevious(scope, root, registry.MirrorGeneration, sourceIdentity);
         if (before is not null && !before.DocumentHash.AsSpan().SequenceEqual(registry.Generations[registry.MirrorGeneration!]))
             throw new InvalidDataException("El catálogo actual del espejo no coincide con su registro.");

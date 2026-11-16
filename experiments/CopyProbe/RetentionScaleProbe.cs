@@ -45,8 +45,13 @@ internal static class RetentionScaleProbe
             if (review.Keep.Length != kept || review.Expire.Length != expired || review.Objects.Length != expired)
                 throw new InvalidOperationException("The scale reference union is incorrect.");
             string operation = "";
+            long before = StoredBytes();
             Measure("retention_quarantine", () => operation = store.BeginRetention(review));
             Measure("retention_purge", () => store.PurgeRetention(operation, clock: DateTimeOffset.UtcNow.AddDays(2)));
+            long after = StoredBytes();
+            if (store.RegisteredGenerations().Generations.Count != kept || store.ListPoints().Length != kept || after >= before)
+                throw new InvalidDataException("Metadata purge did not reduce storage or retire expired expectations.");
+            Console.WriteLine($"metadata_purge: before_logical={before}; after_logical={after}; released_logical={before - after}; metadata_candidates={review.MetadataBytes}; proof_replicas=2.");
             foreach (string retained in review.Keep)
                 if (store.Verify(retained)) throw new InvalidOperationException("A retained scale point lost a replica.");
             Console.WriteLine($"PASS retention across {generations} generations, {fileCount} files each; {kept} kept, {expired} expired, {expired} unshared objects purged; source absent.");
@@ -57,6 +62,9 @@ internal static class RetentionScaleProbe
             using (workspace.OpenRegisteredRoot()) { }
             Directory.Delete(workspace.Root, recursive: true);
         }
+
+        long StoredBytes() => Directory.EnumerateFiles(Path.Combine(workspace.Root, "store"), "*", SearchOption.AllDirectories)
+            .Sum(path => new FileInfo(path).Length);
 
         void Measure(string phase, Action action)
         {

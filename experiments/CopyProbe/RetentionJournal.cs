@@ -3,8 +3,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Win32.SafeHandles;
 
-internal enum RetentionStep { Planned, Expired, Moved, Quarantined, Undoing, Returned, Retained, Undone, Purging, Deleted, Purged }
-internal sealed record RetentionOperation(string Id, DateTimeOffset CreatedUtc, string State, int Objects);
+internal enum RetentionStep { Planned, Expired, Moved, Quarantined, Undoing, Returned, Retained, Undone, Purging, Deleted, Purged,
+    MetadataPlanPartial, MetadataPlanned, MetadataRegistered, MetadataDeleting, MetadataDeleted, MetadataForgotten, MetadataCompleted }
+internal sealed record RetentionOperation(string Id, DateTimeOffset CreatedUtc, string State, int Objects, bool MetadataCleaned = false, long MetadataBytes = 0);
 internal sealed record RetentionPlan(int Version, Guid Marker, byte[] Identity, string Id, RetentionPreview Review);
 
 internal static class RetentionJournal
@@ -46,7 +47,7 @@ internal static class RetentionJournal
         if (plan.Version != 1 || plan.Id != id || plan.Marker != binding.Marker || plan.Identity is not { Length: 24 } ||
             !plan.Identity.AsSpan().SequenceEqual(binding.Identity) || plan.Review is null || plan.Review.Policy is null ||
             plan.Review.RegistryHash is not { Length: 32 } || plan.Review.Keep is null || plan.Review.Expire is null ||
-            plan.Review.Objects is null || plan.Review.QuarantineBytes < 0 || plan.Review.ReviewedUtc.Offset != TimeSpan.Zero)
+            plan.Review.Objects is null || plan.Review.QuarantineBytes < 0 || plan.Review.MetadataBytes < 0 || plan.Review.ReviewedUtc.Offset != TimeSpan.Zero)
             throw new InvalidDataException("El plan de cuarentena no pertenece al almacén o no es válido.");
         plan.Review.Policy.Validate();
         foreach (string generation in plan.Review.Keep.Concat(plan.Review.Expire))
@@ -121,7 +122,17 @@ internal static class RetentionJournal
         bool quarantined = HasState(directory, plan, "quarantined");
         if ((undone && !undoing) || (purged && !purging) || (purging && !quarantined) || (undoing && purging))
             throw new InvalidDataException("El diario contiene estados contradictorios.");
-        return undone ? "undone" : purged ? "purged" : undoing ? "undoing" : purging ? "purging" :
+        bool metadataPlanned = WindowsProbeNative.PlainFileExists(directory, "metadata-plan") ||
+            WindowsProbeNative.PlainFileExists(directory, "metadata-plan.tmp") ||
+            WindowsProbeNative.PlainFileExists(directory, "metadata-replica") ||
+            WindowsProbeNative.PlainFileExists(directory, "metadata-replica.tmp");
+        bool metadataComplete = HasState(directory, plan, "metadata-complete");
+        if (metadataPlanned && metadataComplete && (!purging || !HasState(directory, plan, "metadata-deleting") ||
+            !HasState(directory, plan, "objects-purged") && !purged))
+            throw new InvalidDataException("La finalización de metadatos carece de sus transiciones previas.");
+        bool metadataPending = metadataPlanned && !metadataComplete;
+        if (metadataPending && !purging) throw new InvalidDataException("Hay metadatos en purga sin autorización de purga.");
+        return undone ? "undone" : purged && !metadataPending ? "purged" : undoing ? "undoing" : purging ? "purging" :
             quarantined ? "quarantined" : "moving";
     }
 

@@ -79,23 +79,35 @@ internal sealed partial class VersionStore
         });
     }
 
-    internal void PurgeRetention(string id, Action<RetentionStep>? checkpoint = null, DateTimeOffset? clock = null)
+    internal void PurgeRetention(string id, Action<RetentionStep>? checkpoint = null, DateTimeOffset? clock = null,
+        Action<RegistryStep>? metadataRegistryCheckpoint = null)
     {
         WithRetention(id, (root, directory, plan) =>
         {
             string state = RetentionJournal.State(directory, plan);
-            if (state == "purged")
+            if (state == "purged" && RetentionJournal.HasState(directory, plan, "metadata-complete"))
+            {
+                RequireMetadataPurgeProofs(root);
                 return;
-            if (state is not ("quarantined" or "purging"))
+            }
+            if (state is not ("quarantined" or "purging" or "purged"))
                 throw new InvalidDataException("Termina la cuarentena antes de purgarla.");
             DateTimeOffset now = (clock ?? DateTimeOffset.UtcNow).ToUniversalTime();
             DateTimeOffset completed = RetentionJournal.QuarantinedAt(directory, plan);
             if (completed < plan.Review.ReviewedUtc || now < completed.AddDays(plan.Review.Policy.GraceDays))
                 throw new InvalidDataException("Aún no terminó el plazo de gracia. No se purgó ningún objeto.");
-            var inventory = AuditRetention(root);
-            if (inventory.Registry.Generations.Keys.Any(generation => GenerationTime(generation) > now))
+            if (GenerationRegistry.ReadCommonPrefix(root, binding).Generations.Keys.Any(generation => GenerationTime(generation) > now))
                 throw new InvalidDataException("El reloj actual precede a una generación. La purga queda suspendida.");
+            if (RetentionJournal.HasState(directory, plan, "objects-purged") || state == "purged")
+            {
+                CompleteMetadataPurge(root, directory, plan, checkpoint, metadataRegistryCheckpoint);
+                RetentionJournal.SetState(directory, plan, "purged");
+                checkpoint?.Invoke(RetentionStep.Purged);
+                return;
+            }
+            var inventory = AuditRetention(root);
             ValidatePlanReferences(plan, inventory);
+            GenerationRegistry.Reserve(root, binding, checked(plan.Review.Expire.Length + 1));
             var active = ActiveReferences(inventory);
             // Inspect every candidate before starting a new irreversible phase.
             foreach (string digest in plan.Review.Objects)
@@ -126,6 +138,8 @@ internal sealed partial class VersionStore
                     checkpoint?.Invoke(RetentionStep.Deleted);
                 }
             }
+            RetentionJournal.SetState(directory, plan, "objects-purged");
+            CompleteMetadataPurge(root, directory, plan, checkpoint, metadataRegistryCheckpoint);
             RetentionJournal.SetState(directory, plan, "purged");
             checkpoint?.Invoke(RetentionStep.Purged);
         });
@@ -204,7 +218,8 @@ internal sealed partial class VersionStore
                 RetentionJournal.CheckId(entry.Name);
                 using var directory = WindowsProbeNative.OpenPlainDirectory(quarantine, entry.Name);
                 var plan = RetentionJournal.Read(directory, binding, entry.Name);
-                return new RetentionOperation(entry.Name, plan.Review.ReviewedUtc, RetentionJournal.State(directory, plan), plan.Review.Objects.Length);
+                return new RetentionOperation(entry.Name, plan.Review.ReviewedUtc, RetentionJournal.State(directory, plan),
+                    plan.Review.Objects.Length, RetentionJournal.HasState(directory, plan, "metadata-complete"), plan.Review.MetadataBytes);
             }).ToArray();
     }
 
@@ -215,7 +230,7 @@ internal sealed partial class VersionStore
     }
 
     private static bool SameReview(RetentionPreview first, RetentionPreview second) =>
-        first.Policy == second.Policy && first.QuarantineBytes == second.QuarantineBytes &&
+        first.Policy == second.Policy && first.QuarantineBytes == second.QuarantineBytes && first.MetadataBytes == second.MetadataBytes &&
         first.RegistryHash.AsSpan().SequenceEqual(second.RegistryHash) && first.Keep.SequenceEqual(second.Keep) &&
         first.Expire.SequenceEqual(second.Expire) && first.Objects.SequenceEqual(second.Objects);
 

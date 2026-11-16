@@ -12,7 +12,9 @@ public partial class ProductWindow
         {
             "moving" => "movimientos pendientes", "quarantined" => "en cuarentena", "undoing" => "deshacer pendiente",
             "undone" => "deshecha", "purging" => "purga pendiente", "purged" => "purgada", _ => "requiere revisión"
-        }) + $" · {Operation.Objects:N0} objetos";
+        }) + $" · {Operation.Objects:N0} objetos" +
+            (Operation.State == "purged" && !Operation.MetadataCleaned ? " · metadatos conservados" :
+                Operation.MetadataCleaned ? $" · {Operation.MetadataBytes:N0} bytes de metadatos retirados" : "");
     }
     private RetentionPreview? productRetentionReview;
     private Guid? productRetentionJob;
@@ -54,10 +56,12 @@ public partial class ProductWindow
         PreviewProductRetentionButton.IsEnabled = ready;
         ApplyProductRetentionButton.IsEnabled = ready && productRetentionJob == job?.Id &&
             productRetentionReview is { } review && (review.Expire.Length > 0 || review.Objects.Length > 0) && AcceptProductRetention.IsChecked == true;
-        string? state = (ProductRetentionChoice.SelectedItem as ProductCleanupRow)?.Operation.State;
+        var selected = (ProductRetentionChoice.SelectedItem as ProductCleanupRow)?.Operation;
+        string? state = selected?.State;
         ResumeProductRetentionButton.IsEnabled = ready && state == "moving";
         UndoProductRetentionButton.IsEnabled = ready && state is "moving" or "quarantined" or "undoing";
-        PurgeProductRetentionButton.IsEnabled = ready && state is "quarantined" or "purging" && AcceptProductPurge.IsChecked == true;
+        PurgeProductRetentionButton.IsEnabled = ready && (state is "quarantined" or "purging" || state == "purged" && selected?.MetadataCleaned == false) &&
+            AcceptProductPurge.IsChecked == true;
     }
 
     private void PreviewProductRetentionClick(object sender, RoutedEventArgs e)
@@ -76,6 +80,7 @@ public partial class ProductWindow
             productRetentionJob = job.Id;
             ProductRetentionText.Text = $"Se conservarán {preview.Keep.Length:N0} fechas y expirarán {preview.Expire.Length:N0}. " +
                 $"{preview.Objects.Length:N0} objetos ({preview.QuarantineBytes:N0} bytes) irán a cuarentena. " +
+                $"La purga retirará además {preview.MetadataBytes:N0} bytes de catálogos y descriptores; conservará comprobantes pequeños. " +
                 $"Gracia: {policy.GraceDays} días desde que terminen los movimientos.\n" +
                 string.Join("\n", preview.Expire.Take(10).Select(id => VersionStore.GenerationTime(id).ToLocalTime().ToString("g"))) +
                 (preview.Expire.Length > 10 ? $"\nY {preview.Expire.Length - 10:N0} fechas adicionales." : "");
@@ -97,7 +102,7 @@ public partial class ProductWindow
     private void PurgeProductRetentionClick(object sender, RoutedEventArgs e)
     {
         if (AcceptProductPurge.IsChecked == true) RunSelectedCleanup((store, id) => store.PurgeRetention(id),
-            "Purga terminada. Los objetos borrados ya no se pueden recuperar desde esta cuarentena.");
+            "Purga terminada. Se retiraron objetos y metadatos de las fechas expiradas, conservando comprobantes. Esas fechas ya no se pueden recuperar desde esta cuarentena.");
     }
     private void RunSelectedCleanup(Action<VersionStore, string> action, string message)
     {

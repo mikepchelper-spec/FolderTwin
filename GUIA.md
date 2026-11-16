@@ -105,9 +105,9 @@ Dentro de **Editar trabajo y automatización**, **Exportar configuración** guar
 
 ## Retención manual
 
-Abre **Retención manual y cuarentena**, revisa días, semanas, meses y gracia y pulsa **Revisar retención**. Las fechas se seleccionan con calendario UTC. Comprueba qué expirará y acepta la revisión antes de **Mover a cuarentena**. Esta operación conserva los objetos durante la gracia y no libera todavía el espacio que ocupan.
+Abre **Retención manual y cuarentena**, revisa días, semanas, meses y gracia y pulsa **Revisar retención**. Las fechas se seleccionan con calendario UTC. La revisión distingue los bytes de objetos que irán a cuarentena y los de catálogos y descriptores que retiraría la purga posterior. Se conservan comprobantes; el espacio neto liberado puede ser menor. Comprueba qué expirará y acepta la revisión antes de **Mover a cuarentena**. Esta operación conserva los objetos durante la gracia y no libera todavía el espacio que ocupan.
 
-El historial de cuarentenas permite **Reanudar movimientos** o **Deshacer cuarentena**. La purga es una acción posterior: espera la gracia desde la finalización, vuelve a verificar un punto retenido y acepta el borrado irreversible antes de **Purgar tras el plazo de gracia**. No se ejecuta retención automática. Catálogos ausentes o contradictorios y operaciones pendientes pueden impedir la limpieza.
+El historial de cuarentenas permite **Reanudar movimientos** o **Deshacer cuarentena**. La purga es una acción posterior: espera la gracia desde la finalización, vuelve a verificar un punto retenido y acepta el borrado irreversible antes de **Purgar tras el plazo de gracia**. Retira los objetos exclusivos y los metadatos completos de las fechas expiradas, que dejan de aparecer en recuperación. Conserva comprobantes. Si se interrumpe, aparece **purga pendiente**: reanuda con el mismo botón. Una purga antigua puede indicar **metadatos conservados** y ofrecer completar explícitamente esa parte. Catálogos ausentes o contradictorios y operaciones pendientes suspenden la limpieza. No se ejecuta retención automática.
 
 ## Actualizar o desinstalar
 

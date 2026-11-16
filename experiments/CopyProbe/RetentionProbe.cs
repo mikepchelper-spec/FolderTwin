@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Diagnostics;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 internal static class RetentionProbe
 {
@@ -46,7 +48,9 @@ internal static class RetentionProbe
         }
         Console.WriteLine("PASS undo resumes before/after moves and retention registration.");
 
-        foreach (var boundary in new[] { RetentionStep.Purging, RetentionStep.Deleted, RetentionStep.Purged })
+        foreach (var boundary in new[] { RetentionStep.Purging, RetentionStep.Deleted, RetentionStep.Purged,
+            RetentionStep.MetadataPlanPartial, RetentionStep.MetadataPlanned, RetentionStep.MetadataRegistered,
+            RetentionStep.MetadataDeleting, RetentionStep.MetadataDeleted, RetentionStep.MetadataForgotten, RetentionStep.MetadataCompleted })
         {
             using var fixture = new Fixture();
             string operation = fixture.Store.BeginRetention(fixture.Store.PreviewRetention(fixture.Policy));
@@ -61,6 +65,15 @@ internal static class RetentionProbe
             fixture.Store.PurgeRetention(operation, clock: later);
             Check(fixture.Store.ListRetention().Single().State == "purged" && !fixture.Store.Verify(fixture.Latest),
                 "Purge failed or damaged a retained point.");
+            Check(fixture.Store.RegisteredGenerations().Generations.Keys.SequenceEqual([fixture.Latest]) &&
+                fixture.Store.RegisteredGenerations().PurgeProofs.Count == 1 &&
+                fixture.Store.ListPoints().Select(point => point.Id).SequenceEqual([fixture.Latest]),
+                "Purged metadata kept retired generations live or lost their compact proof.");
+            foreach (string point in fixture.Points[..^1])
+                foreach (string area in new[] { "manifests", "manifests_backup", "pending" })
+                    Check(!Directory.EnumerateFiles(Path.Combine(fixture.Destination, area), point + "*").Any(),
+                        "A purged catalog or execution descriptor was retained.");
+            Reject(() => fixture.Store.CreatePoint(fixture.Source, fixture.Points[0]));
             Reject(() => fixture.Store.UndoRetention(operation));
             fixture.Seed("old one");
             string next = VersionStore.NewGenerationId();
@@ -68,12 +81,17 @@ internal static class RetentionProbe
             Check(!fixture.Store.Verify(next), "A legitimately purged object could not be copied again.");
             fixture.Store.PreviewRetention(fixture.Policy);
         }
-        Console.WriteLine("PASS grace blocks immediate purge; interrupted purge resumes and purged content can be copied again.");
+        Console.WriteLine("PASS grace blocks immediate purge; object/metadata purge resumes at ten boundaries, removes catalogs/descriptors with compact proofs, refuses generation reuse and permits recopying purged content.");
 
         CheckRescueAndCoordination();
         CheckMultipleSources();
         CheckRegistryRecovery();
         CheckWorkerTermination();
+        CheckMetadataRegistryRecovery();
+        CheckMetadataProofs();
+        CheckMetadataWorkerTermination();
+        CheckMetadataResumeClock();
+        CheckLegacyMetadataPurge();
         CheckFailures();
         return 0;
     }
@@ -92,6 +110,181 @@ internal static class RetentionProbe
             }
         });
         return 0;
+    }
+
+    internal static int InterruptMetadataChild(string root, string operation)
+    {
+        var workspace = LabWorkspace.Open(root);
+        var store = VersionStore.Open(workspace, Path.Combine(root, "store"));
+        store.PurgeRetention(operation, step =>
+        {
+            if (step != RetentionStep.MetadataDeleted) return;
+            Console.WriteLine("READY");
+            Console.Out.Flush();
+            Thread.Sleep(Timeout.Infinite);
+        }, DateTimeOffset.UtcNow.AddDays(2));
+        return 1;
+    }
+
+    private static void CheckMetadataRegistryRecovery()
+    {
+        foreach (bool forget in new[] { false, true })
+        foreach (var boundary in Enum.GetValues<RegistryStep>())
+        {
+            using var fixture = new Fixture();
+            string operation = fixture.Store.BeginRetention(fixture.Store.PreviewRetention(fixture.Policy));
+            var later = DateTimeOffset.UtcNow.AddDays(2);
+            if (forget)
+                Reject(() => fixture.Store.PurgeRetention(operation, step =>
+                { if (step == RetentionStep.MetadataDeleting) throw new IOException("Synthetic metadata deletion boundary."); }, later));
+            bool reached = false;
+            Reject(() => fixture.Store.PurgeRetention(operation, clock: later, metadataRegistryCheckpoint: step =>
+            {
+                if (step != boundary) return;
+                reached = true;
+                throw new IOException("Synthetic split metadata registry event.");
+            }));
+            Check(reached, "The metadata registry event did not reach its boundary.");
+            Check(!fixture.Store.Verify(fixture.Latest), "Split metadata proof damaged the retained generation.");
+            Reject(() => fixture.Store.CreatePoint(fixture.Source, VersionStore.NewGenerationId()));
+            fixture.Store.PurgeRetention(operation, clock: later);
+            Check(fixture.Store.ListRetention().Single().MetadataCleaned && fixture.Store.RegisteredGenerations().Generations.Count == 1,
+                "A split metadata expectation could not resume from its exact proof.");
+        }
+        Console.WriteLine("PASS metadata proof and forgetting resume all four split-registry boundaries while blocking new writers.");
+    }
+
+    private static void CheckMetadataProofs()
+    {
+        using var fixture = new Fixture();
+        string operation = fixture.Store.BeginRetention(fixture.Store.PreviewRetention(fixture.Policy));
+        fixture.Store.PurgeRetention(operation, clock: DateTimeOffset.UtcNow.AddDays(2));
+        string receipt = Path.Combine(fixture.Destination, "quarantine", operation, "metadata-plan");
+        string replica = Path.Combine(fixture.Destination, "quarantine", operation, "metadata-replica");
+        byte[] bytes = File.ReadAllBytes(receipt);
+        byte[] registry = File.ReadAllBytes(Path.Combine(fixture.Destination, GenerationRegistry.PrimaryName));
+        File.Delete(receipt);
+        Reject(() => fixture.Store.PreviewRetention(fixture.Policy));
+        Reject(() => fixture.Store.CreatePoint(fixture.Source, VersionStore.NewGenerationId()));
+        Check(File.ReadAllBytes(Path.Combine(fixture.Destination, GenerationRegistry.PrimaryName)).AsSpan().SequenceEqual(registry) &&
+            !fixture.Store.Verify(fixture.Latest), "Missing proof changed the registry or blocked independent verification.");
+        File.WriteAllBytes(receipt, bytes);
+        byte[] bad = (byte[])bytes.Clone(); bad[^1] ^= 1;
+        File.WriteAllBytes(replica, bad);
+        Reject(() => fixture.Store.PreviewRetention(fixture.Policy));
+        File.WriteAllBytes(replica, bytes);
+        string deletion = Path.Combine(Path.GetDirectoryName(receipt)!, "metadata-deleting");
+        byte[] deletionState = File.ReadAllBytes(deletion);
+        File.Delete(deletion);
+        Reject(() => fixture.Store.PreviewRetention(fixture.Policy));
+        Reject(() => fixture.Store.CreatePoint(fixture.Source, VersionStore.NewGenerationId()));
+        File.WriteAllBytes(deletion, deletionState);
+        foreach (var mutate in new Action<JsonObject>[]
+        {
+            node => node["Points"]!.AsArray()[0] = null,
+            node => node["Points"]![0]!["Files"]!.AsArray()[0] = null,
+            node => node["Points"]![0]!["Files"]![0]!["Area"] = "..\\outside",
+            node => node["Points"]![0]!["Files"]!.AsArray().Add(node["Points"]![0]!["Files"]![0]!.DeepClone()),
+            node => node["Unexpected"] = true
+        })
+        {
+            var node = JsonNode.Parse(bytes.AsSpan(32))!.AsObject();
+            mutate(node);
+            byte[] body = JsonSerializer.SerializeToUtf8Bytes(node);
+            byte[] invalid = [.. System.Security.Cryptography.SHA256.HashData(body), .. body];
+            File.WriteAllBytes(receipt, invalid);
+            File.WriteAllBytes(replica, invalid);
+            Reject(() => fixture.Store.PreviewRetention(fixture.Policy));
+            Check(File.ReadAllBytes(Path.Combine(fixture.Destination, GenerationRegistry.PrimaryName)).AsSpan().SequenceEqual(registry),
+                "A semantically invalid metadata proof changed the registry.");
+        }
+        File.WriteAllBytes(receipt, bytes);
+        File.WriteAllBytes(replica, bytes);
+        long original = RegistryCheckpointProbe.FillNearProductionLimit(fixture.Workspace, fixture.Destination, fixture.Store.Binding, fixture.Latest);
+        using (var root = new DirectoryFence(fixture.Destination))
+        using (var operationLock = WindowsProbeNative.OpenPlainFile(root.Root, FolderBatch.LockName, FileAccess.ReadWrite, FileShare.None))
+            GenerationRegistry.Reserve(root.Root, fixture.Store.Binding, 3);
+        Check(fixture.Store.RegisteredGenerations().PurgeProofs.Count == 1 && fixture.Store.PreviewRetention(fixture.Policy).Keep.Contains(fixture.Latest),
+            "Compaction lost a purged operation's expected proof.");
+        string absent = Path.Combine(fixture.Workspace.Root, "source absent");
+        Directory.Move(fixture.Source, absent);
+        string output = Directory.CreateDirectory(Path.Combine(fixture.Workspace.Root, "recovered")).FullName;
+        fixture.Store.Restore(fixture.Latest, output);
+        Check(File.ReadAllBytes(Path.Combine(output, "shared.txt")).AsSpan().SequenceEqual(File.ReadAllBytes(Path.Combine(absent, "shared.txt"))),
+            "Recovery failed after metadata purge and registry compaction.");
+        Console.WriteLine($"PASS missing or damaged metadata proofs stop writes/cleanup, preserve recovery, and survive compaction from {original} bytes.");
+    }
+
+    private static void CheckMetadataWorkerTermination()
+    {
+        using var fixture = new Fixture();
+        string operation = fixture.Store.BeginRetention(fixture.Store.PreviewRetention(fixture.Policy));
+        string executable = Environment.ProcessPath ?? throw new IOException("Missing metadata worker host.");
+        var start = new ProcessStartInfo(executable)
+        { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
+        if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+            start.ArgumentList.Add(Assembly.GetExecutingAssembly().Location);
+        foreach (string argument in new[] { "--interrupt-metadata-child", fixture.Workspace.Root, operation }) start.ArgumentList.Add(argument);
+        using var worker = Process.Start(start) ?? throw new IOException("Could not start metadata purge worker.");
+        try
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            Check(worker.StandardOutput.ReadLineAsync(deadline.Token).AsTask().GetAwaiter().GetResult() == "READY", "Metadata worker did not reach deletion.");
+            worker.Kill(entireProcessTree: true);
+            worker.WaitForExit();
+        }
+        finally { if (!worker.HasExited) { worker.Kill(entireProcessTree: true); worker.WaitForExit(); } }
+        Directory.Move(fixture.Source, Path.Combine(fixture.Workspace.Root, "source absent"));
+        var reopened = VersionStore.Open(LabWorkspace.Open(fixture.Workspace.Root), fixture.Destination);
+        Check(reopened.ListRetention().Single().State == "purging" && !reopened.Verify(fixture.Latest), "A killed metadata purge lost its pending state.");
+        reopened.PurgeRetention(operation, clock: DateTimeOffset.UtcNow.AddDays(2));
+        Check(reopened.ListPoints().Length == 1 && reopened.ListRetention().Single().MetadataCleaned && !reopened.Verify(fixture.Latest),
+            "Another worker could not complete metadata purge with no source.");
+        Console.WriteLine("PASS a real worker terminated after removing metadata; another instance resumed offline and verified the retained point.");
+    }
+
+    private static void CheckMetadataResumeClock()
+    {
+        using var fixture = new Fixture();
+        string operation = fixture.Store.BeginRetention(fixture.Store.PreviewRetention(fixture.Policy));
+        string future = DateTimeOffset.UtcNow.AddDays(5).ToString("yyyyMMdd'T'HHmmssfffffff'Z'", CultureInfo.InvariantCulture) +
+            "-" + Guid.NewGuid().ToString("N");
+        fixture.Store.CreatePoint(fixture.Source, future);
+        bool reached = false;
+        Reject(() => fixture.Store.PurgeRetention(operation, step =>
+        { if (step == RetentionStep.MetadataPlanned) { reached = true; throw new IOException("Synthetic metadata clock boundary."); } },
+            DateTimeOffset.UtcNow.AddDays(7)));
+        Check(reached, "The clock fixture did not reach its metadata phase.");
+        Reject(() => fixture.Store.PurgeRetention(operation, clock: DateTimeOffset.UtcNow.AddDays(3)));
+        Check(!fixture.Store.Verify(future) && !fixture.Store.Verify(fixture.Latest), "A clock rollback damaged retained data.");
+        fixture.Store.PurgeRetention(operation, clock: DateTimeOffset.UtcNow.AddDays(7));
+        Check(fixture.Store.ListRetention().Single().MetadataCleaned, "Metadata purge did not resume after restoring the clock.");
+        Console.WriteLine("PASS metadata purge rechecks future generations on resume after the grace period.");
+    }
+
+    private static void CheckLegacyMetadataPurge()
+    {
+        using var fixture = new Fixture();
+        string operation = fixture.Store.BeginRetention(fixture.Store.PreviewRetention(fixture.Policy));
+        var later = DateTimeOffset.UtcNow.AddDays(2);
+        bool reached = false;
+        Reject(() => fixture.Store.PurgeRetention(operation, step =>
+        { if (step == RetentionStep.MetadataPlanned) { reached = true; throw new IOException("Synthetic legacy purge state."); } }, later));
+        Check(reached && fixture.Store.RegisteredGenerations().PurgeProofs.Count == 0, "Legacy purge fixture contains a new proof.");
+        string directory = Path.Combine(fixture.Destination, "quarantine", operation);
+        // Reconstruct only the old completed-object state: catalogs and expired
+        // expectations still exist, and no new-format proof has been registered.
+        foreach (string name in new[] { "metadata-plan", "metadata-replica", "objects-purged" }) File.Delete(Path.Combine(directory, name));
+        using (var journal = new DirectoryFence(directory))
+        {
+            var plan = RetentionJournal.Read(journal.Root, fixture.Store.Binding, operation);
+            RetentionJournal.SetState(journal.Root, plan, "purged");
+        }
+        Check(fixture.Store.ListRetention().Single() is { State: "purged", MetadataCleaned: false }, "Old purges were silently migrated.");
+        fixture.Store.PurgeRetention(operation, clock: later);
+        Check(fixture.Store.ListRetention().Single().MetadataCleaned && fixture.Store.ListPoints().Length == 1 && !fixture.Store.Verify(fixture.Latest),
+            "A legacy completed purge could not explicitly retire its old metadata.");
+        Console.WriteLine("PASS an old completed object purge preserves catalogs until explicit metadata cleanup and keeps retained recovery.");
     }
 
     private static void CheckWorkerTermination()

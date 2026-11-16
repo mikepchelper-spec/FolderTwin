@@ -86,9 +86,10 @@ internal static class RegistryCheckpointProbe
     {
         if (!before.RegistrationOrder.SequenceEqual(after.RegistrationOrder) || !before.Expired.SetEquals(after.Expired) ||
             before.MirrorGeneration != after.MirrorGeneration || before.PendingMirrorGeneration != after.PendingMirrorGeneration ||
-            before.Generations.Count != after.Generations.Count || before.Abandoned.Count != after.Abandoned.Count ||
+            before.Generations.Count != after.Generations.Count || before.Abandoned.Count != after.Abandoned.Count || before.PurgeProofs.Count != after.PurgeProofs.Count ||
             before.Generations.Any(pair => !after.Generations.TryGetValue(pair.Key, out var hash) || !hash.AsSpan().SequenceEqual(pair.Value)) ||
-            before.Abandoned.Any(pair => !after.Abandoned.TryGetValue(pair.Key, out var hash) || !hash.AsSpan().SequenceEqual(pair.Value)))
+            before.Abandoned.Any(pair => !after.Abandoned.TryGetValue(pair.Key, out var hash) || !hash.AsSpan().SequenceEqual(pair.Value)) ||
+            before.PurgeProofs.Any(pair => !after.PurgeProofs.TryGetValue(pair.Key, out var hash) || !hash.AsSpan().SequenceEqual(pair.Value)))
             throw new InvalidDataException("Registry compaction changed the retained semantic state.");
     }
 
@@ -97,10 +98,10 @@ internal static class RegistryCheckpointProbe
     internal static long FillNearProductionLimit(LabWorkspace fixture, string destination, DestinationBinding binding, string generation)
     {
         using var laboratory = fixture.OpenRegisteredRoot();
-        string relative = Path.GetRelativePath(WindowsProbeNative.VolumePath(laboratory.Root), destination);
+        using var root = new DirectoryFence(destination);
+        string relative = Path.GetRelativePath(WindowsProbeNative.VolumePath(laboratory.Root), WindowsProbeNative.VolumePath(root.Root));
         if (Path.IsPathFullyQualified(relative) || relative.Split(Path.DirectorySeparatorChar).Any(part => part is "." or ".."))
             throw new InvalidDataException("The large registry fixture must remain inside its disposable workspace.");
-        using var root = new DirectoryFence(destination);
         using var operation = WindowsProbeNative.OpenPlainFile(root.Root, FolderBatch.LockName, FileAccess.ReadWrite, FileShare.None);
         var before = GenerationRegistry.Read(root.Root, binding);
         if (before.Expired.Contains(generation) || before.MirrorGeneration == generation || before.PendingMirrorGeneration == generation)
