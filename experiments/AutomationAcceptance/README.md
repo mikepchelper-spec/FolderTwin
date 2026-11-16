@@ -41,3 +41,5 @@ El mismo ensayo traslada al origen un árbol preparado fuera del alcance del vig
 Para la prueba nativa, ejecuta el mismo comando sin `-VerifyOnly` en el runner y usa la ruta del ZIP disponible allí. Conserva la salida junto al informe posterior de la candidata.
 
 `--cloud-recovery-workers <FolderTwin.exe>` prueba credenciales protegidas, fallo del ejecutor real, cancelación desde otro registro y un respaldo local simultáneo. Comprueba también el rechazo de salida ocupada en el ejecutor de producto del ZIP. `--cloud-permissions <FolderTwin.exe>` compara la escritura en la pasarela rclone habilitada con su rechazo en solo lectura y verifica que la recuperación conserva los hashes del repositorio sintético. Ambos requieren Kopia y rclone fijados en la extracción y funcionan en un único volumen local NTFS. [Evidencia de la candidata](../../ENTREGA-CORRECCIONES-AUDITORIA.md)
+
+`--cloud-history <FolderTwin.exe>` entrega 10.000 fechas sintéticas por stdout al adaptador del ZIP. Valida recuento y orden y mide tiempo y asignaciones administradas del lector. No mide latencia de proveedor ni memoria máxima del proceso.

@@ -136,6 +136,9 @@ jobs:
           dotnet (Join-Path $artifacts 'bin/AutomationAcceptance/debug/CopyLab.dll') --cloud-permissions (Join-Path $package 'FolderTwin.exe') |
             Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'cloud-evidence/recovery-permissions.txt')
           if ($LASTEXITCODE -ne 0) { throw 'The packaged read-only gateway acceptance failed.' }
+          dotnet (Join-Path $artifacts 'bin/AutomationAcceptance/debug/CopyLab.dll') --cloud-history (Join-Path $package 'FolderTwin.exe') |
+            Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'cloud-evidence/remote-history.txt')
+          if ($LASTEXITCODE -ne 0) { throw 'The packaged history acceptance failed.' }
       - name: Preserve synthetic acceptance evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

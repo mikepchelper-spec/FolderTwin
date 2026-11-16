@@ -130,3 +130,6 @@ PASS selected test installation removed through the reviewed product flow; previ
 before sha256=5795aaffea1f8b2f79f1d7c10663ecd0b6f99be631f007f1b20317672a00e381
 after sha256=b61d728a627ffc69886ee57d51eecca892f295b6ad4b979a7646ba808e6bfa08
 PASS real previous worker, native deployment handover, preserved job/history/logon, new backup and both offline restores after withdrawal.
+
+long-history.log
+PASS remote history dates=10000; seconds=0.673; managed_allocations=49754848 bytes.
