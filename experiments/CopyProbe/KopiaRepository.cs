@@ -8,7 +8,8 @@ internal sealed record KopiaPoint(string ManifestId, string RootId, DateTimeOffs
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Layout = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? CatalogHash = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] long CatalogBytes = 0,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Generation = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Generation = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? Job = null)
 {
     internal int UserFiles => Files - (Layout == 2 ? 1 : 0);
 }
@@ -123,10 +124,14 @@ internal sealed partial class KopiaRepository(string executable, string config, 
             pointTags.TryGetProperty("tag:ft-catalog-bytes", out _))
             throw new InvalidDataException("El punto remoto mezcla etiquetas de formatos distintos.");
         string? generation = null, hash = null;
+        Guid? job = null;
         long catalogBytes = 0;
         if (catalog)
         {
             var tags = entry.GetProperty("tags");
+            if (!Guid.TryParseExact(tags.GetProperty("tag:ft-v2-job").GetString(), "N", out var parsedJob) || parsedJob == Guid.Empty)
+                throw new InvalidDataException("Falta el trabajo del catálogo remoto.");
+            job = parsedJob;
             generation = tags.GetProperty("tag:ft-v2-generation").GetString();
             if (generation is null) throw new InvalidDataException("Falta la fecha del catálogo remoto.");
             _ = VersionStore.GenerationTime(generation);
@@ -138,8 +143,8 @@ internal sealed partial class KopiaRepository(string executable, string config, 
         }
         var point = new KopiaPoint(Identifier(entry.GetProperty("id").GetString(), ""), Identifier(root.GetProperty("obj").GetString(), "k"),
             entry.GetProperty("endTime").GetDateTimeOffset(), summary.GetProperty("size").GetInt64(),
-            summary.GetProperty("files").GetInt32(), summary.GetProperty("dirs").GetInt32(), catalog ? 2 : 0, hash, catalogBytes, generation);
-        if (point.Bytes < point.CatalogBytes || point.UserFiles < 0 || point.Directories < (catalog ? 2 : 1) ||
+            summary.GetProperty("files").GetInt32(), summary.GetProperty("dirs").GetInt32(), catalog ? 2 : 0, hash, catalogBytes, generation, job);
+        if (point.Bytes < point.CatalogBytes || point.Files < (catalog ? 1 : 0) || point.Directories < (catalog ? 2 : 1) ||
             (long)point.Files + point.Directories > BatchCatalog.VersionMaximumEntries + (catalog ? 3L : 1L))
             throw new InvalidDataException("El inventario remoto supera los límites admitidos o contiene totales inválidos.");
         return point;
@@ -168,7 +173,7 @@ internal sealed partial class KopiaRepository(string executable, string config, 
     {
         if (remote.Bytes != local.Bytes || remote.Files != local.Files || remote.Directories != checked(local.Directories + 1) ||
             remote.Layout != local.Layout || remote.CatalogHash != local.CatalogHash || remote.CatalogBytes != local.CatalogBytes ||
-            remote.Layout == 2 && remote.Generation != local.Generation)
+            remote.Layout == 2 && (remote.Generation != local.Generation || remote.Job != local.Job))
             throw new InvalidDataException("El inventario remoto difiere del punto local confirmado.");
     }
 

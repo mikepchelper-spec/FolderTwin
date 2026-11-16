@@ -219,7 +219,8 @@ internal sealed partial class ProductJobRegistry
             request.RequestedUtc.Offset != TimeSpan.Zero || !ValidRoot(request.Parent) || !RetentionJournal.IsDigest(request.Connection.Repository) ||
             request.Remote.Job == Guid.Empty || VersionStore.IsPartialPoint(request.Remote.Generation) ||
             request.Remote.Point.Layout is not (0 or 2) ||
-            request.Remote.Point.Layout == 2 && request.Remote.Point.Generation != request.Remote.Generation ||
+            request.Remote.Point.Layout == 2 &&
+                (request.Remote.Point.Generation != request.Remote.Generation || request.Remote.Point.Job != request.Remote.Job) ||
             request.Selection is { } selection && (request.Remote.Point.Layout == 0 || !ValidRelative(selection.RelativePath) || FolderBatch.IsControl(selection.RelativePath)))
             throw new InvalidDataException("La revisión de recuperación de nube está dañada o pertenece a otro respaldo.");
         _ = VersionStore.GenerationTime(request.Remote.Generation);

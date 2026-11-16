@@ -260,10 +260,12 @@ internal static class CloudPointProbe
                             foreach (Action<System.Text.Json.Nodes.JsonNode> mutate in new Action<System.Text.Json.Nodes.JsonNode>[]
                             {
                                 value => value["rootEntry"]!["summ"]!["files"] = -1,
+                                value => value["rootEntry"]!["summ"]!["files"] = int.MinValue,
                                 value => value["rootEntry"]!["summ"]!["dirs"] = 0,
                                 value => value["rootEntry"]!["summ"]!["size"] = -1,
                                 value => value["rootEntry"]!["summ"]!["files"] = BatchCatalog.VersionMaximumEntries + 1,
                                 value => value["tags"]!["tag:ft-job"] = job.Id.ToString("N"),
+                                value => value["tags"]!["tag:ft-v2-job"] = Guid.Empty.ToString("N"),
                                 value => value["tags"]!["tag:ft-catalog"] = "invalid-hash",
                                 value => value["tags"]!.AsObject().Remove("tag:ft-catalog-bytes"),
                                 value => value["tags"]!["tag:ft-catalog-bytes"] = 20,
@@ -280,9 +282,15 @@ internal static class CloudPointProbe
                             }
                             string downgraded = Create("downgraded-envelope");
                             bool refused = false;
-                            try { await reader.RestoreAsync(observed! with { Layout = 0, CatalogHash = null, CatalogBytes = 0, Generation = null }, downgraded, token); }
+                            try { await reader.RestoreAsync(observed! with { Layout = 0, CatalogHash = null, CatalogBytes = 0, Generation = null, Job = null }, downgraded, token); }
                             catch (InvalidDataException) { refused = true; }
                             Check(refused, "A catalog envelope was accepted as a complete metadata-free legacy recovery.");
+                            var inventory = new CloudPoint(job.Id, observed!.Generation!, observed.Bytes, observed.Files, observed.Directories - 1,
+                                observed.Layout, observed.CatalogHash, observed.CatalogBytes);
+                            bool wrongJobRejected = false;
+                            try { KopiaRepository.RequireInventory(observed with { Job = Guid.NewGuid() }, inventory); }
+                            catch (InvalidDataException) { wrongJobRejected = true; }
+                            Check(wrongJobRejected, "A different job's remote point confirmed this upload.");
                         }
                     }
                     Console.WriteLine($"{mode} restored {expected.ManifestId}, SHA-256 {Convert.ToHexStringLower(restored)}");
