@@ -1,6 +1,6 @@
 # Comunicación de vulnerabilidades
 
-La entrega pública es experimental. Indica el commit que figura en **Ayuda y versión** o en `COMPILACION.json`. La revisión se centra en RC2 pública y en los candidatos y correcciones identificados en el repositorio. Los informes conservan evidencia de cada revisión. [Entregas y estado](README.md) · [Seguimiento de correcciones](CORRECCIONES-AUDITORIA.md)
+La entrega pública es experimental. Indica el commit que figura en **Ayuda y versión** o en `COMPILACION.json`. La revisión se centra en RC2 pública y en los candidatos y correcciones identificados en el repositorio. Los informes conservan evidencia de cada revisión. [Entregas y estado](README.md) · [Candidata local de correcciones](ENTREGA-CORRECCIONES-AUDITORIA.md)
 
 ## Reportar en privado
 

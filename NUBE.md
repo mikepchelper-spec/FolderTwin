@@ -1,5 +1,7 @@
 # Tercera copia de FolderTwin
 
+La candidata local `9c3c59b` pasó la aceptación sintética desde el ZIP reproducido. Incluye el estado de recuperación durable y selección de archivos y carpetas desde un perfil vacío. Los resultados históricos de `c90f013` se conservan en esta página. [Entrega actual](ENTREGA-CORRECCIONES-AUDITORIA.md) · [Guía de recuperación](RECUPERACION-NUBE.md)
+
 La copia remota usa un repositorio cifrado de Kopia. El respaldo local conserva su propio historial y sus controles. El exportador abre el punto confirmado bajo el mismo bloqueo que usa la retención, comprueba su registro y restaura el contenido a una carpeta temporal privada. La transferencia comienza después de soltar el bloqueo local. Las carpetas de trabajo y los resultados del laboratorio usan datos sintéticos.
 
 ## Evidencia inicial

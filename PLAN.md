@@ -1,6 +1,6 @@
 # Plan de trabajo — FolderTwin
 
-El goal de corrección integral aborda los trece hallazgos de la auditoría del 14 de noviembre y sus mejoras asociadas. El desarrollo incorpora recuperación independiente, compactación del registro, purga de metadatos, historiales paginados y Zone.Identifier con catálogo remoto verificable. La recuperación remota conserva el intento, progreso, salida y cancelación entre aperturas. Queda la aceptación de distribución y del recorrido completo. [Estado y evidencia](CORRECCIONES-AUDITORIA.md)
+La candidata `9c3c59b` pasó la aceptación de software de los trece hallazgos de la auditoría del 14 de noviembre. Dos compilaciones independientes produjeron el mismo ZIP Windows x64. Las próximas pruebas corresponden al piloto y a las validaciones de entorno, incluidos los proveedores reales. [Informe de entrega y pendientes](ENTREGA-CORRECCIONES-AUDITORIA.md) · [Seguimiento técnico](CORRECCIONES-AUDITORIA.md)
 
 > RC2 experimental publicada y verificada en `d902f4c`. RC1 permanece retirada. La candidata local añade vigilancia continua y tiene su propia aceptación. El piloto externo sigue pendiente. [Aceptación de RC2](ENTREGA-RC2.md) · [Automatización continua](AUTOMATIZACION.md)
 

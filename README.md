@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | RC2 pública | Tres modos locales, respaldo a demanda u horario, recuperación y retención manual | [Descarga experimental](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.2) · [Aceptación](ENTREGA-RC2.md) |
 | Nube local `c90f013` | Ruta, vigilancia al detectar cambios y tercera copia cifrada con Kopia | [Paquete anterior y ensayos de nube](NUBE.md) |
-| Correcciones de auditoría en preparación | Recuperación local independiente, conservación de Zone.Identifier, consultas y recuperación remota por archivo o carpeta, registro de recuperación y control de integridad | [Seguimiento y aceptación de desarrollo](CORRECCIONES-AUDITORIA.md) |
+| Correcciones locales `9c3c59b` | Recuperación local independiente, conservación de Zone.Identifier, recuperación remota por archivo o carpeta, registro de recuperación y controles de integridad | [ZIP reproducible y aceptación de software](ENTREGA-CORRECCIONES-AUDITORIA.md) |
 
 Extrae el ZIP de la entrega que vas a probar y abre **FolderTwin.exe**. Usa **Ayuda y versión** para comprobar el commit. En la candidata de correcciones, **Ejecutores** identifica también la versión que usan las tareas de Windows. [Guía de uso](GUIA.md) · [Recuperación de emergencia](RECUPERACION-NUBE.md)
 

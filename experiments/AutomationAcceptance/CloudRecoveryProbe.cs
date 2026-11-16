@@ -24,8 +24,9 @@ internal static class CloudRecoveryProbe
         return result.State == CloudRecoveryState.Cancelled ? 0 : 1;
     }
 
-    internal static async Task<int> RunAsync(string kopia)
+    internal static async Task<int> RunAsync(string product)
     {
+        string kopia = Path.Combine(Path.GetDirectoryName(product)!, "cloud-tools", "kopia.exe");
         var fixture = LabWorkspace.Create();
         bool passed = false;
         try
@@ -111,16 +112,29 @@ internal static class CloudRecoveryProbe
                     throw new InvalidOperationException("A substituted output parent reached the repository."), CancellationToken.None, lab: true);
                 Check(result.State == CloudRecoveryState.Review && !Directory.Exists(request.Output),
                     "A substituted parent did not leave a safe review result.");
-                var occupied = registration.ApproveCloudRecovery(connection, point, credentials, output, lab: true);
+                var inactive = connection with { Destination = new(CloudProvider.Filen, "", "", "", "synthetic/") };
+                var inactiveCredentials = new CloudCredentials(credentials.Password, "test@example.invalid", credentials.SecretKey, "synthetic-api-key");
+                var occupied = registration.ApproveCloudRecovery(inactive, point, inactiveCredentials, output);
                 Directory.CreateDirectory(occupied.Output);
                 File.WriteAllText(Path.Combine(occupied.Output, "occupied.txt"), "preserve");
-                var refused = await registration.RunCloudRecoveryAsync(occupied.Id, (_, _) =>
-                    throw new InvalidOperationException("An occupied output reached the repository."), CancellationToken.None, lab: true);
-                Check(refused.State == CloudRecoveryState.Review &&
+                var start = new ProcessStartInfo(product) { UseShellExecute = false, CreateNoWindow = true };
+                foreach (var argument in new[] { "--restore-cloud-point", registration.Location, occupied.Id.ToString("N") })
+                    start.ArgumentList.Add(argument);
+                using var packagedWorker = Process.Start(start) ?? throw new IOException("The packaged cloud recovery worker did not start.");
+                try
+                {
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                    await packagedWorker.WaitForExitAsync(timeout.Token);
+                }
+                finally
+                {
+                    if (!packagedWorker.HasExited) { packagedWorker.Kill(); await packagedWorker.WaitForExitAsync(); }
+                }
+                Check(packagedWorker.ExitCode == 1 && Find(registration, occupied.Id).State == CloudRecoveryState.Review &&
                     File.ReadAllText(Path.Combine(occupied.Output, "occupied.txt")) == "preserve", "An existing output was touched.");
             }
             passed = true;
-            Console.WriteLine("PASS background cloud recovery: DPAPI, live phase/output, cancellation across processes, worker termination, disjoint local backup, overlap rejection and substituted/occupied output.");
+            Console.WriteLine("PASS background cloud recovery: DPAPI, live phase/output, cancellation across processes, worker termination, disjoint local backup, overlap rejection, substituted parent and occupied output rejected by the packaged worker.");
             return 0;
         }
         finally

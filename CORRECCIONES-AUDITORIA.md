@@ -1,6 +1,6 @@
 # Seguimiento de la auditoría integral
 
-El goal activo cubre los trece hallazgos y las mejoras propuestas en [AUDITORIA-2026-11-14.md](AUDITORIA-2026-11-14.md). Parte de `3637142` y del paquete `c90f013`. Las correcciones avanzan por hitos con pruebas sintéticas. La nueva candidata se generará al completar la aceptación del conjunto.
+La candidata local `9c3c59b` pasó la aceptación de software de los trece hallazgos y las mejoras propuestas en la auditoría del 14 de noviembre. Parte de `3637142` y del paquete `c90f013`. Esta página conserva el recorrido de desarrollo. [Auditoría original](AUDITORIA-2026-11-14.md) · [Informe de entrega y matriz final](ENTREGA-CORRECCIONES-AUDITORIA.md)
 
 | Hallazgo | Trabajo y aceptación | Estado |
 | --- | --- | --- |
@@ -13,14 +13,14 @@ El goal activo cubre los trece hallazgos y las mejoras propuestas en [AUDITORIA-
 | A14-07 | Conservar y restaurar Zone.Identifier con límites y hash, también a través de nube | Implementado y probado en desarrollo: tres modos, catálogos v4, S3/rclone sintéticos y compatibilidad |
 | A14-08 | Recuperación remota con seguimiento, progreso, cancelación y selección de archivo/carpeta | Implementado. Prueba de proceso real, control desde otro registro y selección/reapertura WPF en desarrollo |
 | A14-09 | Confirmar contraseña y reabrir conexión de lectura antes de activar | Implementado y probado |
-| A14-10 | CI de nube con herramientas fijadas, dos ZIP idénticos y pruebas desde extracción | Workflow añadido, validación estática aprobada. Ejecución GitHub pendiente de integrar la rama |
-| A14-11 | Coherencia de Ruta/nube, temas, espacio compacto, ayuda y teclado | Ayuda y grupos de nube, acciones secundarias plegables y teclado/foco probados en desarrollo. Paleta común claro/oscuro y alto contraste sintético; pendiente revisión del conjunto tras A14-08 |
+| A14-10 | CI de nube con herramientas fijadas, dos ZIP idénticos y pruebas desde extracción | Workflow validado y recorridos ejecutados en Windows local. La rama conserva pendiente su ejecución hospedada |
+| A14-11 | Coherencia de Ruta/nube, temas, espacio compacto, ayuda y teclado | Aprobó recorridos WPF de superficie y nube desde extracción en claro, oscuro y alto contraste sintético |
 | A14-12 | Lecturas remotas acotadas y páginas/filtro de historial | Implementado: salida acotada, cancelación, páginas locales y remotas y filtro de incidencias antiguas probados |
-| A14-13 | Identificar paquete abierto/ejecutor y entregar guías coherentes | Interfaz y guías actualizadas. Pendiente comprobar la identidad leyendo paquetes extraídos y ejecutores instalados |
+| A14-13 | Identificar paquete abierto/ejecutor y entregar guías coherentes | Identidades confirmadas en actualización nativa, guía incluida y verificada |
 
 Las mejoras complementarias incluyen revisar avisos de dependencias, inventario de componentes, evaluación de firma, políticas de permisos por proveedor y separación gradual de arneses.
 
-El inventario CycloneDX se genera junto al paquete. La revisión del 16 de noviembre fija SDK 10.0.404 y runtime 10.0.15, mantiene las versiones de Kopia y rclone, deja las políticas de permisos para validar por proveedor y registra la decisión de firma. La prueba de procesos y cancelación remota vive en `AutomationAcceptance`, recompilada contra el motor extraído y con verificación de identidad del binario. [Seguridad de distribución](SEGURIDAD-DISTRIBUCION.md)
+El inventario CycloneDX se genera junto al paquete. La revisión del 16 de noviembre fija SDK 10.0.404 y runtime 10.0.15, mantiene las versiones de Kopia y rclone, describe las políticas de permisos por proveedor y registra la decisión de firma. La prueba local comprobó que el puente de solo lectura permite recuperar y deniega una escritura que el puente de escritura acepta. Los arneses de procesos y permisos viven en `AutomationAcceptance` y verifican la identidad del motor extraído. [Seguridad de distribución](SEGURIDAD-DISTRIBUCION.md)
 
 ## Primer hito
 
@@ -66,7 +66,7 @@ Kopia 0.23.1 perdió las marcas en su restauración directa. Los envíos nuevos 
 
 Ruta agrupa las acciones secundarias en **Más acciones** y conserva su expansión si contiene el foco durante un cambio de tamaño. La prueba espera el cierre animado de Fluent antes de medir: obtuvo 131,9 DIP de detalles en 600×500 y 1040×500, y 251,9 DIP en 760×620. Los mensajes de operación tienen desplazamiento acotado. Nube agrupa ubicación, acceso y clave de recuperación, añade ayuda contextual y devuelve el foco al cerrar su ayuda. `--product-usability-smoke` aprobó cien controles de Ruta, ambos temas y el recorrido de los tres modos. `--product-cloud-smoke` aprobó la ayuda remota y sus recorridos existentes. Estos resultados no acreditan DPI real ni lector de pantalla.
 
-Las regresiones `--batch`, `--accumulative`, `--mirror`, `--resume`, `--reader-audit`, `--product-backup-recovery` y `AutomationAcceptance --cloud-faults` pasaron durante este hito. El paquete final sigue pendiente. La revisión automática rechazó por política retirar una carpeta temporal del ensayo S3; se conserva fuera del repositorio como `FolderTwin-CloudS3-5yw1wsdp.fff` bajo la carpeta temporal. No se volvió a intentar su borrado.
+Las regresiones `--batch`, `--accumulative`, `--mirror`, `--resume`, `--reader-audit`, `--product-backup-recovery` y `AutomationAcceptance --cloud-faults` pasaron durante este hito de desarrollo. La revisión automática rechazó por política retirar una carpeta temporal del ensayo S3. Se conserva fuera del repositorio como `FolderTwin-CloudS3-5yw1wsdp.fff` bajo la carpeta temporal.
 
 [Salida compacta de los ensayos del cuarto hito](experiments/CopyProbe/zone-support-evidence.txt). Incluye recuperación remota anterior y nueva, límites, incidencias, procesos y medidas de interfaz. La revisión semántica rechaza totales remotos negativos o excesivos, etiquetas mezcladas y un sobre nuevo presentado como recuperación antigua sin metadatos.
 
@@ -83,12 +83,8 @@ Las regresiones `--batch`, `--accumulative`, `--mirror`, `--resume`, `--reader-a
 
 El arnés de lectura independiente corrigió una referencia mutable de permisos dentro de su prueba. Conserva el descriptor de seguridad como texto antes de aplicar la ACL sintética y lo restaura al salir. Si falla, conserva su carpeta para diagnóstico.
 
-La aceptación desde el ZIP reproducible final sigue pendiente.
+La matriz final y sus pruebas desde la extracción están en el informe posterior de la candidata. [Entrega de software](ENTREGA-CORRECCIONES-AUDITORIA.md)
 
 ## Continuación
 
-1. Revisar interfaz y guía del recorrido completo. Comprobar identidad de paquete y ejecutor de A14-13 desde extracción.
-2. Completar la validación de permisos mínimos sintéticos y el inventario de componentes.
-3. Revisar dependencias y firma, producir inventario de componentes, compilar dos distribuciones reproducibles y aceptar el paquete extraído.
-
-Las pruebas externas conservan sus procedimientos pendientes. Incluyen AWS, B2, Filen y MEGA reales, cuotas y revocación reales, Object Lock, otra cuenta/equipo, piloto de 7–14 días, USB físico, ciclos de Windows y lector de pantalla. El goal exige el alcance autónomo implementado y verificado junto con esa matriz explícita.
+Las pruebas externas conservan sus procedimientos pendientes. Incluyen AWS, B2, Filen y MEGA reales, cuotas y revocación reales, Object Lock, otra cuenta/equipo, piloto de 7–14 días, USB físico, ciclos de Windows y lector de pantalla. [Procedimientos y estado](ENTREGA-CORRECCIONES-AUDITORIA.md#entrega-y-pendientes-de-entorno)

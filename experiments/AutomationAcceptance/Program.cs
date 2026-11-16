@@ -11,7 +11,7 @@ else if (args is ["--held-cloud-recovery-child", var recoveryRoot, var recoveryI
     return await CloudRecoveryProbe.HeldChildAsync(recoveryRoot, heldRecovery, recoveryTool);
 else if (args is ["--first-use-update", _, _] or ["--first-use-update", _, _, "--withdraw-new"])
     await FirstUseUpdateProbe.RunAsync(args[1], args[2], withdrawNew: args.Length == 4);
-else if (args.Length >= 2 && File.Exists(args[1]) && args[0] is "--waiting-controls" or "--daily-performance" or "--storage-growth" or "--storage-safety" or "--cloud-scale" or "--cloud-faults" or "--cloud-resume-scale" or "--cloud-recovery-workers")
+else if (args.Length >= 2 && File.Exists(args[1]) && args[0] is "--waiting-controls" or "--daily-performance" or "--storage-growth" or "--storage-safety" or "--cloud-scale" or "--cloud-faults" or "--cloud-resume-scale" or "--cloud-recovery-workers" or "--cloud-permissions")
 {
     string fullPath = Path.GetFullPath(args[1]);
     string core = Path.Combine(Path.GetDirectoryName(fullPath)!, "CopyProbe.dll");
@@ -24,8 +24,8 @@ else if (args.Length >= 2 && File.Exists(args[1]) && args[0] is "--waiting-contr
     else if (args is ["--cloud-scale", _, "4096" or "329000"])
         await CloudScaleProbe.RunAsync(fullPath, int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture));
     else if (args is ["--cloud-faults", _]) await CloudFaultProbe.RunAsync(fullPath);
-    else if (args is ["--cloud-recovery-workers", _])
-        return await CloudRecoveryProbe.RunAsync(Path.Combine(Path.GetDirectoryName(fullPath)!, "cloud-tools", "kopia.exe"));
+    else if (args is ["--cloud-recovery-workers", _]) return await CloudRecoveryProbe.RunAsync(fullPath);
+    else if (args is ["--cloud-permissions", _]) await CloudPermissionProbe.RunAsync(Path.GetDirectoryName(fullPath)!);
     else if (args is ["--cloud-resume-scale", _, var fixture]) await CloudScaleProbe.ResumeAsync(fullPath, fixture);
     else if (args is ["--storage-growth", _, "4096" or "329000"])
         await StorageGrowthProbe.RunAsync(fullPath, int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture));
