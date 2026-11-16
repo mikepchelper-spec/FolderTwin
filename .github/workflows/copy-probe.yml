@@ -37,6 +37,8 @@ jobs:
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-config
       - name: Verify product versions, mirror, offline restoration and retention
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-store
+      - name: Verify independent read-only recovery without the original profile
+        run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --product-backup-recovery
       - name: Verify cumulative updates, destination conflicts and interrupted publication
         run: dotnet run --project experiments/CopyProbe --configuration Release --no-build -- --accumulative
       - name: Verify persistent product workers, pause, cancellation and process termination

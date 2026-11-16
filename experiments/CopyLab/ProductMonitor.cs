@@ -115,7 +115,7 @@ internal static class ProductMonitor
                         try
                         {
                             listing = registry.List();
-                            cloudEnabled = listing.Jobs.Any(job => ProductCloudDispatch.HasWork(registry, job));
+                            cloudEnabled = listing.Jobs.Any(job => ProductCloudDispatch.CanSchedule(registry, job));
                             loadedAt = now;
                         }
                         catch (Exception error) when (VersionJob.SharingViolation(error))

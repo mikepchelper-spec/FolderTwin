@@ -268,7 +268,7 @@
                                     <Border Style="{StaticResource RouteCard}">
                                         <UniformGrid Columns="3">
                                             <StackPanel Margin="0,0,8,0">
-                                                <TextBlock Text="ÚLTIMO RESPALDO COMPLETO" Style="{StaticResource RouteLabel}" TextWrapping="Wrap" />
+                                                <TextBlock Text="ÚLTIMO RESPALDO LOCAL COMPLETO" Style="{StaticResource RouteLabel}" TextWrapping="Wrap" />
                                                 <TextBlock x:Name="RouteBackupDate" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,4,0,0" />
                                             </StackPanel>
                                             <StackPanel Margin="0,0,8,0">
@@ -281,6 +281,8 @@
                                             </StackPanel>
                                         </UniformGrid>
                                     </Border>
+                                    <TextBlock x:Name="RouteCloudStatus" TextWrapping="Wrap" Margin="0,8,0,0"
+                                               AutomationProperties.LiveSetting="Polite" Visibility="Collapsed" />
                                 </StackPanel>
                             </Border>
                         </Border>
@@ -363,6 +365,7 @@
                 <WrapPanel Grid.Row="3" Margin="0,8,0,0">
                     <Button x:Name="RefreshJobsButton" Content="Act_ualizar" Click="RefreshJobsClick" Margin="0,0,6,3" />
                     <Button x:Name="ImportConfigurationButton" Content="_Importar configuración" Click="ImportConfigurationClick" Margin="0,0,6,3" />
+                    <Button x:Name="OpenExistingBackupButton" Content="Abrir respaldo e_xistente" Click="OpenExistingBackupClick" Margin="0,0,6,3" />
                     <Button x:Name="ProductTrayButton" Content="Minimizar a _bandeja" Click="ProductTrayClick" Margin="0,0,6,3" />
                     <Button x:Name="ManageApplicationButton" Content="A_plicación" Click="ManageApplicationClick" Margin="0,0,6,3" />
                     <Button x:Name="CloudBackupButton" Content="Copia en _nube" Click="CloudBackupClick" Margin="0,0,6,3" />

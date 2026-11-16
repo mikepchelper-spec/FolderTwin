@@ -9,6 +9,8 @@ public partial class ProductWindow
 {
     private readonly DispatcherTimer runtimeTimer;
     private readonly Dictionary<Guid, ProductRunHistory> runSnapshots = [];
+    private readonly Dictionary<Guid, CloudJobStatus> cloudSnapshots = [];
+    private long? cloudRefreshedAt;
     private readonly ProductJobRegistry.DisplayRunHistory displayHistory = new();
     private readonly Dictionary<Guid, Process> workerProcesses = [];
     private readonly Dictionary<Guid, long> reportedResults = [];
@@ -60,18 +62,33 @@ public partial class ProductWindow
         try
         {
             var jobs = JobList.Items.OfType<JobRow>().Where(row => row.Job is not null).ToArray();
+            bool readCloud = rereadHistory || cloudRefreshedAt is null ||
+                Stopwatch.GetElapsedTime(cloudRefreshedAt.Value) >= TimeSpan.FromSeconds(10) ||
+                jobs.Any(row => !cloudSnapshots.ContainsKey(row.Id));
             var snapshots = await Task.Run(() =>
             {
                 using var registry = openRegistry();
                 if (rereadHistory) displayHistory.Invalidate();
-                return jobs.Select(row => (row.Id, History: displayHistory.Read(registry, row.Id))).ToArray();
+                return jobs.Select(row =>
+                {
+                    var history = displayHistory.Read(registry, row.Id);
+                    return (row.Id, History: history, Cloud: readCloud ? CloudJobStatus.Read(registry, row.Id, history) : null);
+                }).ToArray();
             });
             if (closed) return;
-            foreach (var (id, history) in snapshots)
+            if (readCloud)
+            {
+                cloudSnapshots.Clear();
+                cloudRefreshedAt = Stopwatch.GetTimestamp();
+            }
+            foreach (var (id, history, cloud) in snapshots)
             {
                 runSnapshots[id] = history;
+                if (cloud is not null) cloudSnapshots[id] = cloud;
                 var row = jobs.Single(row => row.Id == id);
-                row.SetRuntime("\n" + Brief(history) + (history.Unreadable > 0 ? " · Historial requiere revisión" : ""),
+                string cloudLabel = cloudSnapshots.TryGetValue(id, out var currentCloud) && currentCloud.Configured
+                    ? "\nNube · " + currentCloud.Label : "";
+                row.SetRuntime("\n" + Brief(history) + (history.Unreadable > 0 ? " · Historial requiere revisión" : "") + cloudLabel,
                     RouteState(row.Job!, history));
                 if (history.Runs.FirstOrDefault() is { Result: { } result } latest &&
                     (!reportedResults.TryGetValue(id, out long sequence) || latest.Intent.Sequence > sequence))
@@ -132,6 +149,15 @@ public partial class ProductWindow
         }
         RouteBackupDate.Text = RouteDate(correct?.Result?.FinishedUtc);
         RouteVerifyDate.Text = RouteDate(verified?.Result?.FinishedUtc);
+        var cloud = job is not null ? cloudSnapshots.GetValueOrDefault(job.Id) : null;
+        string cloudText = cloud is { Configured: true }
+            ? "Copia en nube · " + cloud.Label +
+                (cloud.LastConfirmed is { } date ? " · Último envío " + RouteDate(date) : "") +
+                (cloud.Outstanding > 0 ? $" · Pendientes {cloud.Outstanding:N0}" : "") +
+                (cloud.Guidance.Length > 0 ? "\n" + cloud.Guidance : "")
+            : "";
+        if (RouteCloudStatus.Text != cloudText) RouteCloudStatus.Text = cloudText;
+        RouteCloudStatus.Visibility = cloudText.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         RefreshRouteNextAttempt();
         RuntimeStatusText.Text = job is null ? "" : Brief(history) +
             (recoverable?.Generation is { } generation ? $"\nPunto recuperable del {VersionStore.GenerationTime(generation).ToLocalTime():g}" : "") +

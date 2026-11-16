@@ -68,6 +68,22 @@ internal static class ProductCloudDispatch
     internal static bool HasWork(ProductJobRegistry registry, ProductJob job) =>
         job.Enabled && !job.Retired && registry.HasCloudConnection(job.Id) && !registry.IsCloudPaused(job.Id);
 
+    internal static bool CanSchedule(ProductJobRegistry registry, ProductJob job)
+    {
+        try { return HasWork(registry, job); }
+        catch (Exception error) when (VersionJob.SharingViolation(error))
+        {
+            // Keep a cloud-only monitor alive while a concurrent control is committed.
+            return true;
+        }
+        catch (Exception error) when (VersionJob.Expected(error))
+        {
+            // Ruta and the tray report the damaged record from the same registry.
+            // It must not take down the scheduler or activate an uncertain cloud send.
+            return false;
+        }
+    }
+
     internal static async Task RunPassAsync(ProductJobRegistry registry, string kopia, CancellationToken token, bool lab = false,
         Func<string>? rclone = null, string? labRcloneRoot = null)
     {

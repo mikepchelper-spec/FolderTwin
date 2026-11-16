@@ -36,7 +36,7 @@ internal static class ProductDeployment
                 WaitMonitorStopped(registry, () => scheduler.MonitorHasRunningInstance(registry));
             }
             if (maintenance.Jobs.Any(job => job.Enabled && (job.WatchMode == ProductWatchMode.Watching ||
-                ProductCloudDispatch.HasWork(registry, job))) &&
+                ProductCloudDispatch.CanSchedule(registry, job))) &&
                 !registry.MonitorOwnsRegistry())
                 scheduler.RunMonitorNow(registry);
         }

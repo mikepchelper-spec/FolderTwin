@@ -30,7 +30,7 @@ internal sealed partial class VersionStore
     private readonly bool parallelAnalysis;
     internal string Destination { get; }
     internal DestinationBinding Binding => binding;
-    internal bool SupportsRetention => registeredGenerations;
+    internal bool SupportsRetention => registeredGenerations && !workspace.IsReadOnly;
 
     private VersionStore(VersionScope workspace, string destination, DestinationBinding binding, bool registeredGenerations,
         Action<WorkProgress>? observe = null, bool parallelAnalysis = false)
@@ -72,7 +72,7 @@ internal sealed partial class VersionStore
         using var scope = workspace.OpenRegisteredRoot();
         workspace.CheckChild(destination);
         using var store = new DirectoryFence(destination);
-        using var operation = OpenLock(store.Root, FileAccess.Read);
+        using var operation = WindowsProbeNative.OpenPlainFile(store.Root, FolderBatch.LockName, FileAccess.Read, FileShare.None);
         using var record = WindowsProbeNative.OpenPlainFile(store.Root, StoreName, FileAccess.Read, FileShare.Read);
         Span<byte> bytes = stackalloc byte[48];
         if (record.ReadAtLeast(bytes, bytes.Length, false) != bytes.Length || record.ReadByte() != -1 ||
@@ -426,8 +426,12 @@ internal sealed partial class VersionStore
         return catalog;
     }
 
-    private static FileStream OpenLock(SafeFileHandle root, FileAccess access) =>
-        WindowsProbeNative.OpenPlainFile(root, FolderBatch.LockName, access, FileShare.None);
+    private FileStream OpenLock(SafeFileHandle root, FileAccess access)
+    {
+        if (workspace.IsReadOnly && access != FileAccess.Read)
+            throw new InvalidDataException("Este respaldo está abierto únicamente para recuperar archivos.");
+        return WindowsProbeNative.OpenPlainFile(root, FolderBatch.LockName, access, FileShare.None);
+    }
 
     private static bool IsCommitted(SafeFileHandle store, string generation)
     {

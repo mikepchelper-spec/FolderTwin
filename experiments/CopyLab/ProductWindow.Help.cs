@@ -17,6 +17,8 @@ public partial class ProductWindow
         ["NewJobButton"] = ("Crea otra configuración con su propia carpeta de respaldo.", ""),
         ["RefreshJobsButton"] = ("Vuelve a leer los trabajos guardados y los registros pendientes.", ""),
         ["ImportConfigurationButton"] = ("Abre una configuración exportada y comprueba sus carpetas antes de guardarla deshabilitada.", ""),
+        ["OpenExistingBackupButton"] = ("Abre la carpeta de un respaldo para recuperar sus fechas sin el origen ni la configuración anterior. Comprueba el contenido y lo recupera en una carpeta nueva.", ""),
+        ["CloudBackupButton"] = ("Configura la tercera copia cifrada, consulta sus envíos y recupera fechas desde la nube. Puedes abrirla aunque no tengas trabajos locales.", ""),
         ["ProductTrayButton"] = ("Oculta la ventana y muestra un icono junto al reloj para consultar el estado y abrir la aplicación.", ""),
         ["LegacyRecoveryButton"] = ("Abre las herramientas para respaldos anteriores de alfa. Usa Nuevo trabajo para una copia nueva.", ""),
         ["ManageApplicationButton"] = ("Revisa el ejecutor, sus horarios y las versiones instaladas. Entrar aquí no modifica los trabajos.", ""),

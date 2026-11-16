@@ -23,8 +23,12 @@ public partial class ProductCloudWindow
             string remote = Folder("remote"), clean = Folder("empty-profile"), output = Folder("recovered");
             ProductJobRegistry Open() => new(registryPath);
             ProductJobRegistry OpenClean() => new(clean);
-            CloudRepositorySession Session(CloudDestination address, CloudCredentials credentials) =>
-                new(kopia, address, credentials, lab: true, () => rclone, remote);
+            int sessions = 0;
+            CloudRepositorySession Session(CloudDestination address, CloudCredentials credentials)
+            {
+                sessions++;
+                return new(kopia, address, credentials, lab: true, () => rclone, remote);
+            }
             string input = Path.Combine(source, "archivo.txt");
             File.WriteAllText(input, "Primera fecha sintética de Ruta");
             byte[] first = SHA256.HashData(File.ReadAllBytes(input));
@@ -42,7 +46,18 @@ public partial class ProductCloudWindow
             Check(window.SessionToken.Visibility == Visibility.Collapsed, "MEGA exposed the Filen-only field.");
             Fill(window, CloudProvider.Filen);
             Check(window.Region.Visibility == Visibility.Collapsed && window.SessionToken.IsVisible, "Filen exposed S3 fields or hid its key.");
+            window.ConfirmRepositoryPassword.Password = "mismatched-password";
+            window.RecoveryInformationSaved.IsChecked = true;
             await ClickAsync(window, window.CreateCloud);
+            Check(sessions == 0 && window.CloudStatus.Text.Contains("misma contraseña", StringComparison.Ordinal),
+                "Mismatched recovery passwords reached the provider.");
+            window.ConfirmRepositoryPassword.Password = account.Password;
+            await ClickAsync(window, window.CreateCloud);
+            Check(sessions == 0 && window.CloudStatus.Text.Contains("fuera de este equipo", StringComparison.Ordinal),
+                "Creation proceeded without the recovery-information acknowledgment.");
+            window.RecoveryInformationSaved.IsChecked = true;
+            await ClickAsync(window, window.CreateCloud);
+            Check(sessions == 2, "New repository creation did not reopen an independent recovery session.");
             string repository;
             await ClickAsync(window, window.PauseCloudJob);
             File.WriteAllText(input, "Segunda fecha sintética de Ruta");
@@ -83,8 +98,9 @@ public partial class ProductCloudWindow
             using (var registry = OpenClean())
                 Check(registry.List().Jobs.Length == 0 && registry.LastCloudRestore(repository) is not null,
                     "A clean recovery profile lost its verification record or created a job.");
+            await CheckSelectedTransfersAsync();
             passed = true;
-            Console.WriteLine("PASS packaged Ruta activated Filen against a local rclone backend, listed and recovered two cloud dates from an empty profile.");
+            Console.WriteLine("PASS packaged Ruta confirms the recovery password, reopens the new repository, controls the selected cloud ticket and recovers two dates from an empty profile.");
         }
         finally
         {
@@ -105,6 +121,50 @@ public partial class ProductCloudWindow
             view.SecretKey.Password = account.SecretKey;
             view.SessionToken.Password = account.SessionToken!;
             view.RepositoryPassword.Password = account.Password;
+        }
+
+        async Task CheckSelectedTransfersAsync()
+        {
+            string settings = Folder("control-profile"), source = Folder("control-source"), backup = Folder("control-backup");
+            ProductJobRegistry Open() => new(settings);
+            using var registry = Open();
+            var job = registry.Create(new("Control de fechas", ProductBackupMode.Versions, null),
+                LocalJobRoots.ReviewDedicatedDestination(source, backup));
+            string repository = new('c', 64);
+            registry.SaveCloudConnection(job.Id, new(repository, destination), account, lab: true);
+            File.WriteAllText(Path.Combine(source, "dato.txt"), "Primera fecha");
+            var first = ProductRunner.Run(registry, job.Id);
+            File.WriteAllText(Path.Combine(source, "dato.txt"), "Segunda fecha");
+            var second = ProductRunner.Run(registry, job.Id);
+            Check(first.State == ProductRunState.Confirmed && second.State == ProductRunState.Confirmed,
+                "Could not prepare two local cloud-control points.");
+            var cancelled = registry.EnqueueCloud(job.Id, repository, first.Generation!);
+            var pending = registry.EnqueueCloud(job.Id, repository, second.Generation!);
+            registry.ControlCloudTransfer(cancelled, CloudTransferAction.Cancel);
+            var controls = new ProductCloudWindow(Open, job, () => "unused", _ => { }, testDispatch: (_, _) => Task.CompletedTask);
+            try
+            {
+                controls.Show();
+                await ClickAsync(controls, controls.RefreshCloud);
+                Check(controls.CloudTransfers.SelectedItem is TransferChoice { Transfer.Ticket: var selected } && selected == pending,
+                    "A cancelled earlier ticket hid the pending ticket.");
+                await ClickAsync(controls, controls.PauseCloud);
+                Check(registry.ReadCloudTransfer(pending).State == CloudTransferState.Paused &&
+                    registry.ReadCloudTransfer(cancelled).State == CloudTransferState.Cancelled, "Pause affected the wrong cloud ticket.");
+                await ClickAsync(controls, controls.CancelCloud);
+                Check(registry.ReadCloudTransfer(pending).State == CloudTransferState.Cancelled && !controls.PauseCloud.IsEnabled &&
+                    !controls.CancelCloud.IsEnabled && controls.RetryCloud.IsEnabled, "Cancelled selection exposes invalid actions.");
+                await ClickAsync(controls, controls.RetryCloud);
+                Check(registry.ReadCloudTransfer(pending).State == CloudTransferState.Pending &&
+                    registry.ReadCloudTransfer(cancelled).State == CloudTransferState.Cancelled, "Retry revived another cloud ticket.");
+                controls.CloudTransfers.SelectedIndex = 0;
+                await ClickAsync(controls, controls.RefreshCloud);
+                Check(controls.CloudTransfers.SelectedItem is TransferChoice { Transfer.Ticket: var preserved } && preserved == cancelled,
+                    "Refresh changed an explicit history selection.");
+                await ClickAsync(controls, controls.RetryCloud);
+                Check(registry.ReadCloudTransfer(cancelled).State == CloudTransferState.Pending, "Explicit retry of a cancelled ticket failed.");
+            }
+            finally { controls.Close(); }
         }
     }
 

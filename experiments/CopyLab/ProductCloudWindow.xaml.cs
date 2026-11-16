@@ -13,6 +13,11 @@ public partial class ProductCloudWindow : Window
         public string Label => $"{VersionStore.GenerationTime(Recovery.Generation).ToLocalTime():g} · {Recovery.Point.Files} archivos · {Recovery.Job.ToString("N")[..8]}";
     }
 
+    private sealed record TransferChoice(CloudTransfer Transfer)
+    {
+        public string Label => $"{VersionStore.GenerationTime(Transfer.Ticket.Generation).ToLocalTime():G} · {TransferState(Transfer)} · {Transfer.Ticket.Operation.ToString("N")[..8]}";
+    }
+
     private readonly Func<ProductJobRegistry> openRegistry;
     private readonly ProductJob? job;
     private readonly Func<string> kopia;
@@ -22,6 +27,9 @@ public partial class ProductCloudWindow : Window
     private readonly Func<string>? testOutput;
     private readonly CancellationTokenSource closed = new();
     private CloudConnection? readConnection;
+    private const int TransferPageSize = 100;
+    private CloudTransfer[] transfers = [];
+    private int transferOffset;
 
     internal ProductCloudWindow(Func<ProductJobRegistry> openRegistry, ProductJob? job, Func<string> kopia,
         Action<ProductJobRegistry> startMonitor, Func<CloudDestination, CloudCredentials, CloudRepositorySession>? testSession = null,
@@ -37,6 +45,7 @@ public partial class ProductCloudWindow : Window
         InitializeComponent();
         CloudHeading.Text = job is null ? "Recuperar una copia en nube" : $"Copia en nube · {job.Options.Name}";
         CreateCloud.IsEnabled = ConnectCloud.IsEnabled = job is { Enabled: true, Retired: false };
+        NewRepositoryReview.Visibility = job is null ? Visibility.Collapsed : Visibility.Visible;
         RefreshCloud.IsEnabled = job is not null;
         Loaded += async (_, _) => await RunAsync(_ =>
         {
@@ -50,6 +59,7 @@ public partial class ProductCloudWindow : Window
                     Region.Text = saved.Destination.Region;
                     Bucket.Text = saved.Destination.Bucket;
                     Prefix.Text = saved.Destination.Prefix;
+                    NewRepositoryReview.IsExpanded = false;
                 }
                 ReadStatus(registry);
             }
@@ -102,19 +112,38 @@ public partial class ProductCloudWindow : Window
     private async void CreateClick(object sender, RoutedEventArgs e) => await ConfigureAsync(create: true);
     private async void ConnectClick(object sender, RoutedEventArgs e) => await ConfigureAsync(create: false);
 
+    private void RecoveryPasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (RecoveryInformationSaved is not null) RecoveryInformationSaved.IsChecked = false;
+    }
+
     private async Task ConfigureAsync(bool create) => await RunAsync(async token =>
     {
         if (job is not { Enabled: true, Retired: false }) return;
         var destination = Destination();
         var credentials = Credentials();
+        string confirmation = ConfirmRepositoryPassword.Password;
+        if (create && (confirmation.Length == 0 || confirmation != credentials.Password))
+            throw new InvalidDataException("Vuelve a escribir la misma contraseña de recuperación en la confirmación.");
+        if (create && RecoveryInformationSaved.IsChecked != true)
+            throw new InvalidDataException("Guarda la ubicación y la contraseña del repositorio fuera de este equipo y marca la confirmación.");
         using var registry = openRegistry();
         var current = registry.Get(job.Id);
         if (!current.Enabled || current.Retired)
             throw new InvalidDataException("Habilita el trabajo antes de activar la copia en nube.");
         CloudConnection connection = await Task.Run(async () =>
         {
-            using var session = Session(destination, credentials);
-            return await session.OpenAsync(create, readOnly: false, token);
+            CloudConnection created;
+            using (var session = Session(destination, credentials))
+                created = await session.OpenAsync(create, readOnly: false, token);
+            if (create)
+            {
+                var recoveryCredentials = new CloudCredentials(confirmation, credentials.AccessKey, credentials.SecretKey, credentials.SessionToken);
+                using var recovery = Session(destination, recoveryCredentials);
+                if (await recovery.OpenAsync(create: false, readOnly: true, token) != created)
+                    throw new InvalidDataException("La conexión de recuperación abrió otro repositorio. Revisa su ubicación antes de activar la copia.");
+            }
+            return created;
         }, token);
         registry.SaveCloudConnection(job.Id, connection, credentials, lab: testSession is not null);
         if (testDispatch is null) { using var worker = ProductWorker.StartCloud(registry.Location); }
@@ -210,18 +239,81 @@ public partial class ProductCloudWindow : Window
         ReadStatus(registry);
     });
 
-    private async Task ControlAsync(CloudTransferAction action) => await RunAsync(_ =>
+    private async Task ControlAsync(CloudTransferAction action) => await RunAsync(async token =>
     {
         using var registry = openRegistry();
-        if (job is not null && registry.ReadCloudConnection(job.Id) is { } connection &&
-            registry.CloudTransfers(job.Id, connection.Repository).FirstOrDefault(item => item.State != CloudTransferState.Available) is { } transfer)
+        if (job is null || CloudTransfers.SelectedItem is not TransferChoice selected)
+            throw new InvalidDataException("Selecciona la fecha del envío que quieres controlar.");
+        var connection = registry.ReadCloudConnection(job.Id);
+        if (connection?.Repository != selected.Transfer.Ticket.Repository || selected.Transfer.Ticket.Job != job.Id)
+            throw new InvalidDataException("El destino cambió. Actualiza los envíos y revisa la fecha elegida.");
+        var current = registry.ReadCloudTransfer(selected.Transfer.Ticket);
+        if (!CanControl(current.State, action))
         {
-            registry.ControlCloudTransfer(transfer.Ticket, action);
-            if (action == CloudTransferAction.Retry) { using var process = ProductWorker.StartCloud(registry.Location); }
+            ReadStatus(registry);
+            throw new InvalidDataException("El estado del envío cambió. Revisa la fecha y elige una acción disponible.");
+        }
+        registry.ControlCloudTransfer(current.Ticket, action);
+        if (action == CloudTransferAction.Retry)
+        {
+            if (testDispatch is null) { using var process = ProductWorker.StartCloud(registry.Location); }
+            else await testDispatch(registry, token);
         }
         ReadStatus(registry);
-        return Task.CompletedTask;
     });
+
+    private static bool CanControl(CloudTransferState state, CloudTransferAction action) => action switch
+    {
+        CloudTransferAction.Pause => state is CloudTransferState.Pending or CloudTransferState.Retry,
+        CloudTransferAction.Cancel => state is CloudTransferState.Pending or CloudTransferState.Retry or CloudTransferState.Paused or CloudTransferState.Review,
+        CloudTransferAction.Retry => state is CloudTransferState.Paused or CloudTransferState.Cancelled or CloudTransferState.Review or CloudTransferState.Retry,
+        _ => false
+    };
+
+    private void TransferSelected(object sender, SelectionChangedEventArgs e) => RefreshTransferActions();
+
+    private void RefreshTransferActions()
+    {
+        if (PauseCloud is null) return;
+        var selected = CloudTransfers.SelectedItem as TransferChoice;
+        PauseCloud.IsEnabled = selected is not null && CanControl(selected.Transfer.State, CloudTransferAction.Pause);
+        CancelCloud.IsEnabled = selected is not null && CanControl(selected.Transfer.State, CloudTransferAction.Cancel);
+        RetryCloud.IsEnabled = selected is not null && CanControl(selected.Transfer.State, CloudTransferAction.Retry);
+    }
+
+    private void PreviousTransfersClick(object sender, RoutedEventArgs e)
+    {
+        transferOffset = Math.Max(0, transferOffset - TransferPageSize);
+        ShowTransferPage();
+    }
+
+    private void NextTransfersClick(object sender, RoutedEventArgs e)
+    {
+        if (transferOffset + TransferPageSize < transfers.Length) transferOffset += TransferPageSize;
+        ShowTransferPage();
+    }
+
+    private void ShowTransferPage(CloudTicket? selected = null)
+    {
+        var page = transfers.Skip(transferOffset).Take(TransferPageSize).Select(transfer => new TransferChoice(transfer)).ToArray();
+        CloudTransfers.ItemsSource = page;
+        CloudTransfers.SelectedItem = page.FirstOrDefault(item => item.Transfer.Ticket == selected) ?? page.FirstOrDefault();
+        PreviousTransfers.IsEnabled = transferOffset > 0;
+        NextTransfers.IsEnabled = transferOffset + page.Length < transfers.Length;
+        TransferPage.Text = page.Length == 0 ? "Sin envíos" : $"{transferOffset + 1:N0}–{transferOffset + page.Length:N0} de {transfers.Length:N0}";
+        RefreshTransferActions();
+    }
+
+    private static string TransferState(CloudTransfer transfer) => transfer.State switch
+    {
+        CloudTransferState.Pending => "Pendiente o en curso",
+        CloudTransferState.Paused => "Pausado",
+        CloudTransferState.Cancelled => "Cancelado",
+        CloudTransferState.Retry => $"Reintento {transfer.RetryUtc?.ToLocalTime():g}",
+        CloudTransferState.Review => "Requiere revisión",
+        CloudTransferState.Available => "Confirmado",
+        _ => "Estado desconocido"
+    };
 
     private void ReadStatus(ProductJobRegistry registry)
     {
@@ -229,10 +321,16 @@ public partial class ProductCloudWindow : Window
         bool paused = connection is not null && registry.IsCloudPaused(job!.Id);
         PauseCloudJob.IsEnabled = connection is not null;
         PauseCloudJob.Content = paused ? "Reanudar copia de este trabajo" : "Pausar copia de este trabajo";
-        CloudTransfer[] transfers = connection is null ? [] : registry.CloudTransfers(job!.Id, connection.Repository);
+        var selected = (CloudTransfers.SelectedItem as TransferChoice)?.Transfer.Ticket;
+        transfers = connection is null ? [] : registry.CloudTransfers(job!.Id, connection.Repository);
+        int selectedIndex = Array.FindIndex(transfers, item => item.Ticket == selected);
+        if (selectedIndex < 0) selectedIndex = Array.FindIndex(transfers, item => item.State is CloudTransferState.Pending or CloudTransferState.Retry);
+        if (selectedIndex < 0) selectedIndex = Math.Clamp(transferOffset, 0, Math.Max(0, transfers.Length - 1));
+        transferOffset = selectedIndex / TransferPageSize * TransferPageSize;
+        ShowTransferPage(transfers.ElementAtOrDefault(selectedIndex)?.Ticket);
         var last = transfers.LastOrDefault(item => item.State == CloudTransferState.Available)?.Point;
-        var next = transfers.FirstOrDefault(item => item.State != CloudTransferState.Available);
-        PauseCloud.IsEnabled = CancelCloud.IsEnabled = RetryCloud.IsEnabled = next is not null;
+        var next = transfers.FirstOrDefault(item => item.State is CloudTransferState.Pending or CloudTransferState.Retry) ??
+            transfers.FirstOrDefault(item => item.State is CloudTransferState.Review or CloudTransferState.Paused);
         if (connection is null) { CloudStatus.Text = "Este trabajo todavía no tiene destino en nube."; return; }
         string state = next?.State switch
         {

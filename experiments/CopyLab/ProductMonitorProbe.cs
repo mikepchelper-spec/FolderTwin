@@ -149,6 +149,7 @@ internal static class ProductMonitorProbe
         {
             foreach (var mode in Enum.GetValues<ProductBackupMode>())
                 await RunModeAsync(mode, soak, destination?.Root);
+            if (!soak) await VerifyCloudIsolationAsync(destination?.Root);
         }
         finally
         {
@@ -159,6 +160,70 @@ internal static class ProductMonitorProbe
             }
         }
         Console.Error.WriteLine("PASS headless monitor and workers, single monitor, automatic change, destination return, durable pause and offline recovery for all modes.");
+    }
+
+    private static async Task VerifyCloudIsolationAsync(string? destinationRoot)
+    {
+        var fixture = LabWorkspace.Create();
+        string settings = Folder(fixture.Root, "settings");
+        string destinations = Folder(destinationRoot ?? fixture.Root, "cloud-isolation");
+        using (var registry = new ProductJobRegistry(settings))
+        {
+            var damaged = CreateJob("cloud-damaged");
+            var healthy = CreateJob("local-healthy");
+            string repository = new('a', 64);
+            registry.SaveCloudConnection(damaged.Id,
+                new(repository, new(CloudProvider.CompatibleS3, "127.0.0.1:1", "us-east-1", "foldertwin")),
+                new("synthetic-password", "synthetic-key", "synthetic-secret"), lab: true);
+            var previous = ProductRunner.Run(registry, damaged.Id);
+            if (previous is not { State: ProductRunState.Confirmed, Generation: { } generation })
+                throw new InvalidOperationException("The baseline point could not be created.");
+            var ticket = registry.EnqueueCloud(damaged.Id, repository, generation);
+            registry.RecordCloudConnectionFailure(ticket, CloudTransferIssue.Credentials, retry: false);
+            var before = CloudJobStatus.Read(registry, damaged.Id, registry.RunHistory(damaged.Id));
+            var tray = TraySnapshot.ReadProduct(registry);
+            if (!before.RequiresReview || before.Issue != CloudTransferIssue.Credentials ||
+                !tray.Attention.Contains($"{damaged.Id:N}-cloud-Credentials"))
+                throw new InvalidOperationException("The local confirmation concealed the cloud credential problem.");
+
+            string marker = Path.Combine(settings, damaged.Id.ToString("N"), "cloud-connection", "paused");
+            File.WriteAllText(marker, "damaged marker");
+            File.WriteAllText(Path.Combine(fixture.Root, "cloud-damaged", "sample.txt"), "edit after the cloud failure");
+            foreach (var job in new[] { damaged, healthy })
+                registry.UpdateSettings(job.Id, job.Options.Name, null, true, false, ProductWatchMode.Watching);
+            using var monitor = ProductWorker.StartMonitor(settings);
+            try
+            {
+                await WaitAsync(() => !monitor.HasExited &&
+                    registry.RunHistory(damaged.Id).Runs.Any(run => run.Result is { State: ProductRunState.Confirmed } &&
+                        run.Generation != generation && !run.Running) &&
+                    registry.RunHistory(healthy.Id).Runs.Any(run => run.Result?.State == ProductRunState.Confirmed && !run.Running),
+                    "A damaged cloud pause blocked local confirmations.", TimeSpan.FromSeconds(15));
+                var after = CloudJobStatus.Read(registry, damaged.Id, registry.RunHistory(damaged.Id));
+                if (!after.RecordUnavailable || !after.RequiresReview ||
+                    !TraySnapshot.ReadProduct(registry).Attention.Contains($"{damaged.Id:N}-cloud-None") ||
+                    File.ReadAllText(marker) != "damaged marker")
+                    throw new InvalidOperationException("The damaged cloud record was hidden or modified.");
+            }
+            finally
+            {
+                if (!monitor.HasExited) monitor.Kill(entireProcessTree: true);
+                await monitor.WaitForExitAsync();
+            }
+
+            ProductJob CreateJob(string name)
+            {
+                string source = Folder(fixture.Root, name);
+                File.WriteAllText(Path.Combine(source, "sample.txt"), name);
+                return registry.Create(new(name, ProductBackupMode.Versions, null),
+                    LocalJobRoots.ReviewDedicatedDestination(source, destinations));
+            }
+        }
+        using (fixture.OpenRegisteredRoot()) { }
+        Directory.Delete(fixture.Root, recursive: true);
+        Console.Error.WriteLine("PASS cloud credential incidence remains visible and a damaged cloud pause does not stop either local backup.");
+
+        static string Folder(string parent, string name) => Directory.CreateDirectory(Path.Combine(parent, name)).FullName;
     }
 
     internal static async Task RunReconciliationAsync()

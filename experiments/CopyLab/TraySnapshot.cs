@@ -70,13 +70,22 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
         var attention = new List<string>();
         var dates = new List<DateTimeOffset>();
         var runnable = new List<Guid>();
-        int busy = 0, pending = 0, lowSpace = 0;
+        int busy = 0, pending = 0, lowSpace = 0, cloudAttention = 0, cloudPending = 0;
         if (list.Unreadable != 0 || list.Pending.Length != 0) attention.Add("job-definitions");
-        if (jobs.Any(job => job.WatchMode == ProductWatchMode.Watching) && registry.ReadMonitorProcess() is null)
+        if (jobs.Any(job => job.WatchMode == ProductWatchMode.Watching || ProductCloudDispatch.CanSchedule(registry, job)) &&
+            registry.ReadMonitorProcess() is null)
             attention.Add("monitor-stopped");
         foreach (var job in jobs)
         {
             var history = displayHistory?.Read(registry, job.Id) ?? registry.RunHistory(job.Id);
+            var cloud = CloudJobStatus.Read(registry, job.Id, history);
+            if (cloud.RequiresReview)
+            {
+                attention.Add($"{job.Id:N}-cloud-{cloud.Issue}");
+                cloudAttention++;
+            }
+            else if (cloud.Configured && (cloud.LastConfirmed is null || cloud.Outstanding > 0 || cloud.RecordUnavailable))
+                cloudPending++;
             if (history.Unreadable != 0) attention.Add($"{job.Id:N}-history");
             bool running = history.Runs.Any(run => run.Running);
             if (running) busy++; else runnable.Add(job.Id);
@@ -122,7 +131,9 @@ internal sealed record TraySnapshot(string Status, string Age, Guid[] Jobs, stri
         }
         if (dates.Any(date => date > DateTimeOffset.UtcNow.AddMinutes(1))) attention.Add("clock");
         string status = lowSpace != 0 ? $"Espacio insuficiente en {lowSpace} {(lowSpace == 1 ? "trabajo" : "trabajos")}. Abre FolderTwin para revisar el destino y reintentar." :
+            cloudAttention != 0 ? $"La copia en nube requiere atención en {cloudAttention} {(cloudAttention == 1 ? "trabajo" : "trabajos")}." :
             attention.Count != 0 ? "Hay trabajos o registros que requieren atención." :
+            cloudPending != 0 ? $"{cloudPending} {(cloudPending == 1 ? "trabajo tiene" : "trabajos tienen")} copias en nube pendientes de confirmar o consultar." :
             busy > 0 ? $"{busy} trabajos en curso u ocupados." : pending > 0 ? $"{pending} trabajos aún sin un punto confirmado." :
             jobs.Length == 0 ? "Sin trabajos habilitados." : $"{jobs.Length} trabajos con su último intento confirmado.";
         return new(status, dates.Count == 0 ? "Sin respaldo completo consultable." : AgeText(dates.Min()),

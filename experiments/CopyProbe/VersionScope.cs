@@ -6,12 +6,15 @@ internal sealed class VersionScope
 {
     private readonly LabWorkspace? lab;
     private readonly ProductJob? job;
-    internal string Root => lab?.Root ?? job!.Destination.LastVolumePath;
+    private readonly DestinationBinding? recovery;
+    internal string Root => lab?.Root ?? recovery?.LastVolumePath ?? job!.Destination.LastVolumePath;
+    internal bool IsReadOnly => recovery is not null;
     internal bool IsAccumulative => job?.Options.Mode == ProductBackupMode.Accumulative;
     internal bool IsProductVersion => job?.Options.Mode == ProductBackupMode.Versions;
 
     internal VersionScope(LabWorkspace lab) => this.lab = lab;
     internal VersionScope(ProductJob job) => this.job = job;
+    internal VersionScope(DestinationBinding recovery) => this.recovery = recovery;
 
     internal DirectoryFence OpenRegisteredRoot()
     {
@@ -19,8 +22,8 @@ internal sealed class VersionScope
         var root = new DirectoryFence(Root);
         try
         {
-            WindowsProbeNative.RequireNtfsVolume(root.Root, writable: true);
-            using var marker = job!.Destination.OpenVerifiedMarker(root.Root);
+            WindowsProbeNative.RequireNtfsVolume(root.Root, writable: !IsReadOnly);
+            using var marker = (recovery ?? job!.Destination).OpenVerifiedMarker(root.Root);
             return root;
         }
         catch { root.Dispose(); throw; }
@@ -29,6 +32,13 @@ internal sealed class VersionScope
     internal void CheckRoots(string source, string destination)
     {
         if (lab is not null) { lab.CheckRoots(source, destination); return; }
+        if (recovery is not null)
+        {
+            if (!Same(source, Root)) throw new InvalidDataException("La recuperación solo puede leer del respaldo elegido.");
+            using var recoveredRoots = new LocalJobRoots(source, destination);
+            recovery.RequireDirectoryIdentity(recoveredRoots.SourceHandle);
+            return;
+        }
         if (Same(destination, Root) && Same(source, job!.Source.VolumePath)) return;
         if (!Same(source, Root))
             throw new InvalidDataException("Las carpetas no corresponden al trabajo guardado.");
@@ -91,7 +101,8 @@ internal sealed class VersionScope
             return;
         }
         using var roots = new LocalJobRoots(sourceRoot, destinationRoot);
-        if (Same(sourceRoot, job!.Source.VolumePath)) RequireSourceIdentity(sourceRoot, roots.SourceHandle);
+        if (recovery is not null) recovery.RequireDirectoryIdentity(roots.SourceHandle);
+        else if (Same(sourceRoot, job!.Source.VolumePath)) RequireSourceIdentity(sourceRoot, roots.SourceHandle);
         else job.Destination.RequireDirectoryIdentity(roots.SourceHandle);
         VerifiedCopy.RunBound(roots, target, Path.GetRelativePath(sourceRoot, input),
             Path.GetRelativePath(destinationRoot, final), Path.GetRelativePath(destinationRoot, temporary),

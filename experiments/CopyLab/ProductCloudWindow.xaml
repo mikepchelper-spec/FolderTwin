@@ -34,13 +34,30 @@
                 <Label x:Name="SessionTokenLabel" Content="Token de sesión (opcional)" Target="{Binding ElementName=SessionToken}" />
                 <PasswordBox x:Name="SessionToken" MaxLength="16384" />
                 <Label Content="_Contraseña del repositorio" Target="{Binding ElementName=RepositoryPassword}" />
-                <PasswordBox x:Name="RepositoryPassword" MaxLength="1024" />
+                <PasswordBox x:Name="RepositoryPassword" MaxLength="1024" PasswordChanged="RecoveryPasswordChanged" />
+                <Expander x:Name="NewRepositoryReview" Header="Al crear un repositorio nuevo" IsExpanded="True" Margin="0,8,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Guarda la ubicación y la contraseña del repositorio fuera de este equipo. Las necesitarás para recuperar si pierdes tu perfil de Windows." TextWrapping="Wrap" />
+                        <Label Content="Confirmar contraseña de _recuperación" Target="{Binding ElementName=ConfirmRepositoryPassword}" />
+                        <PasswordBox x:Name="ConfirmRepositoryPassword" MaxLength="1024" PasswordChanged="RecoveryPasswordChanged" />
+                        <CheckBox x:Name="RecoveryInformationSaved" Margin="0,8,0,0">
+                            <TextBlock Text="He guardado la ubicación y la contraseña para recuperar desde otro equipo" TextWrapping="Wrap" />
+                        </CheckBox>
+                    </StackPanel>
+                </Expander>
                 <WrapPanel Margin="0,12,0,0">
                     <Button x:Name="CreateCloud" Content="Crear y activar copia" Click="CreateClick" Margin="0,0,6,5" />
                     <Button x:Name="ConnectCloud" Content="Conectar y activar copia" Click="ConnectClick" Margin="0,0,6,5" />
                     <Button x:Name="ListCloud" Content="Consultar fechas de nube" Click="ListClick" Margin="0,0,6,5" />
                 </WrapPanel>
                 <TextBlock x:Name="CloudStatus" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" Margin="0,8" />
+                <Label Content="_Envío que quieres controlar" Target="{Binding ElementName=CloudTransfers}" />
+                <ComboBox x:Name="CloudTransfers" DisplayMemberPath="Label" SelectionChanged="TransferSelected" />
+                <WrapPanel Margin="0,4,0,4">
+                    <Button x:Name="PreviousTransfers" Content="Envíos anteriores" Click="PreviousTransfersClick" IsEnabled="False" Margin="0,0,6,0" />
+                    <Button x:Name="NextTransfers" Content="Envíos siguientes" Click="NextTransfersClick" IsEnabled="False" Margin="0,0,6,0" />
+                    <TextBlock x:Name="TransferPage" VerticalAlignment="Center" />
+                </WrapPanel>
                 <WrapPanel Margin="0,4,0,8">
                     <Button x:Name="RefreshCloud" Content="Actualizar envíos" Click="RefreshClick" Margin="0,0,6,5" />
                     <Button x:Name="PauseCloudJob" Content="Pausar copia de este trabajo" Click="PauseCloudJobClick" IsEnabled="False" Margin="0,0,6,5" />

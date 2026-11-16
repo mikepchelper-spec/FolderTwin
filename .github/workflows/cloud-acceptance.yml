@@ -1,0 +1,140 @@
+name: Synthetic cloud acceptance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-acceptance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-cloud:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - name: Download and verify the pinned cloud tools
+        timeout-minutes: 5
+        run: |
+          $tools = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP 'cloud-tools')
+          New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP 'cloud-evidence') | Out-Null
+          $downloads = @(
+            @{
+              Name = 'kopia.zip'
+              Uri = 'https://github.com/kopia/kopia/releases/download/v0.23.1/kopia-0.23.1-windows-x64.zip'
+              Hash = 'F0369D9657DBE47A1B8B6FF4E308C5958A4813B405D4E32AE9D81B3F2B3D8251'
+            },
+            @{
+              Name = 'rclone.zip'
+              Uri = 'https://downloads.rclone.org/v1.76.0/rclone-v1.76.0-windows-amd64.zip'
+              Hash = '8B4FD2737ADE4E70C057EF4A49DEB7CFFE94B0FB9D7587C189D149823F21A1DC'
+            },
+            @{
+              Name = 'rclone-COPYING'
+              Uri = 'https://raw.githubusercontent.com/rclone/rclone/v1.76.0/COPYING'
+              Hash = '8CD2E9E750B90A04B7D82DBBCA3930C696AE0309D7C10464F90A44F45754CD04'
+            }
+          )
+          foreach ($download in $downloads) {
+            $file = Join-Path $tools.FullName $download.Name
+            Invoke-WebRequest -Uri $download.Uri -OutFile $file -MaximumRetryCount 2 -RetryIntervalSec 3
+            if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -ne $download.Hash) {
+              throw "The downloaded asset differs from the pinned hash: $($download.Name)"
+            }
+          }
+      - name: Build two clean cloud distributions and compare the ZIPs
+        timeout-minutes: 15
+        run: |
+          $revision = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Could not identify the tested commit.' }
+          $archive = Join-Path $env:RUNNER_TEMP 'cloud-source.tar'
+          git archive --format=tar "--output=$archive" $revision
+          if ($LASTEXITCODE -ne 0) { throw 'Could not archive the tested commit.' }
+          $tools = Join-Path $env:RUNNER_TEMP 'cloud-tools'
+          $cloud = @{
+            CloudKopiaArchive = Join-Path $tools 'kopia.zip'
+            CloudRcloneArchive = Join-Path $tools 'rclone.zip'
+            CloudRcloneLicense = Join-Path $tools 'rclone-COPYING'
+          }
+          foreach ($name in @('A', 'B')) {
+            $source = Join-Path $env:RUNNER_TEMP "cloud-source-$name"
+            $package = Join-Path $env:RUNNER_TEMP "cloud-package-$name"
+            New-Item -ItemType Directory -Path $source | Out-Null
+            tar -xf $archive -C $source
+            if ($LASTEXITCODE -ne 0) { throw 'Could not extract the clean source tree.' }
+            & (Join-Path $source 'scripts/Publish-Portable.ps1') -OutputDirectory $package -SourceArchive $archive -SourceRevision $revision @cloud
+            & (Join-Path $source 'scripts/New-PortableZip.ps1') -PackageDirectory $package -ZipPath (Join-Path $env:RUNNER_TEMP "cloud-$name.zip") -SourceRevision $revision
+          }
+          $first = Get-FileHash -LiteralPath (Join-Path $env:RUNNER_TEMP 'cloud-A.zip') -Algorithm SHA256
+          $second = Get-FileHash -LiteralPath (Join-Path $env:RUNNER_TEMP 'cloud-B.zip') -Algorithm SHA256
+          if ($first.Hash -ne $second.Hash) { throw 'Independent cloud builds produced different ZIPs.' }
+          $expanded = Join-Path $env:RUNNER_TEMP 'cloud-expanded'
+          Expand-Archive -LiteralPath $first.Path -DestinationPath $expanded
+          ./scripts/Test-Portable.ps1 -PackageDirectory $expanded -SourceRevision $revision -RequireCloudTools
+          $manifest = (Get-FileHash -LiteralPath (Join-Path $expanded 'SHA256SUMS.txt') -Algorithm SHA256).Hash
+          @("commit=$revision", "zip-sha256=$($first.Hash)", "manifest-sha256=$manifest") |
+            Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'cloud-evidence/hashes.txt')
+      - name: Verify normal startup and the cloud interface from the extracted ZIP
+        timeout-minutes: 5
+        run: |
+          $package = Join-Path $env:RUNNER_TEMP 'cloud-expanded'
+          $evidence = Join-Path $env:RUNNER_TEMP 'cloud-evidence'
+          $revision = (git rev-parse HEAD).Trim()
+          ./experiments/AutomationAcceptance/Test-IsolatedStartup.ps1 -PackageDirectory $package -SourceRevision $revision |
+            Tee-Object -FilePath (Join-Path $evidence 'startup.txt')
+          $stdout = Join-Path $evidence 'cloud-ui.out'
+          $stderr = Join-Path $evidence 'cloud-ui.err'
+          $process = Start-Process -FilePath (Join-Path $package 'FolderTwin.exe') -WorkingDirectory $package -ArgumentList '--product-cloud-smoke' -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          try {
+            if (!$process.WaitForExit(180000)) { throw 'The packaged cloud interface test timed out.' }
+            Get-Content -LiteralPath $stdout
+            Get-Content -LiteralPath $stderr
+            if ($process.ExitCode -ne 0) { throw "The packaged cloud interface exited with $($process.ExitCode)." }
+          } finally {
+            if (!$process.HasExited) { $process.Kill($true); $process.WaitForExit() }
+            $process.Dispose()
+          }
+      - name: Verify both cloud transports and offline recovery in all modes
+        timeout-minutes: 5
+        run: |
+          $package = Join-Path $env:RUNNER_TEMP 'cloud-expanded'
+          $kopia = Join-Path $package 'cloud-tools/kopia.exe'
+          $rclone = Join-Path $package 'cloud-tools/rclone.exe'
+          $evidence = Join-Path $env:RUNNER_TEMP 'cloud-evidence'
+          ./experiments/AutomationAcceptance/Test-CloudPoint.ps1 -Kopia $kopia -Rclone $rclone -PackageDirectory $package |
+            Tee-Object -FilePath (Join-Path $evidence 's3-recovery.txt')
+          & (Join-Path $package 'CopyProbe.exe') --cloud-rclone $kopia $rclone |
+            Tee-Object -FilePath (Join-Path $evidence 'rclone-recovery.txt')
+          if ($LASTEXITCODE -ne 0) { throw 'The packaged rclone profile acceptance failed.' }
+      - name: Verify transport faults, integrity and worker termination
+        timeout-minutes: 5
+        run: |
+          $package = Join-Path $env:RUNNER_TEMP 'cloud-expanded'
+          $artifacts = Join-Path $env:RUNNER_TEMP 'cloud-fault-build'
+          dotnet build experiments/AutomationAcceptance --artifacts-path $artifacts "-p:ReferenceCoreAssembly=$package/CopyProbe.dll" --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'The cloud fault harness did not build.' }
+          dotnet (Join-Path $artifacts 'bin/AutomationAcceptance/debug/CopyLab.dll') --cloud-faults (Join-Path $package 'FolderTwin.exe') |
+            Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'cloud-evidence/faults.txt')
+          if ($LASTEXITCODE -ne 0) { throw 'The packaged cloud fault acceptance failed.' }
+      - name: Preserve synthetic acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: FolderTwin-cloud-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/cloud-evidence
+          if-no-files-found: warn
+          retention-days: 14

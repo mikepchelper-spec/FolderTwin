@@ -74,6 +74,8 @@ if (args is ["--held-product-child" or "--held-product-auto-child", var productF
     return ProductRunProbe.HeldChild(productFixture, heldJobId, automatic: args[0] == "--held-product-auto-child");
 if (args is ["--product-store"])
     return ProductStoreProbe.Run();
+if (args is ["--product-backup-recovery"])
+    return ProductBackupRecoveryProbe.Run();
 if (args is ["--reader-audit"])
     return ReaderAuditProbe.Run();
 if (args is ["--differential-audit"])

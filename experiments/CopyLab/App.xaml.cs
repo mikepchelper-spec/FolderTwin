@@ -44,6 +44,8 @@ public partial class App : Application
             {
                 ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 await ProductCloudWindow.RunSmokeAsync();
+                await ProductWindow.RunCloudHealthSmokeAsync();
+                await ExistingBackupWindow.RunSmokeAsync();
                 Shutdown(0);
                 return;
             }
