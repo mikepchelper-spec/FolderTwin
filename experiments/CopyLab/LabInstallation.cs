@@ -161,7 +161,7 @@ internal static partial class LabInstallation
             marker.ReadAtLeast(bytes, bytes.Length, false) == bytes.Length && marker.ReadByte() == -1 && bytes.SequenceEqual(hash);
     }
 
-    private static byte[] ReadManifestBytes(Stream input)
+    internal static byte[] ReadManifestBytes(Stream input)
     {
         if (input.Length is < 1 or > 1024 * 1024)
             throw new InvalidDataException("El manifiesto del paquete tiene un tamaño no válido.");
@@ -170,7 +170,7 @@ internal static partial class LabInstallation
         return bytes;
     }
 
-    private static Dictionary<string, byte[]> ParseManifest(byte[] bytes)
+    internal static Dictionary<string, byte[]> ParseManifest(byte[] bytes)
     {
         string text = new UTF8Encoding(false, true).GetString(bytes);
         if (!text.EndsWith('\n') || text.Contains('\r'))

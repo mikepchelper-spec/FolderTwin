@@ -163,9 +163,10 @@ internal sealed partial class ProductJobRegistry
             throw new InvalidDataException("Las rutas conocidas del origen no son válidas.");
     }
 
-    private void RequireOutsideJobData(string output)
+    private void RequireOutsideJobData(string output, bool recovering = false)
     {
-        if (LocalJobRoots.Overlap(output, volumePath)) throw new InvalidDataException("Exporta fuera de la configuración de FolderTwin.");
+        if (LocalJobRoots.Overlap(output, volumePath)) throw new InvalidDataException(recovering ?
+            "Recupera fuera de la configuración de FolderTwin." : "Exporta fuera de la configuración de FolderTwin.");
         foreach (var entry in WindowsProbeNative.ReadDirectory(directory.Root))
         {
             if (!Guid.TryParseExact(entry.Name, "N", out Guid id)) continue;
@@ -173,7 +174,8 @@ internal sealed partial class ProductJobRegistry
             var intent = ReadIntent(job, id, allowDraft: !WindowsProbeNative.PlainFileExists(job, CommitName));
             string source = WindowsProbeNative.PlainFileExists(job, CommitName) ? ReadConfirmed(job, intent).Source.VolumePath : intent.Source.VolumePath;
             if (LocalJobRoots.Overlap(output, source) || LocalJobRoots.Overlap(output, TargetPath(intent)))
-                throw new InvalidDataException("Exporta fuera de los orígenes y respaldos de los trabajos.");
+                throw new InvalidDataException(recovering ? "Recupera fuera de los orígenes y respaldos de los trabajos." :
+                    "Exporta fuera de los orígenes y respaldos de los trabajos.");
         }
     }
 }

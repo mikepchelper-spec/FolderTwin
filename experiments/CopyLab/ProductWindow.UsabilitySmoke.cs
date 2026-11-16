@@ -80,7 +80,7 @@ public partial class ProductWindow
                     !diagnostic.Contains(job.Id.ToString("N"), StringComparison.OrdinalIgnoreCase) &&
                     !diagnostic.Contains("sample.txt", StringComparison.Ordinal), "Diagnostic included private job or file information.");
                 await Click(window, window.HelpButton);
-                Check(window.helpWindow!.Pages.Items.Count == 4, "Guide, support or diagnostic is missing.");
+                Check(window.helpWindow!.Pages.Items.Count == 5, "Guide, support, diagnostic or worker identity is missing.");
                 var help = window.helpWindow;
                 help.Pages.SelectedIndex = 3;
                 Check(!help.CopyButton.IsEnabled, "The diagnostic was ready to copy before review.");

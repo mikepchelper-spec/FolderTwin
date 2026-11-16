@@ -290,6 +290,7 @@ internal sealed partial class ProductJobRegistry : IDisposable
         string destination = TargetPath(intent);
         if (LocalJobRoots.Overlap(intent.Source.VolumePath, volumePath) || LocalJobRoots.Overlap(destination, volumePath))
             throw new InvalidDataException("Los datos del trabajo deben quedar fuera de la configuración de FolderTwin.");
+        RequireDisjointFromCloudRecovery(intent.Source.VolumePath, destination);
         foreach (var entry in WindowsProbeNative.ReadDirectory(directory.Root))
         {
             if (!Guid.TryParseExact(entry.Name, "N", out Guid other) || other == intent.Id)

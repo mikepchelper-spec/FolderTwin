@@ -1,6 +1,6 @@
 # Comunicación de vulnerabilidades
 
-La versión publicada es experimental. No hay una versión estable ni una rama histórica con mantenimiento garantizado. La revisión se centra en el candidato identificado en [ENTREGA.md](ENTREGA.md) y en el código actual; no se prometen plazos, recompensas ni cobertura de todas las versiones anteriores.
+La entrega pública es experimental. Indica el commit que figura en **Ayuda y versión** o en `COMPILACION.json`. La revisión se centra en RC2 pública y en los candidatos y correcciones identificados en el repositorio. Los informes conservan evidencia de cada revisión. [Entregas y estado](README.md) · [Seguimiento de correcciones](CORRECCIONES-AUDITORIA.md)
 
 ## Reportar en privado
 

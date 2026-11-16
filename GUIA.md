@@ -2,7 +2,7 @@
 
 Esta distribución es una vista previa de la v1 para Windows 11 x64. Usa únicamente archivos sintéticos y carpetas desechables. El paquete incluye .NET y se usa sin consola. Consulta [Instalación y actualización](INSTALACION.md) para preparar el ejecutor o retirar la aplicación.
 
-## Vigilancia en la candidata en desarrollo
+## Vigilancia al detectar cambios
 
 En una compilación que incluya esta función, el asistente recomienda **Automático al detectar cambios** para trabajos nuevos. Puedes elegir también una hora diaria. Al guardar el trabajo automático, FolderTwin solicita iniciar el monitor y preparar la primera copia. En **Espejo protegido**, puedes permitir por separado las retiradas ordinarias recuperables. El origen vacío, los cambios de gran alcance y los conflictos requieren revisión.
 
@@ -14,7 +14,7 @@ La vigilancia puede continuar al cerrar la ventana con Windows despierto y tu se
 
 ## Primer inicio
 
-Descarga el artefacto del commit elegido desde [GitHub Actions](https://github.com/mikepchelper-spec/FolderTwin/actions/workflows/copy-probe.yml), extrae **todo** su contenido en una carpeta nueva y abre **FolderTwin.exe**. Conserva los archivos que lo acompañan. La pantalla **Trabajos** estará vacía si esa cuenta todavía no tiene configuración de producto. Las herramientas de **Respaldos de alfa** son para formatos anteriores; no hacen falta para crear trabajos nuevos.
+Usa el ZIP del candidato que quieras probar y consulta el informe de aceptación que indique su commit y hash. Extrae **todo** su contenido en una carpeta nueva y abre **FolderTwin.exe**. En **Ayuda y versión** comprueba la compilación. La pestaña **Ejecutores** indica la ruta abierta y el paquete de las tareas propias cuando están configuradas. La pantalla **Trabajos** estará vacía si esa cuenta todavía no tiene configuración de producto. **Respaldos de alfa** abre formatos anteriores.
 
 Prepara una carpeta de origen con datos de prueba y otra ubicación local NTFS donde guardar los respaldos. Cada trabajo crea su propia subcarpeta dedicada en el destino. Evita rutas anidadas, enlaces y carpetas que otro programa use como respaldo. Las copias en el mismo disco físico sirven para ensayar, pero no protegen frente al fallo de ese disco.
 
@@ -30,7 +30,7 @@ FolderTwin envía puntos locales completos. **Actualizar envíos** muestra la ú
 
 Al crear un repositorio, repite su contraseña de recuperación y confirma que has guardado su ubicación y contraseña fuera del equipo. FolderTwin comprueba una nueva apertura de lectura antes de activar el destino. Elige el envío en **Envío que quieres controlar** antes de pausarlo, cancelarlo o reintentarlo; las páginas permiten consultar los anteriores. Ruta y bandeja distinguen el estado local del remoto, incluida la fecha confirmada y el atraso. Un error de nube conserva su incidencia y permite continuar las copias locales.
 
-Para recuperar en otro equipo, abre **Copia en nube** aunque la lista de trabajos esté vacía. Introduce la ubicación y las credenciales del repositorio, pulsa **Consultar fechas de nube**, elige una fecha y usa **Recuperar en carpeta nueva**. Los perfiles de Filen y MEGA siguen en validación externa. Usa carpetas sintéticas hasta completar la prueba con tu proveedor.
+Para recuperar con un perfil vacío, abre **Más acciones → Copia en nube**. Introduce la ubicación y las credenciales del repositorio y pulsa **Consultar fechas de nube**. Elige **Recuperar fecha completa** o **Elegir archivos o carpetas**. Desde **Intentos de recuperación** puedes comprobar el progreso y la salida o cancelar. Al cerrar la ventana, el ejecutor continúa. Guarda los datos de acceso fuera del equipo y practica el recorrido de emergencia con datos sintéticos. [Guía autónoma de recuperación en nube](RECUPERACION-NUBE.md)
 
 ## Ayuda y versión
 

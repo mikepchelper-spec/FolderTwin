@@ -1,0 +1,33 @@
+# Seguridad de la distribución y acceso remoto
+
+## Dependencias revisadas el 16 de noviembre de 2026
+
+| Componente | Decisión |
+| --- | --- |
+| .NET y Windows Desktop 10.0.15 | Adoptar ambos runtimes y SDK 10.0.404. El ZIP incluye su propio runtime. Se verificó el ZIP del SDK contra SHA-512 oficial y se fijó la versión en compilación y aceptación. [Publicación de Microsoft](https://github.com/dotnet/core/blob/main/release-notes/10.0/10.0.15/10.0.15.md) · [Avisos de noviembre](https://github.com/dotnet/announcements/issues/498) |
+| Kopia 0.23.1 | Mantener el binario fijado. Los avisos sobre exposición de credenciales en el estado JSON y sobre el perfil SFTP se corrigieron en 0.16.0 y 0.23.0, respectivamente. FolderTwin usa S3 y captura la salida en memoria. 0.23.1 incorpora además la corrección de una carrera con riesgo de pérdida de datos. [Credenciales](https://github.com/kopia/kopia/security/advisories/GHSA-j5vm-7qcc-2wwg) · [SFTP](https://github.com/kopia/kopia/security/advisories/GHSA-2q4c-3mrw-63c3) · [Versión fijada](https://github.com/kopia/kopia/releases/tag/v0.23.1) |
+| rclone 1.76.0 | Mantener el binario fijado. La publicación incorpora correcciones de Go y del servidor. El aviso de memoria multipart identifica 1.75.2 como parche. La configuración de FolderTwin usa S3 privado en loopback, clave por sesión, Filen/MEGA y lectura durante recuperación. Las funciones de control remoto, servidor SFTP y actualización automática de rclone quedan fuera de ese recorrido. [Cambios de rclone](https://rclone.org/changelog/#v1-76-0-2026-11-06) · [Avisos](https://github.com/rclone/rclone/security/advisories) |
+
+Antes de preparar otra entrega, revisa los avisos de Microsoft, Kopia y rclone, registra fecha, versiones, función afectada y decisión. Cambiar un binario incluido requiere cotejar hash del archivo oficial, licencia y regresiones de conexión, envío y recuperación. `COMPONENTES.json` es un inventario CycloneDX de componentes directos distribuidos y sus archivos representativos. `SHA256SUMS.txt` cubre la lista completa de archivos. Las dependencias internas de los binarios de terceros tienen los avisos de sus respectivas distribuciones. SQLite se usa mediante la biblioteca del sistema Windows.
+
+## Firma de Windows
+
+La candidata local usa dos ZIP reproducibles a partir de fuentes verificables. Los hashes prueban identidad de bytes contra un manifiesto conocido. Authenticode añade identidad del editor y validación de la cadena de confianza. Se conserva la candidata sin firma del editor hasta disponer de una identidad de firma autorizada. No necesita pagos ni cuentas nuevas para esta fase.
+
+Para una entrega firmada, conserva primero el artefacto reproducible, firma las copias de `FolderTwin.exe` y `CopyLab.exe` con SHA-256 y sello de tiempo, reconstruye el manifiesto del artefacto firmado y comprueba ambas firmas y su paquete. Conserva los hashes antes y después. La firma de una copia modifica sus bytes. Verifica la confianza y el comportamiento de Windows en otra máquina antes de distribuir. [SignTool](https://learn.microsoft.com/windows/win32/seccrypto/signtool) · [Sello de tiempo](https://learn.microsoft.com/en-us/windows/win32/seccrypto/time-stamping-authenticode-signatures)
+
+## Roles de acceso a probar
+
+Usa un bucket privado o carpeta dedicada por repositorio y una credencial de alcance limitado. Mantén separadas las credenciales para conectar en lectura, para enviar y para mantenimiento. Object Lock, versiones y revocación requieren prueba con cada proveedor.
+
+| Función | AWS S3 y compatibles | B2 por S3 | Filen y MEGA |
+| --- | --- | --- | --- |
+| Recuperación | `s3:ListBucket` restringido al prefijo, `s3:GetObject` limitado a sus objetos y `s3:GetBucketLocation` cuando lo pida el cliente. Sin permiso de escritura en esa credencial | Clave de lectura restringida al bucket/prefijo. Verifica el alcance de listados con el proveedor | Recuperación por pasarela en solo lectura. Una credencial de cuenta tiene el alcance real que permita el proveedor. Usa una cuenta o acceso aislado previamente habilitado para el ensayo |
+| Envío diario | Añadir `s3:PutObject` dentro del prefijo y operaciones multipart necesarias para finalizar o abortar la transferencia. Comenzar con escritura y lectura, y revisar en el registro del proveedor cualquier petición de borrado antes de añadirla | Clave restringida al bucket/prefijo. Comprobar lectura, escritura y límites de la API S3 | Carpeta dedicada y sesión de rclone. Tratar la cuenta y la clave API como credenciales de escritura hasta verificar autorización más granular |
+| Creación y mantenimiento | Bucket precreado. Acceso temporal dedicado. Conceder borrado al mantenimiento solo si la operación revisada lo requiere, dentro del repositorio. No conceder borrado permanente de versiones ni saltar retención al trabajador habitual | Revisar qué capacidades de borrado y versiones concede la clave. Probar con repositorio desechable y revocar el acceso temporal al terminar | Usar la carpeta dedicada y revisar permisos de cuenta. Mantener desactivado el mantenimiento automático en la aplicación |
+
+Para AWS, separa los recursos del bucket (listado y región) de los objetos. Limita el listado con `s3:prefix` sobre el prefijo del repositorio. Usa `arn:aws:s3:::BUCKET/PREFIJO/*` para datos. Operaciones adicionales como SSE-KMS o recuperación por versión requieren permisos propios. El cliente S3 de Kopia usa lecturas por rango y lista por prefijo. También admite borrado de blobs en mantenimiento. [Permisos de API de AWS](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-with-s3-policy-actions.html) · [Cliente S3 fijado de Kopia](https://github.com/kopia/kopia/blob/v0.23.1/repo/blob/s3/s3_storage.go)
+
+Para B2, usa claves de aplicación restringidas. Filen y MEGA usan la autenticación que admite rclone. La restricción de la pasarela protege el recorrido de recuperación. Los privilegios de la cuenta se comprueban aparte. [Claves B2](https://www.backblaze.com/docs/cloud-storage-application-keys) · [Pasarela local](https://rclone.org/commands/rclone_serve_s3/) · [Filen](https://rclone.org/filen/) · [MEGA](https://rclone.org/mega/)
+
+En un proveedor real, registra sin secretos las operaciones concedidas y rechazadas al crear, enviar dos puntos, cancelar una transferencia y recuperar. Verifica las restricciones intentando consultar el repositorio de prueba vecino con las credenciales limitadas. Si una acción falla, conserva su código y añade únicamente el permiso confirmado por la operación. Repite el ensayo al rotar o revocar una credencial. Prueba recuperación de una versión protegida frente a borrado antes de presentar Object Lock como activo.

@@ -32,4 +32,17 @@ internal static class ProductCloudWorker
         }
         catch (Exception error) when (VersionJob.Expected(error)) { return 1; }
     }
+
+    internal static async Task<int> RecoverAsync(string location, Guid id)
+    {
+        try
+        {
+            using var registry = new ProductJobRegistry(location);
+            using var deadline = new CancellationTokenSource(TimeSpan.FromHours(2));
+            var result = await registry.RunCloudRecoveryAsync(id, (connection, credentials) =>
+                new(ReviewedKopia(), connection.Destination, credentials, rclone: ReviewedRclone), deadline.Token);
+            return result.State == CloudRecoveryState.Completed ? 0 : 1;
+        }
+        catch (Exception error) when (VersionJob.Expected(error)) { return 1; }
+    }
 }

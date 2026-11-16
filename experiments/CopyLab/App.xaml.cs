@@ -25,6 +25,7 @@ public partial class App : Application
         bool productScheduled = e.Args is ["--run-scheduled-product-job", _, _];
         bool productMonitor = e.Args is ["--watch-product-jobs" or "--watch-scheduled-product-jobs" or "--supervise-product-monitor", _];
         bool cloudDispatch = e.Args is ["--dispatch-cloud-jobs", _];
+        bool cloudRecovery = e.Args is ["--restore-cloud-point", _, _];
         bool cloudSmoke = e.Args is ["--product-cloud-smoke"];
         bool automaticWorker = e.Args is ["--run-automatic-product-job", _, _, ..] && e.Args.Length <= 3 + ProductWatchSignal.MaximumEditHints;
         bool monitorSmoke = e.Args is ["--product-monitor-smoke" or "--product-monitor-soak" or "--product-monitor-schedule-smoke" or "--product-monitor-schedule-soak" or
@@ -32,7 +33,7 @@ public partial class App : Application
             ["--product-monitor-update-smoke" or "--product-monitor-cross-volume-smoke", _];
         bool productWorker = productScheduled || e.Args is ["--run-product-job", _, _] or ["--run-product-job", _, _, _] or ["--verify-product-job", _, _, _] or ["--restore-product-job", _, _, _] or ["--review-product-mirror", _, _] or ["--review-product-pending", _, _] or ["--abandon-product-version", _, _, _];
         bool worker = productWorker || scheduled || e.Args is ["--run-version-job", _, _];
-        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !labPreview && !startupSmoke && !productSyntheticPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !heldMirrorChild && !heldAbandonChild && !productScheduleSmoke && !productMonitor && !automaticWorker && !monitorSmoke && !cloudDispatch && !cloudSmoke)
+        if (e.Args.Length != 0 && !smoke && !indexScale && !worker && !scheduleSmoke && !trayStartup && !productPreview && !labPreview && !startupSmoke && !productSyntheticPreview && !productSmoke && !heldProductChild && !heldRestoreChild && !heldMirrorChild && !heldAbandonChild && !productScheduleSmoke && !productMonitor && !automaticWorker && !monitorSmoke && !cloudDispatch && !cloudSmoke && !cloudRecovery)
         {
             Shutdown(2);
             return;
@@ -53,6 +54,12 @@ public partial class App : Application
             if (cloudDispatch)
             {
                 Shutdown(await Task.Run(() => ProductCloudWorker.RunAsync(e.Args[1])));
+                return;
+            }
+            if (cloudRecovery)
+            {
+                Shutdown(Guid.TryParseExact(e.Args[2], "N", out var request) ?
+                    await Task.Run(() => ProductCloudWorker.RecoverAsync(e.Args[1], request)) : 2);
                 return;
             }
             if (monitorSmoke)

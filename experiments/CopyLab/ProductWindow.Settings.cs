@@ -232,7 +232,7 @@ public partial class ProductWindow
         address.Text = drive && path!.Length > 40 ? $@"{path[..2]}\…\{Path.GetFileName(path)}" : path ?? "";
     }
 
-    private static string DisplayRoutePath(string path)
+    internal static string DisplayRoutePath(string path)
     {
         // A drive letter is for display only. Keep the registered volume path for all operations.
         string? volume = Path.GetPathRoot(path);

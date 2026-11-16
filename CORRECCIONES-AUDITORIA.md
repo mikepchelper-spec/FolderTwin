@@ -11,14 +11,16 @@ El goal activo cubre los trece hallazgos y las mejoras propuestas en [AUDITORIA-
 | A14-05 | Estado remoto, antigüedad, atraso e incidencias en Ruta y bandeja | Implementado y probado. Ruta consulta nube cada diez segundos |
 | A14-06 | Acotar catálogos y descriptores tras gracia y purga | Implementado y probado en desarrollo; medición de 4.096 archivos, tres modos, interrupciones y WPF |
 | A14-07 | Conservar y restaurar Zone.Identifier con límites y hash, también a través de nube | Implementado y probado en desarrollo: tres modos, catálogos v4, S3/rclone sintéticos y compatibilidad |
-| A14-08 | Recuperación remota con seguimiento, progreso, cancelación y selección de archivo/carpeta | Motor probado para selección, fases y cancelación; pendiente seguimiento durable, trabajador y WPF |
+| A14-08 | Recuperación remota con seguimiento, progreso, cancelación y selección de archivo/carpeta | Implementado. Prueba de proceso real, control desde otro registro y selección/reapertura WPF en desarrollo |
 | A14-09 | Confirmar contraseña y reabrir conexión de lectura antes de activar | Implementado y probado |
 | A14-10 | CI de nube con herramientas fijadas, dos ZIP idénticos y pruebas desde extracción | Workflow añadido, validación estática aprobada. Ejecución GitHub pendiente de integrar la rama |
 | A14-11 | Coherencia de Ruta/nube, temas, espacio compacto, ayuda y teclado | Ayuda y grupos de nube, acciones secundarias plegables y teclado/foco probados en desarrollo. Paleta común claro/oscuro y alto contraste sintético; pendiente revisión del conjunto tras A14-08 |
 | A14-12 | Lecturas remotas acotadas y páginas/filtro de historial | Implementado: salida acotada, cancelación, páginas locales y remotas y filtro de incidencias antiguas probados |
-| A14-13 | Identificar paquete abierto/ejecutor y entregar guías coherentes | Pendiente |
+| A14-13 | Identificar paquete abierto/ejecutor y entregar guías coherentes | Interfaz y guías actualizadas. Pendiente comprobar la identidad leyendo paquetes extraídos y ejecutores instalados |
 
 Las mejoras complementarias incluyen revisar avisos de dependencias, inventario de componentes, evaluación de firma, políticas de permisos por proveedor y separación gradual de arneses.
+
+El inventario CycloneDX se genera junto al paquete. La revisión del 16 de noviembre fija SDK 10.0.404 y runtime 10.0.15, mantiene las versiones de Kopia y rclone, deja las políticas de permisos para validar por proveedor y registra la decisión de firma. La prueba de procesos y cancelación remota vive en `AutomationAcceptance`, recompilada contra el motor extraído y con verificación de identidad del binario. [Seguridad de distribución](SEGURIDAD-DISTRIBUCION.md)
 
 ## Primer hito
 
@@ -54,6 +56,10 @@ Una fase interrumpida aparece como purga pendiente y bloquea nuevas escrituras y
 
 ## Evidencia de desarrollo
 
+El registro de recuperaciones remotas se abre desde cualquier perfil de FolderTwin, incluido uno sin trabajos. Cada intento fija el repositorio, fecha, selección e identidad del padre de salida. Guarda sus credenciales bajo DPAPI y autoriza un proceso separado. Una orden persistente permite parar Kopia durante una espera de red. El resultado y las fases se consultan después de cerrar la ventana. Una descarga interrumpida mantiene su salida identificada. Los nuevos intentos eligen otra carpeta. La configuración rechaza altas o cambios de raíz que se solapen con una recuperación activa.
+
+`--cloud-recovery-workers` registró un hijo real retenido en loopback, cancelación desde un segundo registro, terminación real, progreso y salida persistentes, otra copia local confirmada y rechazo de raíz sustituida u ocupada. La primera lectura después de terminar el proceso puede coincidir con la liberación de handles por Windows. La prueba espera ese cambio observando el mismo intento. `--product-cloud-smoke` aprobó dos fechas, selección por archivo con marca, carpeta con subcarpeta vacía y el mismo intento visible después de cerrar y reabrir la interfaz. [Guía de recuperación](RECUPERACION-NUBE.md)
+
 El cuarto hito conserva `Zone.Identifier` como metadato de ruta en catálogo v4 y mantiene CAS sin ADS. `--zone-native`, `--zone-local` y `--product-watch` probaron los límites, vacío/ausencia, bytes arbitrarios, un único objeto para marcas distintas, cambios exclusivos de marca, interrupción/reanudación con origen apartado, retención y rechazo de catálogos alterados. El ensayo nativo detectó que BackupWrite puede escribir desde un handle base de lectura; el adaptador ahora exige permiso efectivo de escritura antes de usarlo. [Contrato y evidencia de Kopia](experiments/CopyProbe/ZONE-IDENTIFIER.md).
 
 Kopia 0.23.1 perdió las marcas en su restauración directa. Los envíos nuevos incluyen el catálogo confirmado dentro del repositorio cifrado, usan etiquetas que los lectores antiguos no enumeran y preservan los puntos remotos anteriores. La recuperación comprueba catálogo, inventario, SHA-256 y marca antes de promover cada archivo. `--cloud-point`, S3 de loopback y los perfiles rclone aprobaron marcas vacías, ausentes, distintas y de 16 KiB, selección por archivo/carpeta, cancelación, catálogo incorrecto y compatibilidad. El motor ya informa fases y recuentos; la interfaz persistente de A14-08 continúa abierta.
@@ -81,8 +87,8 @@ La aceptación desde el ZIP reproducible final sigue pendiente.
 
 ## Continuación
 
-1. Completar A14-08: registro durable de recuperación, trabajador controlable, progreso/salida parcial visible después de cerrar o reabrir, consulta del catálogo y selección WPF de archivo/carpeta. Reutilizar el catálogo y la promoción verificable implementados. Completar el procedimiento independiente para el sobre remoto con metadatos.
-2. Revisar interfaz y guía del recorrido completo; comprobar identidad de paquete y ejecutor de A14-13.
+1. Revisar interfaz y guía del recorrido completo. Comprobar identidad de paquete y ejecutor de A14-13 desde extracción.
+2. Completar la validación de permisos mínimos sintéticos y el inventario de componentes.
 3. Revisar dependencias y firma, producir inventario de componentes, compilar dos distribuciones reproducibles y aceptar el paquete extraído.
 
 Las pruebas externas conservan sus procedimientos pendientes. Incluyen AWS, B2, Filen y MEGA reales, cuotas y revocación reales, Object Lock, otra cuenta/equipo, piloto de 7–14 días, USB físico, ciclos de Windows y lector de pantalla. El goal exige el alcance autónomo implementado y verificado junto con esa matriz explícita.

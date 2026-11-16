@@ -23,6 +23,9 @@ internal static class ProductMonitorProbe
             try
             {
                 string installed = LabInstallation.EnsureWorker(product: true);
+                var openedPackage = ProductIdentity.ReadPackage(Environment.ProcessPath);
+                if (openedPackage is null || ProductIdentity.ReadPackage(installed) != openedPackage)
+                    throw new InvalidDataException("The opened executable and the installed worker did not identify the same verified package.");
                 scheduler.RegisterMonitor(registry, installed, atLogon: true);
                 if (scheduler.ReadMonitor(registry) is not { Enabled: true, MeetsPolicy: true, AtLogon: true })
                     throw new InvalidOperationException("The native logon monitor policy did not verify.");
@@ -62,6 +65,9 @@ internal static class ProductMonitorProbe
                     string previousVersion = LabInstallation.EnsureAt(previousPackage, LabInstallation.ProductInstallations);
                     if (string.Equals(previousVersion, current, StringComparison.OrdinalIgnoreCase))
                         throw new InvalidOperationException("The update probe requires two different packages.");
+                    var older = ProductIdentity.ReadPackage(previousVersion);
+                    if (older is null || older.ManifestHash == openedPackage.ManifestHash)
+                        throw new InvalidDataException("The previous worker did not identify a distinct package.");
                     scheduler.RemoveMonitor(registry);
                     await WaitAsync(() => !registry.MonitorOwnsRegistry(), "The initial monitor did not release the registry.");
                     scheduler.RegisterMonitor(registry, previousVersion, atLogon: true);

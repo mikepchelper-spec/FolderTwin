@@ -20,7 +20,7 @@
                 <TextBlock x:Name="ProviderHelp" Text="Vista previa para carpetas sintéticas. Usa un bucket privado y guarda la contraseña del repositorio fuera de este equipo." TextWrapping="Wrap" Margin="0,8" />
                 <Border Style="{StaticResource RouteCard}" Margin="0,0,0,10">
                 <StackPanel>
-                <TextBlock Text="1 · Ubicación de la copia" FontSize="16" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
+                <TextBlock Text="Ubicación de la copia" FontSize="16" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
                 <Label Content="_Proveedor" Target="{Binding ElementName=Provider}" />
                 <ComboBox x:Name="Provider" SelectedIndex="0" SelectionChanged="ProviderChanged">
                     <ComboBoxItem Content="AWS S3" />
@@ -41,7 +41,7 @@
                 </Border>
                 <Border Style="{StaticResource RouteCard}" Margin="0,0,0,10">
                 <StackPanel>
-                <TextBlock Text="2 · Acceso al proveedor" FontSize="16" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
+                <TextBlock Text="Acceso al proveedor" FontSize="16" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
                 <TextBlock x:Name="ProviderAccessHelp" TextWrapping="Wrap" Margin="0,6,0,4" />
                 <Label x:Name="AccessKeyLabel" Content="_Identificador de acceso" Target="{Binding ElementName=AccessKey}" />
                 <TextBox x:Name="AccessKey" MaxLength="1024" />
@@ -53,7 +53,7 @@
                 </Border>
                 <Border Style="{StaticResource RouteCard}" Margin="0,0,0,10">
                 <StackPanel>
-                <TextBlock Text="3 · Clave para recuperar" FontSize="16" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
+                <TextBlock Text="Clave para recuperar" FontSize="16" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
                 <TextBlock Text="Esta contraseña abre tu respaldo cifrado. Guárdala junto a la ubicación del repositorio para poder recuperar desde otro equipo." TextWrapping="Wrap" Margin="0,6,0,4" />
                 <Label Content="_Contraseña del repositorio" Target="{Binding ElementName=RepositoryPassword}" />
                 <PasswordBox x:Name="RepositoryPassword" MaxLength="1024" PasswordChanged="RecoveryPasswordChanged" />
@@ -92,8 +92,45 @@
                 </WrapPanel>
                 <TextBlock Text="Recuperar desde la nube" FontSize="16" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" Margin="0,8,0,4" />
                 <Label Content="_Fecha en nube" Target="{Binding ElementName=CloudDates}" />
-                <ComboBox x:Name="CloudDates" DisplayMemberPath="Label" />
-                <Button x:Name="RestoreCloud" Content="Recuperar en carpeta _nueva" HorizontalAlignment="Left" Click="RestoreClick" Margin="0,8,0,0" />
+                <ComboBox x:Name="CloudDates" DisplayMemberPath="Label" SelectionChanged="CloudDateChanged" />
+                <WrapPanel Margin="0,8,0,0">
+                    <Button x:Name="RestoreCloud" Content="Recuperar fecha _completa" Click="RestoreClick" IsEnabled="False" Margin="0,0,6,4" />
+                    <Button x:Name="BrowseCloud" Content="_Elegir archivos o carpetas" Click="BrowseCloudClick" IsEnabled="False" Margin="0,0,6,4" />
+                </WrapPanel>
+                <TextBlock x:Name="CloudDateLimit" TextWrapping="Wrap" />
+                <StackPanel x:Name="CloudCatalogPanel" Visibility="Collapsed" Margin="0,8,0,0">
+                    <Label Content="_Buscar en la fecha" Target="{Binding ElementName=CloudFileSearch}" />
+                    <DockPanel>
+                        <Button x:Name="CloudSearchButton" DockPanel.Dock="Right" Content="_Buscar" Click="SearchCloudClick" Margin="6,0,0,0" />
+                        <TextBox x:Name="CloudFileSearch" MaxLength="255" KeyDown="CloudSearchKeyDown" />
+                    </DockPanel>
+                    <TextBlock x:Name="CloudFolderPath" TextWrapping="Wrap" Margin="0,6,0,4" />
+                    <ListBox x:Name="CloudFiles" DisplayMemberPath="FullLabel" Height="132" SelectionChanged="CloudFileChanged"
+                             KeyDown="CloudFilesKeyDown" AutomationProperties.Name="Archivos y carpetas en la fecha remota" />
+                    <WrapPanel Margin="0,6,0,4">
+                        <Button x:Name="CloudParentFolder" Content="Subir un nivel" Click="CloudParentClick" Margin="0,0,6,4" />
+                        <Button x:Name="CloudOpenFolder" Content="Entrar en carpeta" Click="CloudOpenClick" Margin="0,0,6,4" />
+                        <Button x:Name="CloudPreviousFiles" Content="Página anterior" Click="CloudPreviousClick" Margin="0,0,6,4" />
+                        <Button x:Name="CloudNextFiles" Content="Página siguiente" Click="CloudNextClick" Margin="0,0,6,4" />
+                    </WrapPanel>
+                    <TextBlock x:Name="CloudFilePage" />
+                    <Button x:Name="RestoreCloudSelection" Content="Recuperar _selección" Click="RestoreCloudSelectionClick"
+                            HorizontalAlignment="Left" Margin="0,6,0,4" />
+                </StackPanel>
+                <TextBlock Text="Intentos de recuperación" FontSize="16" FontWeight="SemiBold"
+                           AutomationProperties.HeadingLevel="Level2" Margin="0,12,0,4" />
+                <ComboBox x:Name="CloudRecoveryRuns" DisplayMemberPath="Label" SelectionChanged="CloudRunChanged"
+                          AutomationProperties.Name="Intento de recuperación remota" />
+                <WrapPanel Margin="0,6,0,4">
+                    <Button x:Name="OlderCloudRuns" Content="Intentos anteriores" Click="OlderCloudRunsClick" Margin="0,0,6,4" />
+                    <Button x:Name="NewerCloudRuns" Content="Intentos recientes" Click="NewerCloudRunsClick" Margin="0,0,6,4" />
+                    <Button x:Name="CancelCloudRecovery" Content="Cancelar recuperación" Click="CancelCloudRecoveryClick" Margin="0,0,6,4" />
+                </WrapPanel>
+                <TextBlock x:Name="CloudRecoveryStatus" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                <ProgressBar x:Name="CloudRecoveryProgress" Visibility="Collapsed" Height="5" Margin="0,6"
+                             AutomationProperties.Name="Progreso de recuperación remota" />
+                <TextBox x:Name="CloudRecoveryOutput" IsReadOnly="True" TextWrapping="Wrap" Visibility="Collapsed"
+                         AutomationProperties.Name="Carpeta de salida de la recuperación" Margin="0,6,0,4" />
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

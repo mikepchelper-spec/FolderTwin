@@ -34,9 +34,23 @@ public partial class ProductCloudWindow
         ["RetryCloud"] = ("Reintentar envío", "Vuelve a intentar el envío seleccionado después de resolver su incidencia. Comprueba primero la conexión y el espacio disponible."),
         ["NewRepositoryReview"] = ("Revisión al crear", "Expande la confirmación de contraseña y la revisión de los datos necesarios para recuperar sin este equipo."),
         ["CloudHelpButton"] = ("Ayuda de nube", "Abre las explicaciones de los controles visibles. También puedes pulsar F1. Al cerrar la ayuda, vuelve el foco al control anterior."),
-        ["CloseCloudButton"] = ("Cerrar nube", "Cierra esta ventana. Los trabajos de copia local mantienen su configuración. Una recuperación iniciada en esta ventana conserva su salida parcial si se interrumpe."),
+        ["CloseCloudButton"] = ("Cerrar nube", "Cierra esta ventana. Una recuperación en curso sigue en segundo plano. Vuelve a abrir Nube para consultar el intento o cancelarlo."),
         ["CloudDates"] = ("Fecha para recuperar", "Elige uno de los puntos consultados en el repositorio remoto."),
-        ["RestoreCloud"] = ("Recuperar", "Recupera la fecha elegida en una carpeta nueva. Consulta las fechas con las credenciales y la contraseña del repositorio antes de continuar.")
+        ["RestoreCloud"] = ("Recuperar fecha completa", "Recupera todo el contenido de la fecha elegida en una carpeta nueva. Puedes consultar el progreso desde Intentos de recuperación."),
+        ["BrowseCloud"] = ("Elegir archivos o carpetas", "Descarga el catálogo verificado de esta fecha para buscar un archivo o elegir una carpeta. Las fechas antiguas ofrecen recuperación completa."),
+        ["CloudFileSearch"] = ("Buscar en la fecha", "Escribe parte del nombre de un archivo o carpeta y pulsa Intro. La búsqueda recorre las rutas del catálogo de la fecha."),
+        ["CloudSearchButton"] = ("Buscar", "Muestra las rutas que coinciden con el texto escrito. Puedes recuperar una ruta directamente desde los resultados."),
+        ["CloudFiles"] = ("Archivos y carpetas", "Selecciona la ruta que quieres recuperar. Pulsa Intro para entrar en una carpeta y Retroceso para subir un nivel."),
+        ["CloudParentFolder"] = ("Subir un nivel", "Vuelve a la carpeta anterior dentro de la fecha de respaldo."),
+        ["CloudOpenFolder"] = ("Entrar en carpeta", "Muestra los archivos y subcarpetas de la carpeta seleccionada."),
+        ["CloudPreviousFiles"] = ("Página anterior", "Muestra las rutas anteriores a las de esta página."),
+        ["CloudNextFiles"] = ("Página siguiente", "Muestra la siguiente página de archivos y carpetas."),
+        ["RestoreCloudSelection"] = ("Recuperar selección", "Recupera el archivo o la carpeta elegidos en una carpeta nueva y conserva su ruta relativa."),
+        ["CloudRecoveryRuns"] = ("Intento de recuperación", "Elige un intento para ver su estado, progreso y carpeta de salida. Puedes consultar este historial sin abrir el repositorio."),
+        ["OlderCloudRuns"] = ("Intentos anteriores", "Muestra la página siguiente de intentos anteriores."),
+        ["NewerCloudRuns"] = ("Intentos recientes", "Vuelve a una página de intentos más recientes."),
+        ["CancelCloudRecovery"] = ("Cancelar recuperación", "Solicita detener el intento elegido. La salida que ya se haya creado queda disponible para revisar. Otro intento usa una carpeta nueva."),
+        ["CloudRecoveryOutput"] = ("Carpeta de salida", "Puedes copiar esta ruta. Si el intento se interrumpe, revisa su estado antes de usar los archivos.")
     };
     private ProductHelpWindow? cloudHelpWindow;
 

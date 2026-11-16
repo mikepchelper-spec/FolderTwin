@@ -9,7 +9,7 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath $PackageDirectory).Path
 $identity = Get-Content -LiteralPath (Join-Path $root 'COMPILACION.json') -Raw | ConvertFrom-Json
 if ($identity.schemaVersion -ne 1 -or $identity.sourceRevision -cne $SourceRevision -or
-    $identity.acceptance -cne 'external' -or $identity.runtimeVersion -cne '10.0.14' -or
+    $identity.acceptance -cne 'external' -or $identity.runtimeVersion -cne '10.0.15' -or
     $identity.sourceArchiveSha256 -cne (Get-FileHash -LiteralPath (Join-Path $root 'FolderTwin-source.tar')).Hash.ToLowerInvariant()) {
     throw 'La identidad del paquete no coincide con las fuentes y runtime declarados.'
 }
@@ -28,9 +28,31 @@ $actual = @(Get-ChildItem -LiteralPath $root -File -Recurse -Force | ForEach-Obj
     [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/')
 } | Where-Object { $_ -cne 'SHA256SUMS.txt' })
 if (-not $expected.SetEquals([string[]]$actual)) { throw 'El conjunto de archivos no coincide con el manifiesto.' }
-foreach ($required in @('README.md', 'NOTAS.md', 'GUIA.md', 'SUPPORT.md', 'INSTALACION.md', 'COMPATIBILIDAD.md', 'PILOTO.md',
-    'LICENSE', 'LICENSE-dotnet.txt', 'LICENSE-dotnet-desktop.txt', 'THIRD-PARTY-NOTICES-dotnet.txt', 'FolderTwin.exe')) {
+foreach ($required in @('README.md', 'NOTAS.md', 'GUIA.md', 'SUPPORT.md', 'INSTALACION.md', 'COMPATIBILIDAD.md', 'PILOTO.md', 'RECUPERACION-NUBE.md',
+    'LICENSE', 'LICENSE-dotnet.txt', 'LICENSE-dotnet-desktop.txt', 'THIRD-PARTY-NOTICES-dotnet.txt', 'FolderTwin.exe', 'COMPONENTES.json')) {
     if (-not $expected.Contains($required)) { throw "Falta un componente obligatorio: $required" }
+}
+$inventory = Get-Content -LiteralPath (Join-Path $root 'COMPONENTES.json') -Raw | ConvertFrom-Json
+$versions = [ordered]@{
+    'FolderTwin' = @($SourceRevision, 'FolderTwin.exe')
+    'Microsoft.NETCore.App.Runtime.win-x64' = @($identity.runtimeVersion, 'coreclr.dll')
+    'Microsoft.WindowsDesktop.App.Runtime.win-x64' = @($identity.runtimeVersion, 'PresentationFramework.dll')
+}
+if ($expected.Contains('cloud-tools/kopia.exe')) { $versions.Kopia = @('0.23.1', 'cloud-tools/kopia.exe') }
+if ($expected.Contains('cloud-tools/rclone.exe')) { $versions.rclone = @('1.76.0', 'cloud-tools/rclone.exe') }
+$components = @($inventory.metadata.component) + @($inventory.components)
+if ($inventory.bomFormat -cne 'CycloneDX' -or $inventory.specVersion -cne '1.6' -or $components.Count -ne $versions.Count) {
+    throw 'El inventario de componentes no corresponde al paquete.'
+}
+foreach ($component in $components) {
+    if (!$versions.Contains($component.name)) { throw 'Componente desconocido o duplicado.' }
+    $version, $path = $versions[$component.name]
+    if ($component.version -cne $version -or $component.hashes.Count -ne 1 -or $component.hashes[0].alg -cne 'SHA-256' -or
+        $component.properties.Count -ne 1 -or $component.properties[0].value -cne $path -or
+        $component.hashes[0].content -cne (Get-FileHash -LiteralPath (Join-Path $root $path)).Hash.ToLowerInvariant()) {
+        throw "Identidad de componente distinta: $($component.name)"
+    }
+    $versions.Remove($component.name)
 }
 foreach ($report in @('ENTREGA.md', 'ENTREGA-AUTOMATIZACION.md', 'V1.md', 'PLAN.md', 'ALFA.md', 'ACEPTACION.md', 'INVESTIGACION.md')) {
     if (Test-Path -LiteralPath (Join-Path $root $report)) { throw "Informe de desarrollo mezclado con las guías: $report" }

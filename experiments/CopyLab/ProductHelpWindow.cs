@@ -1,4 +1,5 @@
 using System.IO;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -11,24 +12,44 @@ namespace CopyLab;
 
 internal static class ProductIdentity
 {
+    internal sealed record Package(string Revision, string Runtime, string ManifestHash);
+
     internal static string Read()
     {
-        string file = Path.Combine(AppContext.BaseDirectory, "COMPILACION.json");
+        var package = ReadPackage(Environment.ProcessPath);
+        return package is null ? "FolderTwin · compilación de desarrollo sin identidad de paquete verificada" :
+            "FolderTwin · candidata de software\nCompilación · " + package.Revision + "\nRuntime incluido · " + package.Runtime;
+    }
+
+    internal static Package? ReadPackage(string? executable)
+    {
+        if (executable is null || Path.GetDirectoryName(executable) is not { } root) return null;
         try
         {
-            using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read);
-            if (stream.Length > 4096) throw new InvalidDataException("Identity exceeds its limit.");
+            using var fence = new DirectoryFence(root);
+            using var manifest = WindowsProbeNative.OpenPlainFile(fence.Root, "SHA256SUMS.txt", FileAccess.Read, FileShare.Read);
+            byte[] bytes = LabInstallation.ReadManifestBytes(manifest);
+            var files = LabInstallation.ParseManifest(bytes);
+            foreach (string name in new[] { Path.GetFileName(executable), "CopyLab.dll", "CopyProbe.dll" })
+            {
+                using var file = WindowsProbeNative.OpenPlainFile(fence.Root, name, FileAccess.Read, FileShare.Read);
+                if (!files.TryGetValue(name, out var digest) || !SHA256.HashData(file).AsSpan().SequenceEqual(digest)) return null;
+            }
+            using var stream = WindowsProbeNative.OpenPlainFile(fence.Root, "COMPILACION.json", FileAccess.Read, FileShare.Read);
+            if (stream.Length is < 1 or > 4096 || !files.TryGetValue("COMPILACION.json", out var identityHash) ||
+                !SHA256.HashData(stream).AsSpan().SequenceEqual(identityHash)) return null;
+            stream.Position = 0;
             using var json = JsonDocument.Parse(stream, new JsonDocumentOptions { MaxDepth = 4 });
             string? revision = json.RootElement.GetProperty("sourceRevision").GetString();
             string? runtime = json.RootElement.GetProperty("runtimeVersion").GetString();
             if (revision is null || !Regex.IsMatch(revision, "^[0-9a-f]{40}$") ||
                 runtime is null || !Regex.IsMatch(runtime, @"^\d{1,3}\.\d{1,3}\.\d{1,3}$"))
                 throw new InvalidDataException("Invalid package identity.");
-            return "FolderTwin · candidata de software\nCompilación · " + revision + "\nRuntime incluido · " + runtime;
+            return new(revision, runtime, Convert.ToHexStringLower(SHA256.HashData(bytes)));
         }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or KeyNotFoundException)
+        catch (Exception error) when (VersionJob.Expected(error) || error is InvalidOperationException or KeyNotFoundException)
         {
-            return "FolderTwin · compilación de desarrollo sin identidad de paquete verificada";
+            return null;
         }
     }
 }
@@ -45,7 +66,7 @@ internal sealed class ProductHelpWindow : Window
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new(12)
     };
 
-    internal ProductHelpWindow((string Label, string Text)[] entries, Func<string> diagnostic)
+    internal ProductHelpWindow((string Label, string Text)[] entries, Func<string> diagnostic, Func<string>? executors = null)
     {
         Title = "FolderTwin · Ayuda y versión";
         Width = 700; Height = 620; MinWidth = 500; MinHeight = 400;
@@ -65,6 +86,13 @@ internal sealed class ProductHelpWindow : Window
             context.Children.Add(section);
         }
         Pages.Items.Add(new TabItem { Header = "Esta _pantalla", Content = new ScrollViewer { Content = context, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
+        var version = new TextBlock { Text = "Ejecutable abierto\n" + Environment.ProcessPath, TextWrapping = TextWrapping.Wrap, Margin = new(12) };
+        if (executors is not null)
+            Loaded += async (_, _) =>
+            {
+                string summary = await Task.Run(executors);
+                if (IsVisible) version.Text += "\n\n" + summary;
+            };
         Pages.Items.Add(new TabItem { Header = "_Guía de uso", Content = Guide("GUIA.md") });
         Pages.Items.Add(new TabItem { Header = "_Soporte", Content = Guide("SUPPORT.md") });
         var diagnostics = new DockPanel();
@@ -81,6 +109,7 @@ internal sealed class ProductHelpWindow : Window
         AutomationProperties.SetName(Diagnostic, "Diagnóstico local para revisar antes de compartir");
         diagnostics.Children.Add(Diagnostic);
         Pages.Items.Add(new TabItem { Header = "_Diagnóstico", Content = diagnostics });
+        Pages.Items.Add(new TabItem { Header = "_Ejecutores", Content = new ScrollViewer { Content = version, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
         Grid.SetRow(CloseButton, 2);
         CloseButton.HorizontalAlignment = HorizontalAlignment.Right;
         CloseButton.Margin = new(0, 12, 0, 0);

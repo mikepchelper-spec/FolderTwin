@@ -190,6 +190,13 @@ internal sealed class CloudRepositorySession : IDisposable
         return new(await Repository.IdentityAsync(token), destination);
     }
 
+    internal async Task<CatalogSnapshot> ReadRecoveryCatalogAsync(KopiaPoint point, CancellationToken token)
+    {
+        using var root = new DirectoryFence(scratch.FullName);
+        using var catalog = WindowsProbeNative.CreatePlainDirectory(root.Root, "catalog");
+        return await Repository.ReadCatalogAsync(point, WindowsProbeNative.VolumePath(catalog), token);
+    }
+
     public void Dispose()
     {
         gateway?.Dispose();

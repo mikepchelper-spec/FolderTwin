@@ -185,6 +185,7 @@ internal sealed partial class KopiaRepository(string executable, string config, 
         using var target = new DirectoryFence(emptyOutput);
         LabWorkspace.RequireEmpty(target.Root);
         LabWorkspace.RequireSpace(point.Bytes, LabWorkspace.AvailableSpace(target.Root));
+        observe?.Invoke(new(WorkPhase.Restoring, 0, 0));
         await RunAsync(token, "snapshot", "restore", Identifier(point.RootId, "k"), Path.GetFullPath(emptyOutput),
             "--no-overwrite-files", "--no-overwrite-directories", "--no-overwrite-symlinks",
             "--no-ignore-permission-errors", "--write-files-atomically", "--flush-files");
@@ -194,6 +195,7 @@ internal sealed partial class KopiaRepository(string executable, string config, 
             inventory.FileCount != point.Files || inventory.Bytes != point.Bytes ||
             inventory.Entries.Length - inventory.FileCount + 1 != point.Directories)
             throw new InvalidDataException("La carpeta recuperada difiere del inventario remoto. Se conserva para revisión.");
+        observe?.Invoke(new(WorkPhase.Restoring, point.Files, point.Files));
     }
 
     internal async Task<string> RunAsync(CancellationToken token, params string[] arguments)

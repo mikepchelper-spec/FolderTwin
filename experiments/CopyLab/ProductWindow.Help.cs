@@ -150,7 +150,7 @@ public partial class ProductWindow
             .Where(control => control.IsVisible && control != HelpButton)
             .Select(control => (Label: HelpLabel(control), Text: HelpFor(control))).ToArray();
 #pragma warning disable WPF0001
-        helpWindow = new ProductHelpWindow(context, BuildDiagnostic) { Owner = this, ThemeMode = ThemeMode };
+        helpWindow = new ProductHelpWindow(context, BuildDiagnostic, ReadExecutorIdentity) { Owner = this, ThemeMode = ThemeMode };
 #pragma warning restore WPF0001
         helpWindow.Closed += (_, _) => { helpWindow = null; RestoreKeyboardFocus(HelpButton); };
         helpWindow.Show();
@@ -160,6 +160,48 @@ public partial class ProductWindow
         (control is HeaderedContentControl header ? header.Header?.ToString() :
             control is ContentControl content ? content.Content?.ToString() : null)?.Replace("_", "") ??
         AutomationProperties.GetName(control);
+
+    private string ReadExecutorIdentity()
+    {
+        if (testSchedule is not null || testFolderWorkspace is not null || testPicker is not null || testMonitor is not null)
+            return "El perfil sintético no consulta las tareas de Windows.";
+        try
+        {
+            using var registry = openRegistry();
+            using var scheduler = new WindowsSchedule();
+            var listing = registry.List();
+            var tasks = new List<(string Label, ScheduleInfo Task)>();
+            int unreadable = listing.Unreadable;
+            ReadTask("Vigilancia de cambios", () => scheduler.ReadMonitor(registry));
+            foreach (var job in listing.Jobs.Where(job => job.Options.DailyAt is not null))
+                ReadTask("Horario de " + job.Options.Name, () => scheduler.ReadProductReviewed(registry, job));
+            var open = ProductIdentity.ReadPackage(Environment.ProcessPath);
+            var lines = new List<string>();
+            foreach (var group in tasks.GroupBy(item => item.Task.Executable, StringComparer.OrdinalIgnoreCase))
+            {
+                var worker = ProductIdentity.ReadPackage(group.Key);
+                string relation = worker is null ? "Identidad del ejecutor sin verificar" : open is null ?
+                    "Identidad de la ventana abierta sin verificar" : worker.ManifestHash == open.ManifestHash ?
+                    "Mismo paquete que la ventana abierta" : "Paquete distinto del abierto";
+                string labels = string.Join("\n", group.Select(item => item.Label +
+                    (item.Task.MeetsPolicy ? item.Task.Enabled ? "" : " · Detenida" : " · Requiere revisión")));
+                lines.Add(labels + "\n" + group.Key + "\n" + (worker is null ? "" : worker.Revision + "\n") + relation);
+            }
+            if (unreadable != 0) lines.Add($"{unreadable:N0} tareas o trabajos requieren revisión.");
+            return lines.Count == 0 ? "El perfil tiene el ejecutor incorporado al abrir FolderTwin. Todavía no hay tareas configuradas." :
+                string.Join("\n\n", lines);
+
+            void ReadTask(string label, Func<ScheduleInfo?> read)
+            {
+                try { if (read() is { } task) tasks.Add((label, task)); }
+                catch (Exception error) when (ProductAutomation.Expected(error)) { unreadable++; }
+            }
+        }
+        catch (Exception error) when (ProductAutomation.Expected(error))
+        {
+            return "No se pudieron consultar los ejecutores configurados. Revisa Aplicación y horarios.";
+        }
+    }
 
     private string BuildDiagnostic()
     {

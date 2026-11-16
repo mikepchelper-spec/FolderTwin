@@ -31,7 +31,7 @@ internal static class RouteThemeProbe
                     ("RouteOnAccent", "RouteAccent"), ("RouteWarning", "RouteWarningFill") })
                     if (Contrast(Brush(pair.Item1).Color, Brush(pair.Item2).Color) < 4.5)
                         throw new InvalidDataException("A Ruta text pair failed its contrast requirement.");
-                if (!ReferenceEquals(button.Background, window.Resources["RouteAccent"]) ||
+                if (!ReferenceEquals(button.Background, window.Resources[PrimaryBackground()]) ||
                     !ReferenceEquals(button.Foreground, window.Resources["RouteOnAccent"]))
                     throw new InvalidDataException("Ruta controls kept a stale theme brush.");
                 var dialog = new ExistingBackupWindow(() => throw new IOException("Theme fixture cannot open configuration.")) { Owner = window };
@@ -50,13 +50,14 @@ internal static class RouteThemeProbe
             await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
             if (Brush("RouteInk").Color != SystemColors.WindowTextColor ||
                 Brush("RoutePaper").Color != SystemColors.WindowColor ||
-                !ReferenceEquals(button.Background, window.Resources["RouteAccent"]))
+                !ReferenceEquals(button.Background, window.Resources[PrimaryBackground()]))
                 throw new InvalidDataException("The contrast palette did not use the Windows system colors.");
             Console.WriteLine("PASS Ruta light/dark text contrast, dynamic brush changes, shared recovery dialog theme and synthetic high-contrast palette.");
         }
         finally { window.Close(); }
 
         SolidColorBrush Brush(string key) => (SolidColorBrush)window.Resources[key];
+        string PrimaryBackground() => button.IsMouseOver || button.IsKeyboardFocused ? "RouteAccentHover" : "RouteAccent";
     }
 
     private static double Contrast(Color first, Color second)

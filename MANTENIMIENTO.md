@@ -1,5 +1,7 @@
 # Mantenimiento y entregas experimentales
 
+Revisa las dependencias, las huellas de los componentes incluidos y las reglas de acceso antes de preparar otro ZIP. Registra la decisión junto a la evidencia del paquete. [Distribución y permisos](SEGURIDAD-DISTRIBUCION.md)
+
 Este procedimiento no inicia trabajos sobre datos personales ni autoriza pruebas de energía, reinicio o sesión del equipo habitual. La publicación es experimental: NTFS local, tres modos y retención manual. Los pendientes de [V1.md](V1.md) y [PILOTO.md](PILOTO.md) no se aprueban por publicar.
 
 ## Recibir y clasificar

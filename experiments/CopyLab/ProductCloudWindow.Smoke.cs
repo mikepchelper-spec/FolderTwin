@@ -24,13 +24,21 @@ public partial class ProductCloudWindow
             ProductJobRegistry Open() => new(registryPath);
             ProductJobRegistry OpenClean() => new(clean);
             int sessions = 0;
+            using var recoveryGate = new ManualResetEventSlim(initialState: true);
             CloudRepositorySession Session(CloudDestination address, CloudCredentials credentials)
             {
+                if (!recoveryGate.Wait(TimeSpan.FromSeconds(20))) throw new IOException("The synthetic recovery gate timed out.");
                 sessions++;
                 return new(kopia, address, credentials, lab: true, () => rclone, remote);
             }
             string input = Path.Combine(source, "archivo.txt");
             File.WriteAllText(input, "Primera fecha sintética de Ruta");
+            string nested = Directory.CreateDirectory(Path.Combine(source, "carpeta")).FullName;
+            Directory.CreateDirectory(Path.Combine(nested, "vacía"));
+            string nestedFile = Path.Combine(nested, "marcado.txt");
+            File.WriteAllText(nestedFile, "Marca sintética");
+            byte[] marker = [255, 33, 0, 10, 0];
+            File.WriteAllBytes(nestedFile + ":Zone.Identifier", marker);
             byte[] first = SHA256.HashData(File.ReadAllBytes(input));
             ProductJob job;
             using (var registry = Open())
@@ -90,18 +98,64 @@ public partial class ProductCloudWindow
                 window.CloudDates.SelectedIndex = i;
                 var before = Directory.GetDirectories(output);
                 await ClickAsync(window, window.RestoreCloud);
+                await WaitForRecoveryAsync(window);
                 string? created = Directory.GetDirectories(output).Except(before, StringComparer.Ordinal).SingleOrDefault();
-                Check(window.CloudStatus.Text.Contains("Recuperación completada", StringComparison.Ordinal) && created is not null,
-                    window.CloudStatus.Text);
+                Check(window.CloudRecoveryStatus.Text.Contains("Recuperación completada", StringComparison.Ordinal) && created is not null,
+                    window.CloudRecoveryStatus.Text);
                 Check(SHA256.HashData(File.ReadAllBytes(Path.Combine(created!, "archivo.txt"))).AsSpan()
                     .SequenceEqual(i == 0 ? second : first), "Ruta restored the wrong bytes.");
             }
+            await ClickAsync(window, window.BrowseCloud);
+            Check(window.CloudCatalogPanel.IsVisible && window.CloudFiles.Items.Count == 2, "The verified remote catalog did not expose its root.");
+            window.CloudFileSearch.Text = "marcado";
+            await ClickAsync(window, window.CloudSearchButton);
+            Check(window.CloudFiles.Items.Count == 1 && window.CloudFiles.SelectedItem is VersionEntry { IsDirectory: false },
+                "Cloud catalog search did not select the matching file.");
+            await ClickAsync(window, window.RestoreCloudSelection);
+            var fileOnly = await WaitForRecoveryAsync(window);
+            Check(Directory.GetFiles(fileOnly.Request.Output, "*", SearchOption.AllDirectories).Length == 1 &&
+                File.ReadAllBytes(Path.Combine(fileOnly.Request.Output, "carpeta", "marcado.txt") + ":Zone.Identifier").AsSpan().SequenceEqual(marker),
+                "Selected cloud recovery did not preserve the file and its provenance.");
+            window.CloudFileSearch.Text = "carpeta";
+            await ClickAsync(window, window.CloudSearchButton);
+            window.CloudFiles.SelectedItem = window.CloudFiles.Items.OfType<VersionEntry>().Single(entry => entry.Path == "carpeta");
+            recoveryGate.Reset();
+            Task<CloudRecoveryResult> detached;
+            Guid running;
+            try
+            {
+                await ClickAsync(window, window.RestoreCloudSelection);
+                detached = window.testRecoveryTask ?? throw new InvalidDataException("The recovery did not leave the UI.");
+                using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                do
+                {
+                    await window.RefreshRecoveriesAsync();
+                    if (window.recoveryRuns.FirstOrDefault() is { State: CloudRecoveryState.Running } active)
+                    { running = active.Request.Id; break; }
+                    await Task.Delay(30, deadline.Token);
+                } while (true);
+                window.Close();
+                window = new ProductCloudWindow(OpenClean, null, () => kopia, _ => { }, Session, testOutput: () => output);
+                window.Show();
+                await window.RefreshRecoveriesAsync(running);
+                Check(window.CloudRecoveryRuns.SelectedItem is RecoveryChoice choice && choice.Id == running &&
+                    window.CloudRecoveryProgress.IsVisible && window.CancelCloudRecovery.IsEnabled &&
+                    window.CloudRecoveryOutput.Text.Length > 0 && !detached.IsCompleted, "Reopening did not show the same running recovery and its controls.");
+            }
+            finally { recoveryGate.Set(); }
+            Check((await detached.WaitAsync(TimeSpan.FromSeconds(40))).State == CloudRecoveryState.Completed,
+                "Closing the cloud window stopped its worker.");
+            await window.RefreshRecoveriesAsync(running);
+            var folderOnly = window.recoveryRuns.Single(run => run.Request.Id == running);
+            Check(folderOnly.State == CloudRecoveryState.Completed &&
+                Directory.Exists(Path.Combine(folderOnly.Request.Output, "carpeta", "vacía")) &&
+                !File.Exists(Path.Combine(folderOnly.Request.Output, "archivo.txt")), "Selected folder after reopening differs from the reviewed tree.");
             using (var registry = OpenClean())
                 Check(registry.List().Jobs.Length == 0 && registry.LastCloudRestore(repository) is not null,
                     "A clean recovery profile lost its verification record or created a job.");
             await CheckSelectedTransfersAsync();
             passed = true;
-            Console.WriteLine("PASS packaged Ruta confirms the recovery password, reopens the new repository, controls the selected cloud ticket and recovers two dates from an empty profile.");
+            Console.WriteLine("PASS Ruta confirms the recovery password, controls the selected cloud ticket, restores two dates and selected file/folder with metadata from an empty profile, and shows the same running recovery after closing/reopening.");
         }
         finally
         {
@@ -114,6 +168,13 @@ public partial class ProductCloudWindow
         }
 
         string Folder(string name) => Directory.CreateDirectory(Path.Combine(fixture.Root, name)).FullName;
+        static async Task<CloudRecoveryView> WaitForRecoveryAsync(ProductCloudWindow view)
+        {
+            var worker = view.testRecoveryTask ?? throw new InvalidDataException("No synthetic recovery worker started.");
+            Check((await worker.WaitAsync(TimeSpan.FromSeconds(40))).State == CloudRecoveryState.Completed, "Synthetic recovery failed.");
+            await view.RefreshRecoveriesAsync();
+            return view.recoveryRuns[0];
+        }
         void Fill(ProductCloudWindow view, CloudProvider provider)
         {
             view.Provider.SelectedIndex = (int)provider;

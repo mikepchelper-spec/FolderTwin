@@ -4,23 +4,15 @@
 
 **Vista previa experimental para Windows 11 x64: usa solo datos sintéticos y carpetas desechables. No es una v1 definitiva ni está aceptada para respaldos personales.**
 
-**RC2 está publicada y verificada.** Corrige fallos de confinamiento del caché SQLite, coordinación de trabajos, estado de incidencias y otros casos de la auditoría. RC1 sigue retirada y conserva etiqueta, fuentes y evidencia histórica. Si la probaste, conserva configuración, diarios y respaldos sintéticos. El piloto y las validaciones externas siguen pendientes. [Publicación de RC2](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.2) · [Aviso de RC1](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.1)
+| Entrega | Funciones | Evidencia |
+| --- | --- | --- |
+| RC2 pública | Tres modos locales, respaldo a demanda u horario, recuperación y retención manual | [Descarga experimental](https://github.com/mikepchelper-spec/FolderTwin/releases/tag/v1.0.0-rc.2) · [Aceptación](ENTREGA-RC2.md) |
+| Nube local `c90f013` | Ruta, vigilancia al detectar cambios y tercera copia cifrada con Kopia | [Paquete anterior y ensayos de nube](NUBE.md) |
+| Correcciones de auditoría en preparación | Recuperación local independiente, conservación de Zone.Identifier, consultas y recuperación remota por archivo o carpeta, registro de recuperación y control de integridad | [Seguimiento y aceptación de desarrollo](CORRECCIONES-AUDITORIA.md) |
 
-La candidata de interfaz `7c568d6` añadió primer uso, ayuda contextual, diagnóstico revisable y acceso a la salida recuperada. Su informe conserva las pruebas desde paquete y las dos compilaciones reproducibles. [Aceptación histórica de interfaz](ENTREGA-INTERFAZ.md).
+Extrae el ZIP de la entrega que vas a probar y abre **FolderTwin.exe**. Usa **Ayuda y versión** para comprobar el commit. En la candidata de correcciones, **Ejecutores** identifica también la versión que usan las tareas de Windows. [Guía de uso](GUIA.md) · [Recuperación de emergencia](RECUPERACION-NUBE.md)
 
-La revisión local **Ruta** muestra las carpetas del trabajo como un trayecto de origen a destino y mantiene las acciones principales a la vista. Centro, Mesa, Archivo y Pulso quedan en el [plan de interfaz](PLAN.md). El acceso local **FolderTwin candidata** apunta a `598fbc7`. Consulta **Ayuda y versión** para identificar la compilación.
-
-## Leer primero
-
-La candidata local incorpora la vigilancia continua. El código admite altas, ediciones, renombrados y bajas acotados en acumulativo y espejo y conserva la comparación completa periódica. En la campaña anterior, `3cb9c6a` confirmó una edición de 329.000 archivos en 20,1 s en acumulativo con un exclusivo del destino, 31,2 s en versionado y 24,8 s en espejo. `598fbc7` pasó el traspaso y la recuperación nativos del monitor y tiene pendiente la prueba con un VHDX lleno. [Matriz de automatización](AUTOMATIZACION.md) · [Evidencia de paquetes locales](ENTREGA-AUTOMATIZACION.md) · [Rendimiento cotidiano](RENDIMIENTO.md).
-
-El paquete local reproducible `335a98a` validó cambios y recuperación entre la SSD C: y el HDD D: con 4.096 archivos en los tres modos y con 329.000 en espejo. La simulación de tres trabajos con 3.024 intentos cada uno comprobó Ruta, bandeja y reserva de nuevas ejecuciones. [Mediciones y pruebas desde la extracción](RENDIMIENTO.md).
-
-La revisión de capacidad mide el crecimiento con los tres modos vigilados entre C: y D: y comprueba la recuperación tras un fallo de espacio inyectado. Ruta, historial y bandeja muestran la incidencia de espacio por trabajo. [Mediciones de capacidad y retención manual](CAPACIDAD.md).
-
-La candidata local de nube `c90f013` añade una tercera copia cifrada en Kopia a los tres modos de respaldo. Ruta configura el envío y permite recuperar fechas desde un perfil vacío. La aceptación usa S3 y almacenamiento rclone de laboratorio. Backblaze B2, AWS S3, Filen y MEGA conservan sus pruebas con cuentas reales pendientes. [Candidata y matriz de pruebas](NUBE.md).
-
-La auditoría integral del 14 de noviembre abrió un goal de correcciones. El desarrollo incorpora aislamiento de fallos de nube, estado remoto en Ruta y bandeja, controles por envío, recuperación local independiente, compactación recuperable del registro, purga de metadatos e historiales paginados. La aceptación de desarrollo y los hitos pendientes están en el [seguimiento de correcciones](CORRECCIONES-AUDITORIA.md). El paquete final de estas correcciones todavía no está aceptado.
+Los ensayos anteriores de interfaz, vigilancia, rendimiento y capacidad conservan sus resultados junto a la revisión que se probó. [Interfaz](ENTREGA-INTERFAZ.md) · [Automatización](ENTREGA-AUTOMATIZACION.md) · [Rendimiento](RENDIMIENTO.md) · [Capacidad](CAPACIDAD.md)
 
 Esta entrega es **experimental y solo para datos sintéticos y carpetas desechables**. Para participar: [soporte](SUPPORT.md), [contribuciones](CONTRIBUTING.md), [reporte privado de vulnerabilidades](SECURITY.md) y [mantenimiento y futuras entregas](MANTENIMIENTO.md). No adjuntes respaldos, credenciales, configuraciones, logs completos ni rutas personales a las incidencias.
 

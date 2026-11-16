@@ -66,6 +66,7 @@ public partial class ProductCloudWindow : Window
             return Task.CompletedTask;
         });
         Closed += (_, _) => closed.Cancel();
+        InitializeRecoveryTracking();
     }
 
     private void ProviderChanged(object sender, SelectionChangedEventArgs e)
@@ -174,42 +175,6 @@ public partial class ProductCloudWindow : Window
         CloudDates.SelectedIndex = points.Length == 0 ? -1 : 0;
         CloudStatus.Text = points.Length == 0 ? "Este repositorio aún no contiene fechas de FolderTwin." : $"{points.Length} fechas disponibles.";
     });
-
-    private async void RestoreClick(object sender, RoutedEventArgs e) => await RunAsync(async token =>
-    {
-        if (readConnection is not { } reviewed || CloudDates.SelectedItem is not DateChoice selected || Destination() != reviewed.Destination)
-            throw new InvalidDataException("Consulta las fechas del repositorio y elige la que quieres recuperar.");
-        string? selectedParent = testOutput?.Invoke();
-        if (selectedParent is null)
-        {
-            var dialog = new OpenFolderDialog { Title = "Elige dónde crear la carpeta recuperada", AddToRecent = false, DereferenceLinks = false };
-            if (dialog.ShowDialog(this) != true) return;
-            selectedParent = dialog.FolderName;
-        }
-        string parent = Path.TrimEndingDirectorySeparator(Path.GetFullPath(selectedParent));
-        var credentials = Credentials();
-        string output = await Task.Run(async () =>
-        {
-            using var session = Session(reviewed.Destination, credentials);
-            if (await session.OpenAsync(create: false, readOnly: true, token) != reviewed)
-                throw new InvalidDataException("El repositorio cambió. Vuelve a consultar sus fechas.");
-            var observed = (await session.Repository.ListAsync(token)).SingleOrDefault(point => point == selected.Recovery) ??
-                throw new InvalidDataException("La fecha cambió o ya no está disponible.");
-            using var root = new DirectoryFence(parent);
-            string name = $"FolderTwin-Nube-{Guid.NewGuid():N}";
-            string target = Path.Combine(WindowsProbeNative.VolumePath(root.Root), name);
-            using var registry = openRegistry();
-            var local = registry.List();
-            if (local.Unreadable != 0 || local.Jobs.Any(item => LocalJobRoots.Overlap(item.Source.VolumePath, target) ||
-                LocalJobRoots.Overlap(item.Destination.LastVolumePath, target)))
-                throw new InvalidDataException("Elige una carpeta separada de los trabajos locales.");
-            using var folder = WindowsProbeNative.CreatePlainDirectory(root.Root, name);
-            await session.Repository.RestoreAsync(observed.Point, target, token);
-            registry.RecordCloudRestore(reviewed.Repository, observed.Point);
-            return Path.Combine(parent, name);
-        }, token);
-        CloudStatus.Text = $"Recuperación completada y autenticada por Kopia. {output}";
-    }, TimeSpan.FromHours(2));
 
     private CloudRepositorySession Session(CloudDestination destination, CloudCredentials credentials) =>
         testSession?.Invoke(destination, credentials) ?? new(kopia(), destination, credentials, rclone: ProductCloudWorker.ReviewedRclone);

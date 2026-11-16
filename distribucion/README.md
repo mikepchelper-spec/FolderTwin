@@ -7,9 +7,12 @@ Extrae **todo** este paquete en una carpeta nueva y abre **FolderTwin.exe**. Inc
 - [Instalación, actualización y retirada](INSTALACION.md).
 - [Funciones, cambios y límites](NOTAS.md).
 - [Recuperación de formatos anteriores](COMPATIBILIDAD.md).
+- [Tercera copia y recuperación de emergencia](RECUPERACION-NUBE.md).
 - [Procedimiento del piloto](PILOTO.md).
 
 **COMPILACION.json** identifica el commit de este paquete, su runtime y el hash del archivo de fuentes incluido. **SHA256SUMS.txt** enumera el contenido distribuido. Ninguno acredita una firma del editor ni durabilidad física.
+
+**COMPONENTES.json** identifica FolderTwin, los runtimes y las herramientas de nube distribuidas, con sus versiones, licencias y hashes de archivos representativos.
 
 El informe de aceptación se produce después de compilar y probar el paquete y se entrega por separado, con el hash del ZIP cuando esté disponible. Comprueba que el informe identifica el mismo commit y manifiesto. Los informes dentro del archivo de fuentes documentan el desarrollo.
 

@@ -46,7 +46,8 @@ internal sealed partial class KopiaRepository
         using var output = new DirectoryFence(emptyOutput);
         LabWorkspace.RequireEmpty(output.Root);
         string root = WindowsProbeNative.VolumePath(output.Root);
-        using (WindowsProbeNative.CreatePlainDirectory(output.Root, CloudCatalog.RecoveryDirectory)) { }
+        using (var hidden = WindowsProbeNative.CreatePlainDirectory(output.Root, CloudCatalog.RecoveryDirectory, writeAttributes: true))
+            File.SetAttributes(hidden, File.GetAttributes(hidden) | FileAttributes.Hidden);
         string staging = Path.Combine(root, CloudCatalog.RecoveryDirectory);
         using var stage = new DirectoryFence(staging);
         observe?.Invoke(new(WorkPhase.Preparing, 0, 0));
@@ -88,10 +89,12 @@ internal sealed partial class KopiaRepository
             WindowsProbeNative.RequireSupportedData(source.Root, "carpeta recuperada");
         foreach (string directory in directories)
         {
+            token.ThrowIfCancellationRequested();
             using var child = new DirectoryFence(Path.Combine(tree, directory));
             WindowsProbeNative.RequireSupportedData(child.Root, directory);
         }
         // Check every downloaded file before exposing any under the final paths.
+        byte[] buffer = new byte[64 * 1024];
         for (int index = 0; index < files.Length; index++)
         {
             token.ThrowIfCancellationRequested();
@@ -100,13 +103,16 @@ internal sealed partial class KopiaRepository
             string path = Path.Combine(tree, file.RelativePath);
             using var fence = new DirectoryFence(tree, path);
             using var input = WindowsProbeNative.OpenPlainFile(fence.Parent(path), path, FileAccess.ReadWrite, FileShare.None);
-            RequireData(input, file, allowZone: false);
+            RequireData(input, file, allowZone: false, buffer, token);
             file.Metadata?.Apply(input.SafeFileHandle);
             input.Flush(flushToDisk: true);
             file.Metadata?.RequireMatch(input.SafeFileHandle);
         }
         foreach (string directory in directories)
+        {
+            token.ThrowIfCancellationRequested();
             FolderBatch.WithDirectories(output.Root, directory, () => true);
+        }
         for (int index = 0; index < files.Length; index++)
         {
             token.ThrowIfCancellationRequested();
@@ -116,7 +122,7 @@ internal sealed partial class KopiaRepository
             using var fence = new DirectoryFence(tree, path);
             using var input = WindowsProbeNative.OpenPlainFile(fence.Parent(path), path, FileAccess.Read, FileShare.Read,
                 rename: true, writeAttributes: file.Metadata?.CreationUtc is not null);
-            RequireData(input, file, file.Metadata?.ZoneData is not null);
+            RequireData(input, file, file.Metadata?.ZoneData is not null, buffer, token);
             file.Metadata?.RequireMatch(input.SafeFileHandle);
             FolderBatch.WithDirectories(output.Root, Path.GetDirectoryName(file.RelativePath) ?? "", parent =>
             {
@@ -144,10 +150,20 @@ internal sealed partial class KopiaRepository
         observe?.Invoke(new(WorkPhase.Restoring, files.Length, files.Length));
     }
 
-    private static void RequireData(FileStream input, BatchFile file, bool allowZone)
+    private static void RequireData(FileStream input, BatchFile file, bool allowZone, byte[] buffer, CancellationToken token)
     {
         WindowsProbeNative.RequireSupportedData(input.SafeFileHandle, file.RelativePath, allowZone);
-        if (input.Length != file.Length || !SHA256.HashData(input).AsSpan().SequenceEqual(file.Hash))
+        if (input.Length != file.Length)
+            throw new InvalidDataException("El tamaño recuperado no coincide con el catálogo.");
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        int count;
+        while ((count = input.Read(buffer)) != 0)
+        {
+            token.ThrowIfCancellationRequested();
+            hash.AppendData(buffer, 0, count);
+        }
+        token.ThrowIfCancellationRequested();
+        if (!hash.GetHashAndReset().AsSpan().SequenceEqual(file.Hash))
             throw new InvalidDataException("El contenido recuperado no coincide con su SHA-256. Se conserva para revisión.");
     }
 }

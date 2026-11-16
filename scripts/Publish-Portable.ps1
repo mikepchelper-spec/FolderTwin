@@ -16,7 +16,7 @@ $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $output = [IO.Path]::TrimEndingDirectorySeparator($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory))
 $sourceFile = if ($SourceArchive) { (Resolve-Path -LiteralPath $SourceArchive).Path }
 $work = $output + '.build'
-$runtimeVersion = '10.0.14'
+$runtimeVersion = '10.0.15'
 if ($CloudRcloneArchive -and (!$CloudKopiaArchive -or !$CloudRcloneLicense) -or $CloudRcloneLicense -and !$CloudRcloneArchive) {
     throw 'Para distribuir rclone, indica los ZIP de Kopia y rclone y la licencia oficial de rclone.'
 }
@@ -93,7 +93,7 @@ try {
         Copy-Item -LiteralPath $rclone -Destination $tools.FullName
         Copy-Item -LiteralPath $license -Destination (Join-Path $tools.FullName 'LICENSE-rclone.txt')
     }
-    foreach ($guide in @('GUIA.md', 'SUPPORT.md', 'NOTAS.md', 'PILOTO.md', 'COMPATIBILIDAD.md', 'INSTALACION.md', 'global.json')) {
+    foreach ($guide in @('GUIA.md', 'SUPPORT.md', 'NOTAS.md', 'PILOTO.md', 'COMPATIBILIDAD.md', 'INSTALACION.md', 'RECUPERACION-NUBE.md', 'global.json')) {
         Copy-Item -LiteralPath (Join-Path $repo $guide) -Destination $output
     }
     Copy-Item -LiteralPath (Join-Path $repo 'distribucion/README.md') -Destination (Join-Path $output 'README.md')
@@ -134,6 +134,31 @@ try {
         acceptance = 'external'
     }
     [IO.File]::WriteAllText((Join-Path $output 'COMPILACION.json'), ($identity | ConvertTo-Json) + "`n")
+
+    function PackageComponent($Type, $Name, $Version, $License, $Path) {
+        [ordered]@{
+            type = $Type
+            name = $Name
+            version = $Version
+            hashes = @([ordered]@{ alg = 'SHA-256'; content = (Get-FileHash -LiteralPath (Join-Path $output $Path)).Hash.ToLowerInvariant() })
+            licenses = @([ordered]@{ expression = $License })
+            properties = @([ordered]@{ name = 'foldertwin:representative-file'; value = $Path })
+        }
+    }
+    $components = @(
+        PackageComponent 'framework' 'Microsoft.NETCore.App.Runtime.win-x64' $runtimeVersion 'MIT' 'coreclr.dll'
+        PackageComponent 'framework' 'Microsoft.WindowsDesktop.App.Runtime.win-x64' $runtimeVersion 'MIT' 'PresentationFramework.dll'
+        if ($CloudKopiaArchive) { PackageComponent 'application' 'Kopia' '0.23.1' 'Apache-2.0' 'cloud-tools/kopia.exe' }
+        if ($CloudRcloneArchive) { PackageComponent 'application' 'rclone' '1.76.0' 'MIT' 'cloud-tools/rclone.exe' }
+    )
+    $inventory = [ordered]@{
+        bomFormat = 'CycloneDX'
+        specVersion = '1.6'
+        version = 1
+        metadata = [ordered]@{ component = (PackageComponent 'application' 'FolderTwin' $SourceRevision 'GPL-3.0-or-later' 'FolderTwin.exe') }
+        components = $components
+    }
+    [IO.File]::WriteAllText((Join-Path $output 'COMPONENTES.json'), ($inventory | ConvertTo-Json -Depth 10) + "`n")
 
     [string[]]$paths = Get-ChildItem -LiteralPath $output -File -Recurse -Force | ForEach-Object {
         $_.FullName.Substring($output.Length + 1).Replace('\', '/')

@@ -24,11 +24,11 @@ Fuentes primarias del contrato nativo: [BackupRead](https://learn.microsoft.com/
 
 Los envíos nuevos usan layout 2: `.foldertwin-remote-catalog.jsonl` contiene los bytes exactos del catálogo confirmado, y `data/` contiene el árbol. No hay un segundo catálogo autoritativo. Las etiquetas `ft-v2-job`, `ft-v2-generation`, `ft-catalog` y `ft-catalog-bytes` enlazan trabajo, fecha, hash y tamaño. El inventario remoto incluye un archivo adicional y dos directorios adicionales contando la raíz y `data/`. Los lectores anteriores buscan `ft-job`: no enumeran estos puntos como si pudieran restaurarlos completamente.
 
-El lector descarga primero el catálogo, comprueba hash, esquema y totales y recupera todo o un archivo/carpeta a `.foldertwin-cloud-staging` dentro de una salida nueva. Rechaza rutas, tamaños o contenidos distintos. Aplica y verifica metadatos en staging antes de promover sin sobrescribir. Cancelar o fallar conserva staging y cualquier salida parcial para revisión. El seguimiento durable y la selección desde WPF de A14-08 siguen pendientes. La API ya informa fases y recuentos.
+El lector descarga primero el catálogo, comprueba hash, esquema y totales y recupera todo o un archivo/carpeta a `.foldertwin-cloud-staging` dentro de una salida nueva. Rechaza rutas, tamaños o contenidos distintos. Aplica y verifica metadatos en staging antes de promover sin sobrescribir. Cancelar o fallar conserva staging y cualquier salida parcial para revisión. El ejecutor informa fases y recuentos. La interfaz permite elegir archivo o carpeta y conserva el estado del intento entre aperturas.
 
 Los puntos remotos anteriores mantienen recuperación completa. Un envío preparado en layout 0 conserva ese formato al reintentarse; ese formato rechaza puntos que requieran una marca. La prueba comprueba además los bytes exactos de serialización de los registros anteriores, que forman parte de su cadena de hashes.
 
-Con Kopia independiente se puede descargar el sobre completo identificado por las etiquetas nuevas. **Kopia por sí solo no vuelve a aplicar la marca**: conserva `data/` y el catálogo, evita abrir los ejecutables descargados y usa un lector FolderTwin compatible para recuperar todos los metadatos. La guía de emergencia completa se cerrará junto a A14-08. No tratar `data/` como una recuperación íntegra sin esa comprobación.
+Con Kopia independiente se puede descargar el sobre completo identificado por las etiquetas nuevas. Conserva `data/` y el catálogo. El lector de FolderTwin verifica y vuelve a aplicar la marca antes de entregar los archivos. [Guía de emergencia](../../RECUPERACION-NUBE.md)
 
 ## Aceptación de desarrollo
 

@@ -28,10 +28,10 @@ internal static class WindowsProbeNative
         return OpenRelative(parent, name, 0x01 | 0x80, FileShare.ReadWrite, 3, directory: true);
     }
 
-    internal static SafeFileHandle CreatePlainDirectory(SafeFileHandle parent, string name)
+    internal static SafeFileHandle CreatePlainDirectory(SafeFileHandle parent, string name, bool writeAttributes = false)
     {
         DirectoryFence.CheckName(name);
-        return OpenRelative(parent, name, 0x01 | 0x80, FileShare.ReadWrite, 2, directory: true);
+        return OpenRelative(parent, name, 0x01 | 0x80 | (writeAttributes ? 0x100u : 0), FileShare.ReadWrite, 2, directory: true);
     }
 
     internal static FileStream OpenPlainFile(SafeFileHandle parent, string path, FileAccess access, FileShare share,
