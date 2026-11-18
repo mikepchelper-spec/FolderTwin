@@ -27,7 +27,7 @@
       </a>
       <a class="btn btn--donate" href="https://www.paypal.me/atlaspcsupport" target="_blank" rel="noopener noreferrer" title="Apoya el proyecto con una donación vía PayPal">
         <span class="btn__dot" aria-hidden="true"></span>
-        <span>Invitar a donar · PayPal ↗</span>
+        <span>Invítame un café · PayPal ↗</span>
       </a>
     </nav>
   </header>
@@ -42,7 +42,7 @@
         </p>
         <div class="action-row">
           <a class="btn btn--primary" href="https://github.com/mikepchelper-spec/FolderTwin">Explorar en GitHub →</a>
-          <a class="btn btn--donate" href="https://www.paypal.me/atlaspcsupport" target="_blank" rel="noopener noreferrer">Apoyar vía PayPal ↗</a>
+          <a class="btn btn--donate" href="https://www.paypal.me/atlaspcsupport" target="_blank" rel="noopener noreferrer">Invítame un café ↗</a>
           <a class="btn" href="https://github.com/mikepchelper-spec/FolderTwin/blob/main/HISTORIAL.md">Leer historial →</a>
         </div>
         <p class="notice" role="note">
@@ -51,31 +51,13 @@
       </div>
 
       <figure class="diagram-frame">
-        <svg viewBox="0 0 460 368" role="img" aria-labelledby="route-diagram-title" fetchpriority="high">
-          <title id="route-diagram-title">Esquema de ruta 3-2-1 verificada de FolderTwin</title>
-          <rect x="16" y="16" width="428" height="92" rx="6" fill="var(--color-paper)" stroke="var(--color-rule-2)" stroke-width="1.2" />
-          <text x="36" y="46" fill="var(--color-muted)" font-family="var(--font-body)" font-size="11" font-weight="600" letter-spacing="1.1">ORIGEN NTFS · SOLO LECTURA</text>
-          <text x="36" y="72" fill="var(--color-ink)" font-family="var(--font-display)" font-size="18" font-weight="700">Cerca por handle y FILE_ID_INFO</text>
-          <text x="36" y="93" fill="var(--color-ink-2)" font-family="var(--font-outlier)" font-size="11.5">VOLUME_NAME_GUID · Zone.Identifier ≤ 16 KiB</text>
-
-          <line x1="230" y1="108" x2="230" y2="138" stroke="var(--color-accent)" stroke-width="2" stroke-dasharray="4 4" />
-          <polygon points="225,134 235,134 230,142" fill="var(--color-accent)" />
-
-          <rect x="16" y="144" width="428" height="102" rx="6" fill="var(--color-paper)" stroke="var(--color-accent)" stroke-width="1.6" />
-          <text x="36" y="173" fill="var(--color-accent)" font-family="var(--font-body)" font-size="11" font-weight="600" letter-spacing="1.1">DESTINO DEDICADO · FTVERS03</text>
-          <text x="36" y="199" fill="var(--color-ink)" font-family="var(--font-display)" font-size="18" font-weight="700">Objetos SHA-256 + doble manifiesto</text>
-          <text x="36" y="220" fill="var(--color-ink-2)" font-family="var(--font-outlier)" font-size="11.5">manifests ×2 (≤ 512 MiB) · FTCAT001 · staging limpio</text>
-          <text x="36" y="236" fill="var(--color-muted)" font-family="var(--font-body)" font-size="11.5">Acumulativo · Versionado · Espejo protegido</text>
-
-          <line x1="230" y1="246" x2="230" y2="274" stroke="var(--color-rule-2)" stroke-width="1.5" stroke-dasharray="4 4" />
-          <polygon points="225,270 235,270 230,278" fill="var(--color-ink-2)" />
-
-          <rect x="16" y="280" width="428" height="72" rx="6" fill="var(--color-paper)" stroke="var(--color-rule-2)" stroke-width="1.2" />
-          <text x="36" y="307" fill="var(--color-muted)" font-family="var(--font-body)" font-size="11" font-weight="600" letter-spacing="1.1">TERCERA COPIA CIFRADA OPCIONAL</text>
-          <text x="36" y="332" fill="var(--color-ink)" font-family="var(--font-display)" font-size="17" font-weight="700">Kopia 0.23.1 + puente local rclone 1.76.0</text>
-        </svg>
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="./hero-dark.png">
+          <source media="(prefers-color-scheme: light)" srcset="./hero-light.png">
+          <img src="./hero-light.png" width="2248" height="1604" fetchpriority="high" alt="Ventana principal Ruta de respaldo de FolderTwin en Windows 11">
+        </picture>
         <figcaption class="diagram-caption">
-          Cada punto confirmado exige relectura de hashes, doble réplica del catálogo y confirmación binaria antes de exponerse a recuperación o envío remoto.
+          Vista principal <strong>Ruta de respaldo</strong> en Windows&nbsp;11: origen verificado por identidad de volumen, almacén local dedicado y estado en vivo de la tercera copia cifrada.
         </figcaption>
       </figure>
     </section>
@@ -203,16 +185,16 @@ dotnet run --project tests/CopyProbe -c Release -- --product-store</code></pre>
       </div>
 
       <div class="support-panel">
-        <h3 class="support-panel__title">Invita a donar y apoya el proyecto</h3>
+        <h3 class="support-panel__title">Apoya el desarrollo independiente</h3>
         <p class="support-panel__text">
-          Si valoras las herramientas locales transparentes para Windows, tu aporte voluntario vía PayPal ayuda directamente a sostener el tiempo de ingeniería, las auditorías de recuperación y el laboratorio de pruebas en discos físicos y nube real.
+          Si valoras las herramientas locales transparentes para Windows, puedes invitar un café o hacer una donación voluntaria vía PayPal para respaldar el tiempo de ingeniería, las auditorías de recuperación y el laboratorio de pruebas en discos físicos y nube real.
         </p>
         <div class="action-row">
-          <a class="btn btn--primary" href="https://www.paypal.me/atlaspcsupport" target="_blank" rel="noopener noreferrer">Donar vía PayPal (atlaspcsupport) ↗</a>
+          <a class="btn btn--primary" href="https://www.paypal.me/atlaspcsupport" target="_blank" rel="noopener noreferrer">Donar con PayPal ↗</a>
           <a class="btn" href="https://github.com/mikepchelper-spec/FolderTwin/blob/main/PLAN.md">Revisar plan técnico →</a>
         </div>
         <p class="support-panel__meta">
-          Enlace directo verificado del panel Atlas PC Support: <code>paypal.me/atlaspcsupport</code>
+          PayPal de Atlas PC Support: <code>paypal.me/atlaspcsupport</code>
         </p>
       </div>
     </section>

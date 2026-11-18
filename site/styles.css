@@ -303,16 +303,13 @@ a {
   font-weight: 600;
 }
 
-/* Tier-B hand-built SVG figure (no fake browser/OS chrome) */
+/* Real WPF screenshot figure (no fake browser/OS chrome) */
 .diagram-frame {
   margin: 0;
-  padding: var(--space-lg);
-  background-color: var(--color-paper-2);
-  border: var(--rule-hairline);
-  border-radius: var(--radius-md);
+  padding: 0;
 }
 
-.diagram-frame svg {
+.diagram-frame img {
   display: block;
   width: 100%;
   height: auto;
