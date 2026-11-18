@@ -24,7 +24,7 @@
       "attributes": {
         "label": "Versión o commit del paquete",
         "description": "Consulta COMPILACION.json o la entrega descargada. No pegues el archivo completo.",
-        "placeholder": "v1.0.0-rc.1 / e4e87b8"
+        "placeholder": "v1.0.0-rc.2 / <commit>"
       },
       "validations": {
         "required": true

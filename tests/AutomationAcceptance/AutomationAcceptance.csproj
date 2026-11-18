@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>AutomationAcceptance</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Include="FolderTwin.Core" />
+    <Compile Include="../../src/FolderTwin.App/LabInstallation.cs;../../src/FolderTwin.App/LabInstallation.Removal.cs;../../src/FolderTwin.App/ProductDeployment.cs;../../src/FolderTwin.App/WindowsSchedule.cs" LinkBase="Deployment" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(ReferenceCoreAssembly)' == ''">
+    <ProjectReference Include="../../src/FolderTwin.Core/FolderTwin.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(ReferenceCoreAssembly)' != ''">
+    <Reference Include="$([System.IO.Path]::GetFileNameWithoutExtension('$(ReferenceCoreAssembly)'))">
+      <HintPath>$(ReferenceCoreAssembly)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="RequireCoreAssembly" BeforeTargets="ResolveReferences" Condition="'$(ReferenceCoreAssembly)' != ''">
+    <Error Condition="!Exists('$(ReferenceCoreAssembly)')" Text="Provide -p:ReferenceCoreAssembly=absolute/path/to/FolderTwin.Core.dll" />
+  </Target>
+</Project>

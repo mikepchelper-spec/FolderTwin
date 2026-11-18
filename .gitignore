@@ -1,7 +1,9 @@
 **/bin/
 **/obj/
 .vs/
+artifacts/
 TestResults/
 *.user
 *.suo
 *.foldertwin.json
+.hallmark/

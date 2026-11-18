@@ -1,0 +1,87 @@
+/* Hallmark · Studio tokens (anchor hue 168 · forest-sage editorial) */
+:root {
+  --color-paper: oklch(97.4% 0.008 166);
+  --color-paper-2: oklch(94.2% 0.012 166);
+  --color-paper-3: oklch(90.5% 0.016 166);
+  --color-rule: oklch(83.5% 0.014 166);
+  --color-rule-2: oklch(70.0% 0.018 166);
+  --color-neutral: oklch(52.0% 0.016 168);
+  --color-muted: oklch(40.5% 0.018 168);
+  --color-ink-2: oklch(28.5% 0.022 170);
+  --color-ink: oklch(19.5% 0.024 172);
+  --color-accent: oklch(42.5% 0.096 168);
+  --color-accent-hover: oklch(36.0% 0.092 168);
+  --color-accent-ink: oklch(97.8% 0.006 166);
+  --color-warn-paper: oklch(94.6% 0.030 82);
+  --color-warn-rule: oklch(78.0% 0.058 76);
+  --color-warn-ink: oklch(34.0% 0.075 66);
+  --color-error: oklch(48.0% 0.175 26);
+  --color-focus: oklch(44.0% 0.135 168);
+
+  --font-display: "Fraunces", Georgia, serif;
+  --font-body: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-outlier: "JetBrains Mono", ui-monospace, monospace;
+
+  --text-xs: 0.78rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.2rem;
+  --text-lg: 1.5rem;
+  --text-xl: 1.95rem;
+  --text-2xl: 2.44rem;
+  --text-display-s: clamp(2.05rem, 3.4vw + 0.9rem, 3.35rem);
+  --text-display: clamp(2.35rem, 4.1vw + 0.95rem, 4.45rem);
+
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.5rem;
+  --space-2xl: 4rem;
+  --space-3xl: 6rem;
+  --space-4xl: 8.5rem;
+
+  --page-max: 76rem;
+  --page-gutter: clamp(1rem, 4vw, 3rem);
+
+  --rule-hairline: 1px solid var(--color-rule);
+  --rule-strong: 1px solid var(--color-rule-2);
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --dur-micro: 120ms;
+  --dur-short: 200ms;
+  --dur-long: 400ms;
+
+  --z-base: 1;
+  --z-raised: 10;
+  --z-sticky: 200;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-paper: oklch(15.5% 0.012 172);
+    --color-paper-2: oklch(19.2% 0.014 172);
+    --color-paper-3: oklch(23.5% 0.016 172);
+    --color-rule: oklch(29.5% 0.014 170);
+    --color-rule-2: oklch(44.0% 0.016 170);
+    --color-neutral: oklch(62.0% 0.014 168);
+    --color-muted: oklch(74.0% 0.012 168);
+    --color-ink-2: oklch(86.5% 0.010 166);
+    --color-ink: oklch(94.5% 0.008 166);
+    --color-accent: oklch(73.0% 0.112 166);
+    --color-accent-hover: oklch(79.0% 0.106 166);
+    --color-accent-ink: oklch(15.5% 0.020 172);
+    --color-warn-paper: oklch(22.0% 0.026 76);
+    --color-warn-rule: oklch(44.0% 0.062 76);
+    --color-warn-ink: oklch(86.0% 0.072 80);
+    --color-error: oklch(70.0% 0.155 26);
+    --color-focus: oklch(76.0% 0.125 166);
+  }
+}

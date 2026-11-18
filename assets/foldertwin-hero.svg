@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 340" role="img" aria-labelledby="ft-hero-title ft-hero-desc">
+  <title id="ft-hero-title">FolderTwin — Copias locales verificadas y versiones recuperables para Windows 11</title>
+  <desc id="ft-hero-desc">Motor de respaldo NTFS con copia acumulativa, versionado por objetos SHA-256, espejo protegido y tercera copia cifrada sobre Kopia y rclone.</desc>
+  <style>
+    .bg { fill: #F6FAF7; stroke: #C6D7CF; }
+    .panel { fill: #EDF4F0; stroke: #C6D7CF; }
+    .card { fill: #FBFEFC; stroke: #B7CCC2; }
+    .card-accent { fill: #FBFEFC; stroke: #12634F; }
+    .ink { fill: #142B27; }
+    .ink2 { fill: #2E4842; }
+    .muted { fill: #4A645D; }
+    .accent { fill: #12634F; }
+    .accent-stroke { stroke: #12634F; }
+    .mark-bg { fill: #142B27; }
+    .mark-back { fill: #3EB5A3; }
+    .mark-front { fill: #DCF2EC; }
+    .mark-check { stroke: #142B27; }
+    .pill { fill: #DCECE4; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #101E1B; stroke: #28403A; }
+      .panel { fill: #152723; stroke: #2A433D; }
+      .card { fill: #182D28; stroke: #33524A; }
+      .card-accent { fill: #182D28; stroke: #5BC8AF; }
+      .ink { fill: #EDF6F2; }
+      .ink2 { fill: #C6DCD4; }
+      .muted { fill: #95B4A9; }
+      .accent { fill: #62CEB5; }
+      .accent-stroke { stroke: #62CEB5; }
+      .mark-bg { fill: #EDF6F2; }
+      .mark-back { fill: #197A63; }
+      .mark-front { fill: #142B27; }
+      .mark-check { stroke: #62CEB5; }
+      .pill { fill: #1D3831; }
+    }
+    .serif { font-family: Georgia, "Times New Roman", serif; font-weight: 700; }
+    .sans { font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif; }
+    .mono { font-family: Consolas, "Cascadia Mono", ui-monospace, monospace; }
+  </style>
+
+  <rect class="bg" x="1" y="1" width="1118" height="338" rx="14" stroke-width="2" />
+
+  <!-- Left column: Emblem + Headline + Tagline + Tech pills -->
+  <g transform="translate(48, 42)">
+    <rect class="mark-bg" x="0" y="0" width="56" height="56" rx="14" />
+    <path class="mark-back" d="M10 14h12l4 5h16v20H10z" />
+    <path class="mark-front" d="M17 23h11l4 4.5h17V46H17z" />
+    <path class="mark-check" d="m27 36.5 4.2 4.2 9.5-10" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" />
+
+    <text class="ink serif" x="72" y="38" font-size="30" letter-spacing="-0.6">FolderTwin</text>
+
+    <text class="ink serif" x="0" y="106" font-size="38" letter-spacing="-0.9">Dos copias locales y una</text>
+    <text class="ink serif" x="0" y="150" font-size="38" letter-spacing="-0.9">cifrada, verificables.</text>
+
+    <text class="ink2 sans" x="0" y="188" font-size="16">Respaldo NTFS en C# y .NET 10 con identidades físicas de volumen,</text>
+    <text class="ink2 sans" x="0" y="212" font-size="16">versiones recuperables SHA-256 y tercera copia sobre Kopia y rclone.</text>
+
+    <g transform="translate(0, 234)">
+      <rect class="pill" x="0" y="0" width="144" height="28" rx="6" />
+      <text class="accent mono" x="14" y="18.5" font-size="12" font-weight="600">Windows 11 x64</text>
+
+      <rect class="pill" x="156" y="0" width="142" height="28" rx="6" />
+      <text class="accent mono" x="170" y="18.5" font-size="12" font-weight="600">FTVERS03 · NTFS</text>
+
+      <rect class="pill" x="310" y="0" width="156" height="28" rx="6" />
+      <text class="accent mono" x="324" y="18.5" font-size="12" font-weight="600">0 paquetes NuGet</text>
+
+      <rect class="pill" x="478" y="0" width="118" height="28" rx="6" />
+      <text class="accent mono" x="492" y="18.5" font-size="12" font-weight="600">GNU GPL v3+</text>
+    </g>
+  </g>
+
+  <!-- Right column: 3-2-1 Verified Pipeline Diagram -->
+  <g transform="translate(690, 32)">
+    <rect class="panel" x="0" y="0" width="386" height="276" rx="10" stroke-width="1.2" />
+
+    <rect class="card" x="20" y="18" width="346" height="66" rx="7" stroke-width="1.2" />
+    <text class="muted sans" x="36" y="40" font-size="10.5" font-weight="700" letter-spacing="1">1 · ORIGEN NTFS (SOLO LECTURA)</text>
+    <text class="ink mono" x="36" y="64" font-size="13" font-weight="600">DirectoryFence · FILE_ID_INFO</text>
+
+    <line class="accent-stroke" x1="193" y1="84" x2="193" y2="104" stroke-width="2" stroke-dasharray="3 3" />
+
+    <rect class="card-accent" x="20" y="105" width="346" height="76" rx="7" stroke-width="1.8" />
+    <text class="accent sans" x="36" y="127" font-size="10.5" font-weight="700" letter-spacing="1">2 · ALMACÉN DEDICADO VERIFICADO</text>
+    <text class="ink mono" x="36" y="150" font-size="13" font-weight="600">CAS SHA-256 + JSONL ×2 (≤ 512 MiB)</text>
+    <text class="muted sans" x="36" y="169" font-size="12">Acumulativo · Versionado · Espejo protegido</text>
+
+    <line class="accent-stroke" x1="193" y1="181" x2="193" y2="201" stroke-width="2" stroke-dasharray="3 3" />
+
+    <rect class="card" x="20" y="202" width="346" height="56" rx="7" stroke-width="1.2" />
+    <text class="muted sans" x="36" y="224" font-size="10.5" font-weight="700" letter-spacing="1">3 · TERCERA COPIA CIFRADA OPCIONAL</text>
+    <text class="ink mono" x="36" y="244" font-size="12.5" font-weight="600">Kopia 0.23.1 + rclone 1.76.0 (layout 2)</text>
+  </g>
+</svg>

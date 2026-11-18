@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>FolderTwin</AssemblyName>
+    <RootNamespace>FolderTwin</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Product>FolderTwin</Product>
+    <Title>FolderTwin</Title>
+    <Description>Copias locales y versiones recuperables para Windows.</Description>
+    <ApplicationIcon>Assets/FolderTwin.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Using Include="FolderTwin.Core" />
+    <ProjectReference Include="../FolderTwin.Core/FolderTwin.Core.csproj" />
+    <Resource Include="Assets/FolderTwin.ico" />
+    <InternalsVisibleTo Include="CopyLab.Tests" />
+    <InternalsVisibleTo Include="AutomationAcceptance" />
+  </ItemGroup>
+</Project>

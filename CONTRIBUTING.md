@@ -13,11 +13,12 @@ Conserva las invariantes: origen de solo lectura, raíces e identidades comproba
 Usa el SDK de [global.json](global.json) y PowerShell 7. Mantén las salidas fuera del repositorio cuando uses el publicador. Los arneses crean sus propios fixtures; no les pases datos personales.
 
 ```powershell
-dotnet run --project experiments/CopyProbe -c Release
-dotnet run --project experiments/CopyLab -c Release -- --product-surface-smoke
+dotnet build FolderTwin.sln -c Release
+dotnet run --project tests/CopyProbe -c Release
+dotnet run --project tests/CopyLab.Tests -c Release -- --product-surface-smoke
 ```
 
-Elige después la prueba del cambio: por ejemplo `--accumulative`, `--retention`, `--product-config` o `--product-runs` en CopyProbe. Para integración WPF usa `--product-smoke` en CopyLab. Consulta los protocolos y el [workflow](.github/workflows/copy-probe.yml) para los argumentos exactos. Las pruebas nativas de horarios y VHDX se reservan a runners desechables. No repitas toda la aceptación ante cambios exclusivamente editoriales ni declares pruebas que no ejecutaste.
+Elige después la prueba del cambio: por ejemplo `--accumulative`, `--retention`, `--product-config` o `--product-runs` en `tests/CopyProbe`. Para integración WPF usa `--product-smoke` en `tests/CopyLab.Tests`. Consulta los protocolos en `docs/` y el [workflow](.github/workflows/copy-probe.yml) para los argumentos exactos. Las pruebas nativas de horarios y VHDX se reservan a runners desechables. No repitas toda la aceptación ante cambios exclusivamente editoriales ni declares pruebas que no ejecutaste.
 
 Una corrección de comportamiento debe incluir una reproducción o regresión que falle sin ella y pase con ella. Para documentación, valida enlaces, ejemplos y coherencia con el paquete elegido. Distingue automatización, observación de escritorio y validación externa: ninguna acredita por sí sola durabilidad física.
 

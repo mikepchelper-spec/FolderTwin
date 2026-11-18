@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+﻿#Requires -Version 7.0
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
@@ -42,13 +42,11 @@ if ((Test-Path -LiteralPath $output) -or (Test-Path -LiteralPath $work)) {
 
 Push-Location -LiteralPath $repo
 try {
-    & $DotNet publish 'experiments/CopyLab/CopyLab.csproj' --configuration Release --runtime win-x64 --self-contained true `
+    & $DotNet publish 'src/FolderTwin.App/FolderTwin.App.csproj' --configuration Release --runtime win-x64 --self-contained true `
         --artifacts-path $work --output $output --disable-build-servers `
         "-p:RuntimeFrameworkVersion=$runtimeVersion" "-p:PathMap=$repo=/_/FolderTwin" `
         -p:DebugType=None -p:DebugSymbols=false -p:ContinuousIntegrationBuild=true -p:IncludeSourceRevisionInInformationalVersion=false
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish terminó con código $LASTEXITCODE." }
-    # The apphost continues to locate CopyLab.dll; the public entry point uses the product name.
-    Copy-Item -LiteralPath (Join-Path $output 'CopyLab.exe') -Destination (Join-Path $output 'FolderTwin.exe')
 
     $cache = & $DotNet nuget locals global-packages --list --force-english-output
     if ($LASTEXITCODE -ne 0 -or $cache -isnot [string] -or -not $cache.StartsWith('global-packages: ')) {
@@ -97,10 +95,10 @@ try {
         Copy-Item -LiteralPath (Join-Path $repo $guide) -Destination $output
     }
     Copy-Item -LiteralPath (Join-Path $repo 'distribucion/README.md') -Destination (Join-Path $output 'README.md')
-    $probeDocs = Join-Path $output 'experiments/CopyProbe'
-    New-Item -ItemType Directory -Path $probeDocs | Out-Null
-    Get-ChildItem -LiteralPath (Join-Path $repo 'experiments/CopyProbe') -File -Filter '*.md' | ForEach-Object {
-        Copy-Item -LiteralPath $_.FullName -Destination $probeDocs
+    $protocolDocs = Join-Path $output 'docs'
+    New-Item -ItemType Directory -Path $protocolDocs | Out-Null
+    Get-ChildItem -LiteralPath (Join-Path $repo 'docs') -File -Filter '*.md' | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination $protocolDocs
     }
     if (-not $sourceFile) {
         $sourceFile = Join-Path $work 'FolderTwin-source.tar'

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>CompatibilityProbe</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(ReferenceCoreAssembly)' == ''">
+    <Using Include="FolderTwin.Core" />
+    <ProjectReference Include="../../src/FolderTwin.Core/FolderTwin.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(ReferenceCoreAssembly)' != ''">
+    <Reference Include="$([System.IO.Path]::GetFileNameWithoutExtension('$(ReferenceCoreAssembly)'))">
+      <HintPath>$(ReferenceCoreAssembly)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition="'$(ReferenceCoreAssembly)' != '' and $([System.String]::Copy('$(ReferenceCoreAssembly)').EndsWith('FolderTwin.Core.dll', System.StringComparison.OrdinalIgnoreCase))">
+    <Using Include="FolderTwin.Core" />
+  </ItemGroup>
+  <Target Name="RequireCoreAssembly" BeforeTargets="ResolveReferences" Condition="'$(ReferenceCoreAssembly)' != ''">
+    <Error Condition="!Exists('$(ReferenceCoreAssembly)')" Text="Provide -p:ReferenceCoreAssembly=absolute/path/to/FolderTwin.Core.dll (or legacy CopyProbe.dll)" />
+  </Target>
+</Project>

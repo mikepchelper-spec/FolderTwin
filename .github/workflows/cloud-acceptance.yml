@@ -88,22 +88,26 @@ jobs:
           $manifest = (Get-FileHash -LiteralPath (Join-Path $expanded 'SHA256SUMS.txt') -Algorithm SHA256).Hash
           @("commit=$revision", "zip-sha256=$($first.Hash)", "manifest-sha256=$manifest") |
             Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'cloud-evidence/hashes.txt')
-      - name: Verify normal startup and the cloud interface from the extracted ZIP
+      - name: Verify normal startup and the cloud interface
         timeout-minutes: 5
         run: |
           $package = Join-Path $env:RUNNER_TEMP 'cloud-expanded'
           $evidence = Join-Path $env:RUNNER_TEMP 'cloud-evidence'
           $revision = (git rev-parse HEAD).Trim()
-          ./experiments/AutomationAcceptance/Test-IsolatedStartup.ps1 -PackageDirectory $package -SourceRevision $revision |
+          ./tests/AutomationAcceptance/Test-IsolatedStartup.ps1 -PackageDirectory $package -SourceRevision $revision |
             Tee-Object -FilePath (Join-Path $evidence 'startup.txt')
+          $uiOut = Join-Path $env:RUNNER_TEMP 'cloud-ui-tests'
+          dotnet build tests/CopyLab.Tests/CopyLab.Tests.csproj -c Release --output $uiOut --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'CopyLab.Tests failed to build.' }
+          Copy-Item -LiteralPath (Join-Path $package 'cloud-tools') -Destination (Join-Path $uiOut 'cloud-tools') -Recurse -Force
           $stdout = Join-Path $evidence 'cloud-ui.out'
           $stderr = Join-Path $evidence 'cloud-ui.err'
-          $process = Start-Process -FilePath (Join-Path $package 'FolderTwin.exe') -WorkingDirectory $package -ArgumentList '--product-cloud-smoke' -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          $process = Start-Process -FilePath (Join-Path $uiOut 'CopyLab.Tests.exe') -WorkingDirectory $uiOut -ArgumentList '--product-cloud-smoke' -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
           try {
-            if (!$process.WaitForExit(180000)) { throw 'The packaged cloud interface test timed out.' }
+            if (!$process.WaitForExit(180000)) { throw 'The cloud interface test timed out.' }
             Get-Content -LiteralPath $stdout
             Get-Content -LiteralPath $stderr
-            if ($process.ExitCode -ne 0) { throw "The packaged cloud interface exited with $($process.ExitCode)." }
+            if ($process.ExitCode -ne 0) { throw "The cloud interface test exited with $($process.ExitCode)." }
           } finally {
             if (!$process.HasExited) { $process.Kill($true); $process.WaitForExit() }
             $process.Dispose()
@@ -115,28 +119,32 @@ jobs:
           $kopia = Join-Path $package 'cloud-tools/kopia.exe'
           $rclone = Join-Path $package 'cloud-tools/rclone.exe'
           $evidence = Join-Path $env:RUNNER_TEMP 'cloud-evidence'
-          ./experiments/AutomationAcceptance/Test-CloudPoint.ps1 -Kopia $kopia -Rclone $rclone -PackageDirectory $package |
+          ./tests/AutomationAcceptance/Test-CloudPoint.ps1 -Kopia $kopia -Rclone $rclone -PackageDirectory $package |
             Tee-Object -FilePath (Join-Path $evidence 's3-recovery.txt')
-          & (Join-Path $package 'CopyProbe.exe') --cloud-rclone $kopia $rclone |
+          dotnet run --project tests/CopyProbe --configuration Release -- --cloud-rclone $kopia $rclone |
             Tee-Object -FilePath (Join-Path $evidence 'rclone-recovery.txt')
-          if ($LASTEXITCODE -ne 0) { throw 'The packaged rclone profile acceptance failed.' }
-      - name: Verify transport faults, integrity and worker termination
+          if ($LASTEXITCODE -ne 0) { throw 'The rclone profile acceptance failed.' }
+      - name: Verify packaged binary isolation, transport faults, integrity and worker termination
         timeout-minutes: 5
         run: |
           $package = Join-Path $env:RUNNER_TEMP 'cloud-expanded'
           $artifacts = Join-Path $env:RUNNER_TEMP 'cloud-fault-build'
-          dotnet build experiments/AutomationAcceptance --artifacts-path $artifacts "-p:ReferenceCoreAssembly=$package/CopyProbe.dll" --nologo
+          dotnet build tests/AutomationAcceptance -c Release --artifacts-path $artifacts "-p:ReferenceCoreAssembly=$package/FolderTwin.Core.dll" --nologo
           if ($LASTEXITCODE -ne 0) { throw 'The cloud fault harness did not build.' }
-          dotnet (Join-Path $artifacts 'bin/AutomationAcceptance/debug/CopyLab.dll') --cloud-faults (Join-Path $package 'FolderTwin.exe') |
+          $harness = Join-Path $artifacts 'bin/AutomationAcceptance/release/AutomationAcceptance.dll'
+          dotnet $harness --packaged-binary-audit (Join-Path $package 'FolderTwin.exe') |
+            Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'cloud-evidence/binary-audit.txt')
+          if ($LASTEXITCODE -ne 0) { throw 'The packaged binary isolation audit failed.' }
+          dotnet $harness --cloud-faults (Join-Path $package 'FolderTwin.exe') |
             Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'cloud-evidence/faults.txt')
           if ($LASTEXITCODE -ne 0) { throw 'The packaged cloud fault acceptance failed.' }
-          dotnet (Join-Path $artifacts 'bin/AutomationAcceptance/debug/CopyLab.dll') --cloud-recovery-workers (Join-Path $package 'FolderTwin.exe') |
+          dotnet $harness --cloud-recovery-workers (Join-Path $package 'FolderTwin.exe') |
             Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'cloud-evidence/recovery-workers.txt')
           if ($LASTEXITCODE -ne 0) { throw 'The packaged background recovery acceptance failed.' }
-          dotnet (Join-Path $artifacts 'bin/AutomationAcceptance/debug/CopyLab.dll') --cloud-permissions (Join-Path $package 'FolderTwin.exe') |
+          dotnet $harness --cloud-permissions (Join-Path $package 'FolderTwin.exe') |
             Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'cloud-evidence/recovery-permissions.txt')
           if ($LASTEXITCODE -ne 0) { throw 'The packaged read-only gateway acceptance failed.' }
-          dotnet (Join-Path $artifacts 'bin/AutomationAcceptance/debug/CopyLab.dll') --cloud-history (Join-Path $package 'FolderTwin.exe') |
+          dotnet $harness --cloud-history (Join-Path $package 'FolderTwin.exe') |
             Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'cloud-evidence/remote-history.txt')
           if ($LASTEXITCODE -ne 0) { throw 'The packaged history acceptance failed.' }
       - name: Preserve synthetic acceptance evidence

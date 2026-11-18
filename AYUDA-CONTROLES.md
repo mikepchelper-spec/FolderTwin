@@ -1,6 +1,6 @@
 # Inventario de ayuda de producto
 
-La implementación central está en `experiments/CopyLab/ProductWindow.Help.cs`. Cada entrada tiene tooltip, HelpText accesible y explicación en la ventana de ayuda cuando el control está visible. Los requisitos se muestran cuando la acción está deshabilitada. La comprobación de usabilidad exige que los controles de producto estén incluidos.
+La implementación central está en `src/FolderTwin.App/ProductWindow.Help.cs`. Cada una de las 100 entradas tiene tooltip, `HelpText` accesible y explicación en la ventana de ayuda cuando el control está visible. Los requisitos se muestran cuando la acción está deshabilitada. La comprobación de usabilidad (`--product-usability-smoke`) exige que todos los controles interactivos de producto estén incluidos.
 
 | Control | Qué hace | Requisito cuando falta |
 |---|---|---|
@@ -8,8 +8,11 @@ La implementación central está en `experiments/CopyLab/ProductWindow.Help.cs`.
 | ReturnToJobsButton | Regresa a la lista y conserva el trabajo seleccionado. | Espera a que termine la comprobación de esta pantalla. |
 | FirstBackupButton | Empieza el asistente de cuatro pasos. Elige origen, destino, modo y revisa antes de guardar. | Disponible según el estado general de la pantalla. |
 | NewJobButton | Crea otra configuración con su propia carpeta de respaldo. | Disponible según el estado general de la pantalla. |
+| MoreJobActions | Despliega las acciones de aplicación, nube, bandeja, importación y apertura de un respaldo existente. En ventanas pequeñas puedes plegarlas para ver más detalles del trabajo. | Disponible según el estado general de la pantalla. |
 | RefreshJobsButton | Vuelve a leer los trabajos guardados y los registros pendientes. | Disponible según el estado general de la pantalla. |
 | ImportConfigurationButton | Abre una configuración exportada y comprueba sus carpetas antes de guardarla deshabilitada. | Disponible según el estado general de la pantalla. |
+| OpenExistingBackupButton | Abre la carpeta de un respaldo para recuperar sus fechas sin el origen ni la configuración anterior. Comprueba el contenido y lo recupera en una carpeta nueva. | Disponible según el estado general de la pantalla. |
+| CloudBackupButton | Configura la tercera copia cifrada, consulta sus envíos y recupera fechas desde la nube. Puedes abrirla aunque no tengas trabajos locales. | Disponible según el estado general de la pantalla. |
 | ProductTrayButton | Oculta la ventana y muestra un icono junto al reloj para consultar el estado y abrir la aplicación. | Disponible según el estado general de la pantalla. |
 | LegacyRecoveryButton | Abre las herramientas para respaldos anteriores de alfa. Usa Nuevo trabajo para una copia nueva. | Disponible según el estado general de la pantalla. |
 | ManageApplicationButton | Revisa el ejecutor, sus horarios y las versiones instaladas. Entrar aquí no modifica los trabajos. | Disponible según el estado general de la pantalla. |
@@ -23,7 +26,10 @@ La implementación central está en `experiments/CopyLab/ProductWindow.Help.cs`.
 | ApplyMirrorButton | Aplica solo los cambios revisados y conserva el contenido anterior en un punto recuperable. | Completa el análisis del espejo, resuelve los conflictos y acepta las revisiones adicionales indicadas. |
 | JobFoldersPanel | Muestra las carpetas registradas de origen y destino para comprobar dónde lee y escribe el trabajo. | Disponible según el estado general de la pantalla. |
 | RunHistoryPanel | Despliega resultados e incidencias por intento. Un fallo anterior permanece documentado después del reintento. | Disponible según el estado general de la pantalla. |
-| RunHistoryList | Consulta la operación, fecha, resultado y ruta de cada intento reciente. Usa flechas para recorrerlos. | Disponible según el estado general de la pantalla. |
+| RunHistoryList | Consulta la operación, fecha, resultado y ruta de cada intento. Usa flechas para recorrer esta página y Anteriores para consultar otros intentos. | Disponible según el estado general de la pantalla. |
+| HistoryOnlyIncidents | Muestra intentos fallidos, cancelados, interrumpidos o que requieren revisión, incluidos los anteriores a esta página. | Disponible según el estado general de la pantalla. |
+| NewerHistoryButton | Muestra hasta 30 intentos más recientes del historial o del filtro de incidencias. | Ya estás en la página más reciente. |
+| OlderHistoryButton | Muestra hasta 30 intentos anteriores. Los registros siguen disponibles después de los reintentos. | Has llegado al final del historial o del filtro de incidencias. |
 | PendingVersionPanel | Revisa un plan incompleto que ya no coincide con el origen antes de permitir un análisis nuevo. | Disponible según el estado general de la pantalla. |
 | ReviewPendingButton | Inspecciona el plan pendiente y sus datos conservados. Esta revisión no crea una copia nueva. | Selecciona un trabajo de versionado con un plan pendiente y espera al ejecutor. |
 | AcceptPendingPlan | Acepta conservar el plan incompleto y permitir uno nuevo. Los parciales seguirán ocupando espacio. | Lee la revisión del plan pendiente. |
@@ -36,6 +42,10 @@ La implementación central está en `experiments/CopyLab/ProductWindow.Help.cs`.
 | ReviewImportedSourceButton | Comprueba la identidad del origen importado antes de permitir futuras copias. | Selecciona un trabajo importado deshabilitado y espera al ejecutor. |
 | SaveSettingsButton | Guarda los cambios de nombre, hora, habilitación y retirada. Comprueba el estado observado del horario. | Selecciona un trabajo y espera a que termine su operación actual. |
 | ApplyScheduleButton | Repara el horario propio con la hora guardada e instala un ejecutor comprobado si hace falta. | Guarda una hora diaria válida y habilita el trabajo. Espera al ejecutor. |
+| EditWatch | Activa la vigilancia de este trabajo. Desmárcala y guarda para detenerla. Puedes conservar un horario diario aparte. | Disponible según el estado general de la pantalla. |
+| EditAllowMirrorRetire | Permite retirar del espejo archivos que borraste del origen. El punto anterior conserva esos datos y los cambios grandes requieren revisión. | Disponible según el estado general de la pantalla. |
+| ToggleJobWatchButton | Pausa o reanuda la vigilancia sin quitar su configuración. El ajuste se conserva al cerrar FolderTwin. | Selecciona un trabajo automático y espera a que termine su operación actual. |
+| RepairWatchButton | Solicita a Windows iniciar el monitor. Consulta su estado en Ruta antes de confiar en la automatización. | Activa la vigilancia en este trabajo. |
 | ProductRetentionPanel | Revisa qué fechas conservar. La limpieza es manual y tiene revisión, cuarentena, deshacer y purga. | Selecciona un trabajo y espera a que termine su operación actual. |
 | ProductRetentionDays | Cantidad de días recientes con puntos diarios que conservar. La selección usa calendario UTC. | Disponible según el estado general de la pantalla. |
 | ProductRetentionWeeks | Cantidad de semanas con puntos semanales que conservar, además de los diarios. | Disponible según el estado general de la pantalla. |
@@ -50,6 +60,9 @@ La implementación central está en `experiments/CopyLab/ProductWindow.Help.cs`.
 | AcceptProductPurge | Acepta el borrado irreversible de objetos exclusivos de la cuarentena seleccionada. | Comprueba la cuarentena y la gracia antes de aceptar. |
 | PurgeProductRetentionButton | Borra los objetos de la cuarentena tras comprobar gracia, referencias y puntos retenidos. Este borrado es irreversible. | Selecciona una cuarentena terminada o purga pendiente, acepta el borrado y espera la gracia. Catálogos y registros deben estar íntegros. |
 | AcceptApplicationUpdate | Acepta actualizar el ejecutor y los horarios propios de los trabajos revisados. | Lee los trabajos afectados y espera a que terminen operaciones y reintentos. |
+| MonitorAtLogon | Elige si Windows inicia el monitor al entrar en tu sesión. La vigilancia también puede iniciarse desde esta pantalla. | Disponible según el estado general de la pantalla. |
+| ApplyMonitorStartupButton | Guarda la opción de inicio en Windows y solicita arrancar el monitor en esta sesión. | Debe haber un trabajo con vigilancia o copia en nube activa. |
+| StopMonitorButton | Retira la tarea de vigilancia. Conserva horarios diarios, configuración y datos. Una copia que ya empezó puede terminar. | Debe existir una tarea de monitor que pertenezca a esta configuración. |
 | InstallApplicationButton | Instala una copia comprobada del paquete y dirige los horarios habilitados a ese ejecutor. | Revisa los trabajos y acepta la actualización. Espera a que terminen operaciones y reintentos. |
 | AcceptRemoveSchedules | Acepta deshabilitar todos los trabajos revisados y retirar sus horarios propios. Los respaldos permanecen. | Lee la revisión de trabajos. |
 | RemoveApplicationSchedulesButton | Retira horarios propios y deshabilita los trabajos revisados. Conserva datos, configuración e historial. | Revisa los trabajos y marca la aceptación de retirar sus horarios. |
@@ -80,12 +93,14 @@ La implementación central está en `experiments/CopyLab/ProductWindow.Help.cs`.
 | OpenRestoredFolderButton | Abre en el Explorador la última carpeta recuperada con resultado confirmado para este trabajo. | Completa una recuperación de este trabajo. |
 | BackStepButton | Vuelve al paso anterior conservando lo elegido. Puedes corregirlo antes de guardar. | Estás en el primer paso del asistente. |
 | NextStepButton | Avanza y comprueba lo elegido. En el último paso revisas todas las opciones antes de guardar. | Elige la carpeta que solicita este paso. |
-| SaveJobButton | Crea la carpeta dedicada y guarda la configuración. Después pulsa Respaldar ahora para hacer la primera copia. | Completa los pasos y revisa origen, destino, modo y horario. |
+| SaveJobButton | Crea la carpeta dedicada y guarda la configuración. Si elegiste vigilancia, solicita el inicio de la primera copia. | Completa los pasos y revisa origen, destino, modo y horario. |
 | CancelWizardButton | Sale del asistente y descarta la selección sin crear el trabajo. | Disponible según el estado general de la pantalla. |
 | ChooseOriginButton | Selecciona la carpeta cuyos archivos quieres copiar. Se leerá su contenido. | Disponible según el estado general de la pantalla. |
 | ChooseParentButton | Selecciona dónde crear la subcarpeta dedicada de este trabajo. Para proteger frente al fallo de un disco, usa otro disco físico. | Disponible según el estado general de la pantalla. |
 | JobName | Nombre para reconocer el trabajo. Por ejemplo, Documentos de C a D. | Disponible según el estado general de la pantalla. |
 | BackupMode | Acumulativo conserva archivos retirados del origen; Versionado permite volver por fecha; Espejo refleja el origen y conserva lo retirado. | Disponible según el estado general de la pantalla. |
+| WatchChanges | El monitor agrupa cambios y ejecuta respaldos con tu sesión iniciada y el equipo despierto. Puede continuar con la ventana cerrada. | Disponible según el estado general de la pantalla. |
+| AllowWizardMirrorRetire | Acepta retiradas ordinarias recuperables en la carpeta actual. El origen vacío, los cambios masivos y los conflictos requieren revisión. | Disponible según el estado general de la pantalla. |
 | DailyTime | Hora local diaria HH:mm. Deja vacío para ejecutar cuando tú quieras. Un horario necesita tu sesión iniciada. | Disponible según el estado general de la pantalla. |
 | PauseRunButton | Solicita una pausa o continúa el intento pausado. El ejecutor atiende la orden en un límite recuperable. | Debe haber una operación activa para este trabajo. |
 | CancelRunButton | Detiene el intento en un límite recuperable y conserva los parciales. Podrás revisar o reintentar. | Debe haber una operación activa para este trabajo. |

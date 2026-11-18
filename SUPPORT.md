@@ -2,7 +2,7 @@
 
 FolderTwin se publica para pruebas con datos sintéticos y carpetas desechables. No es una v1 definitiva ni una recomendación para respaldos personales. No existe un servicio de recuperación de datos ni un plazo de respuesta garantizado.
 
-Consulta primero [GUIA.md](GUIA.md), [INSTALACION.md](INSTALACION.md), [COMPATIBILIDAD.md](COMPATIBILIDAD.md) y [ENTREGA.md](ENTREGA.md). El informe identifica el paquete aceptado; una compilación posterior no hereda automáticamente sus resultados. [PILOTO.md](PILOTO.md) describe las pruebas externas que siguen pendientes.
+Consulta primero [GUIA.md](GUIA.md), [INSTALACION.md](INSTALACION.md), [COMPATIBILIDAD.md](COMPATIBILIDAD.md) y [NOTAS.md](NOTAS.md). El informe de aceptación externo identifica el paquete aceptado; una compilación posterior no hereda automáticamente sus resultados. [PILOTO.md](PILOTO.md) describe las pruebas externas que siguen pendientes.
 
 ## Dónde consultar
 

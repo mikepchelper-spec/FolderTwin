@@ -58,4 +58,4 @@ Cada validación externa conserva su propio resultado. Usa solo datos sintético
 
 Para cada caso conserva: ID de V1 o EXT, commit y hash del paquete, inicio y fin con zona horaria, entorno, pasos, resultado esperado y observado, mensaje literal sin datos privados y verificación de los archivos restaurados. Usa capturas solo de la sesión sintética. Un caso sin esa evidencia permanece pendiente. Un error impide aprobar el caso y debe registrar el punto de reanudación después de corregirlo.
 
-Consulta `V1.md` y `ACEPTACION.md` en las fuentes para la matriz de producto y la evidencia anterior del motor. Registra la observación del piloto aparte de este procedimiento.
+Consulta `V1.md` y `PLAN.md` en las fuentes para la matriz de producto y la evidencia sintética del motor. Registra la observación del piloto aparte de este procedimiento.

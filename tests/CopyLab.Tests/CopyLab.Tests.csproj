@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>CopyLab.Tests</AssemblyName>
+    <RootNamespace>FolderTwin</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Using Include="FolderTwin.Core" />
+    <ProjectReference Include="../../src/FolderTwin.Core/FolderTwin.Core.csproj" />
+    <ProjectReference Include="../CopyProbe/CopyProbe.csproj" />
+    <ApplicationDefinition Include="TestApp.xaml" />
+    <Page Include="../../src/FolderTwin.App/ExistingBackupWindow.xaml" Link="ExistingBackupWindow.xaml" />
+    <Page Include="../../src/FolderTwin.App/MainWindow.xaml" Link="MainWindow.xaml" />
+    <Page Include="../../src/FolderTwin.App/ProductCloudWindow.xaml" Link="ProductCloudWindow.xaml" />
+    <Page Include="../../src/FolderTwin.App/ProductRoute.xaml" Link="ProductRoute.xaml" />
+    <Page Include="../../src/FolderTwin.App/ProductWindow.xaml" Link="ProductWindow.xaml" />
+    <Page Include="../../src/FolderTwin.App/VersionWindow.xaml" Link="VersionWindow.xaml" />
+    <Compile Include="../../src/FolderTwin.App/*.cs" Exclude="../../src/FolderTwin.App/App.xaml.cs" LinkBase="App" />
+    <Resource Include="../../src/FolderTwin.App/Assets/FolderTwin.ico" Link="Assets/FolderTwin.ico" />
+  </ItemGroup>
+</Project>

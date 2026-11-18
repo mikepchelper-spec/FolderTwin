@@ -1,6 +1,9 @@
 name: Disposable volume lab
 
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -17,7 +20,7 @@ jobs:
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
-      - name: Build the self-contained portable package
-        run: ./scripts/Publish-Portable.ps1 -OutputDirectory "$env:RUNNER_TEMP\FolderTwin-volume-package"
+      - name: Build CopyProbe for volume lab
+        run: dotnet publish tests/CopyProbe/CopyProbe.csproj -c Release -r win-x64 --self-contained true "-p:RuntimeFrameworkVersion=10.0.15" --output "$env:RUNNER_TEMP\FolderTwin-volume-probe"
       - name: Exercise disk full, reassignment, and reconnection
-        run: ./experiments/CopyProbe/Run-VolumeLab.ps1
+        run: ./tests/CopyProbe/Run-VolumeLab.ps1

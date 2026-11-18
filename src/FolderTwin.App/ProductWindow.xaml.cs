@@ -1,0 +1,486 @@
+using System.ComponentModel;
+using System.Globalization;
+using System.IO;
+using System.Windows;
+using System.Windows.Automation.Peers;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Threading;
+using Microsoft.Win32;
+
+namespace FolderTwin;
+
+public partial class ProductWindow : Window
+{
+    private sealed record Choice(ProductJobOptions Options, DedicatedDestinationReview Destination, bool Watch, bool AllowRetire);
+    private sealed class JobRow(Guid id, string label, string detail, bool pending, ProductJob? job = null) : INotifyPropertyChanged
+    {
+        public Guid Id => id;
+        public string Label => label;
+        public bool Pending => pending;
+        public ProductJob? Job => job;
+        private string runtime = "";
+        public string Detail => detail + runtime;
+        public string Summary => detail;
+        public string BadgeText { get; private set; } = pending ? "Pendiente" : "Sin respaldos";
+        public string BadgeTone { get; private set; } = pending ? "Attention" : "";
+        public event PropertyChangedEventHandler? PropertyChanged;
+        internal void SetRuntime(string text, (string Label, string Tone) badge)
+        {
+            if (runtime == text && BadgeText == badge.Label && BadgeTone == badge.Tone) return;
+            runtime = text;
+            BadgeText = badge.Label;
+            BadgeTone = badge.Tone;
+            PropertyChanged?.Invoke(this, new(nameof(Detail)));
+            PropertyChanged?.Invoke(this, new(nameof(BadgeText)));
+            PropertyChanged?.Invoke(this, new(nameof(BadgeTone)));
+        }
+    }
+    private readonly Func<ProductJobRegistry> openRegistry;
+    private readonly Func<string, string?>? testPicker;
+    private readonly Func<string, Guid, Guid?, System.Diagnostics.Process>? testWorker;
+    private readonly Action<string, Guid, bool>? testSchedule;
+    private readonly Func<string, Guid, Guid, System.Diagnostics.Process>? testRestoreWorker;
+    private readonly Func<bool, string?>? testConfigurationPicker;
+    private readonly Func<string, Guid, System.Diagnostics.Process>? testMirrorReviewWorker;
+    private readonly Func<string, Guid, Guid, System.Diagnostics.Process>? testAbandonWorker;
+    private readonly Func<string>? testPackageInstall;
+    private readonly string? testInstallations;
+    private readonly LabWorkspace? testFolderWorkspace;
+    private readonly Action<ProductJobRegistry, bool?>? testMonitor;
+    private readonly VersionIndex productIndex;
+    private string? origin;
+    private string? parent;
+    private Choice? selection;
+    private int step;
+    private bool busy;
+    private bool explainWatchOnClose;
+    private Task activeTask = Task.CompletedTask;
+
+    internal ProductWindow(Func<ProductJobRegistry>? openRegistry = null, Func<string, string?>? testPicker = null,
+        Func<string, Guid, Guid?, System.Diagnostics.Process>? testWorker = null,
+        Action<string, Guid, bool>? testSchedule = null,
+        Func<string, Guid, Guid, System.Diagnostics.Process>? testRestoreWorker = null,
+        Func<bool, string?>? testConfigurationPicker = null,
+        Func<string, Guid, System.Diagnostics.Process>? testMirrorReviewWorker = null,
+        Func<string, Guid, Guid, System.Diagnostics.Process>? testAbandonWorker = null,
+        Func<string>? testPackageInstall = null, string? testInstallations = null, LabWorkspace? testFolderWorkspace = null,
+        Action<ProductJobRegistry, bool?>? testMonitor = null)
+    {
+        this.openRegistry = openRegistry ?? ProductJobRegistry.OpenLocal;
+        this.testPicker = testPicker;
+        this.testWorker = testWorker;
+        this.testSchedule = testSchedule;
+        this.testRestoreWorker = testRestoreWorker;
+        this.testConfigurationPicker = testConfigurationPicker;
+        this.testMirrorReviewWorker = testMirrorReviewWorker;
+        this.testAbandonWorker = testAbandonWorker;
+        this.testPackageInstall = testPackageInstall;
+        this.testInstallations = testInstallations;
+        this.testFolderWorkspace = testFolderWorkspace;
+        this.testMonitor = testMonitor;
+        productIndex = new(() =>
+        {
+            using var registry = this.openRegistry();
+            return registry.OpenIndexScope();
+        });
+        InitializeComponent();
+        InitializeProductHelp();
+        SizeChanged += (_, _) => UpdateWorkspaceLayout();
+        UpdateWorkspaceLayout();
+        runtimeTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background,
+            async (_, _) => await PollRuntimeAsync(), Dispatcher);
+        runtimeTimer.Stop();
+        ModeChanged(this, new RoutedEventArgs());
+    }
+
+    internal async Task InitializeAsync()
+    {
+        await RunAsync(async () => { await LoadListAsync(); await RefreshRuntimeAsync(); });
+        runtimeTimer.Start();
+    }
+
+    private bool? wideWorkspace;
+
+    private void UpdateWorkspaceLayout()
+    {
+        bool wide = (ActualWidth > 0 ? ActualWidth : Width) >= 900 &&
+            (ActualHeight > 0 ? ActualHeight : Height) >= 650;
+        if (wideWorkspace != wide)
+        {
+            wideWorkspace = wide;
+            MoreJobActions.IsExpanded = wide || MoreJobActions.IsKeyboardFocusWithin;
+        }
+        JobWorkspace.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
+        JobWorkspace.ColumnDefinitions[1].Width = new GridLength(wide ? 16 : 0);
+        JobWorkspace.ColumnDefinitions[2].Width = new GridLength(wide ? 294 : 0);
+        JobWorkspace.RowDefinitions[1].Height = new GridLength(wide ? 0 : 12);
+        JobWorkspace.RowDefinitions[0].MinHeight = wide ? 0 : 64;
+        JobWorkspace.RowDefinitions[0].Height = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(64);
+        JobWorkspace.RowDefinitions[2].Height = wide ? new GridLength(0) : new GridLength(2, GridUnitType.Star);
+        JobRailLabel.Visibility = RouteEyebrow.Visibility = RouteSubtitle.Visibility = wide ? Visibility.Visible : Visibility.Collapsed;
+        RouteHeading.Margin = wide ? new Thickness(0, 16, 0, 15) : new Thickness(0, 6, 0, 7);
+        RouteTitle.FontSize = wide ? 34 : 26;
+        JobRail.Padding = wide ? new Thickness(12) : new Thickness(6, 3, 6, 3);
+        JobRail.VerticalAlignment = wide ? VerticalAlignment.Top : VerticalAlignment.Stretch;
+        JobRail.MinHeight = wide ? 190 : 0;
+        if (wide && JobRail.GetBindingExpression(HeightProperty) is null)
+            JobRail.SetBinding(HeightProperty, new System.Windows.Data.Binding(nameof(ActualHeight)) { Source = BackupRoute });
+        else if (!wide) JobRail.ClearValue(HeightProperty);
+        Grid.SetColumn(JobRail, wide ? 2 : 0);
+        Grid.SetRow(JobDetailsPanel, wide ? 0 : 2);
+        ArrangeRoute();
+    }
+
+    private void ArrangeRoute()
+    {
+        bool reviewing = MirrorReviewPanel.Visibility == Visibility.Visible;
+        var routeHost = Grid.GetColumn(JobRail) == 2 && !reviewing ? WideRouteHost : CompactRouteHost;
+        if (BackupRoute.Parent is Border previous && previous != routeHost)
+        {
+            previous.Child = null;
+            routeHost.Child = BackupRoute;
+            if (reviewing) JobDetailsScroll.ScrollToTop();
+        }
+
+        var host = WideRouteHost.Child is not null && BackupRoute.Visibility == Visibility.Visible
+            ? WideRouteActions : CompactRouteActions;
+        if (PrimaryJobActions.Parent is not Border oldActionsHost || oldActionsHost == host) return;
+        oldActionsHost.Child = null;
+        host.Child = PrimaryJobActions;
+    }
+
+    private void NewJobClick(object sender, RoutedEventArgs e)
+    {
+        if (busy) return;
+        origin = parent = null;
+        selection = null;
+        ResetProductActions();
+        OriginText.Text = ParentText.Text = "";
+        JobName.Text = DailyTime.Text = "";
+        BackupMode.SelectedIndex = 1;
+        WatchChanges.IsChecked = testMonitor is not null || testSchedule is null && testFolderWorkspace is null && testPicker is null;
+        AllowWizardMirrorRetire.IsChecked = false;
+        JobListPanel.Visibility = Visibility.Collapsed;
+        Wizard.Visibility = Visibility.Visible;
+        SetStatus("");
+        ShowStep(0);
+    }
+
+    private void ChooseOriginClick(object sender, RoutedEventArgs e)
+    {
+        if (ChooseFolder("Elige la carpeta de origen") is not { } chosen) return;
+        origin = chosen;
+        OriginText.Text = chosen;
+        NextStepButton.IsEnabled = true;
+        NextStepButton.Focus();
+    }
+
+    private void ChooseParentClick(object sender, RoutedEventArgs e)
+    {
+        if (ChooseFolder("Elige dónde guardar el respaldo") is not { } chosen) return;
+        parent = chosen;
+        ParentText.Text = chosen;
+        NextStepButton.IsEnabled = true;
+        NextStepButton.Focus();
+    }
+
+    private string? ChooseFolder(string title)
+    {
+        if (busy) return null;
+        if (testPicker is not null) return testPicker(title);
+        var dialog = new OpenFolderDialog { Title = title, AddToRecent = false, DereferenceLinks = false };
+        if (testFolderWorkspace is { } workspace) dialog.InitialDirectory = workspace.Root;
+        if (dialog.ShowDialog(this) != true) return null;
+        string selected = Path.TrimEndingDirectorySeparator(dialog.FolderName);
+        if (testFolderWorkspace is { } fixture)
+        {
+            try { fixture.CheckChild(selected); }
+            catch (Exception error) when (VersionJob.Expected(error))
+            { SetStatus("Elige una subcarpeta directa del espacio de prueba."); return null; }
+        }
+        return selected;
+    }
+
+    private void NextStepClick(object sender, RoutedEventArgs e)
+    {
+        if (busy) return;
+        if (step == 0 && origin is not null) ShowStep(1);
+        else if (step == 1 && parent is not null) ShowStep(2);
+        else if (step == 2 && origin is { } source && parent is { } destinationParent)
+            Start(async () =>
+            {
+                var options = ReadOptions();
+                var reviewed = await Task.Run(() => LocalJobRoots.ReviewDedicatedDestination(source, destinationParent));
+                bool watch = WatchChanges.IsChecked == true;
+                bool retire = watch && options.Mode == ProductBackupMode.ProtectedMirror && AllowWizardMirrorRetire.IsChecked == true;
+                selection = new(options, reviewed, watch, retire);
+                ReviewText.Text = $"{options.Name}\n\nOrigen\n{source}\n\nDestino nuevo\n" +
+                    $"{Path.Combine(destinationParent, reviewed.FolderName)}\n\n{ModeName(options.Mode)} · " +
+                    $"{TriggerLabel(options, watch ? ProductWatchMode.Watching : ProductWatchMode.Off)}\n\n" +
+                    (options.Mode == ProductBackupMode.ProtectedMirror && watch ?
+                        (retire ? "Retiradas ordinarias autorizadas. Podrás recuperarlas desde un punto anterior.\n\n" :
+                            "Las retiradas requieren tu revisión.\n\n") : "") +
+                    $"Espacio disponible: {reviewed.AvailableBytes / (1024d * 1024 * 1024):N1} GiB. " +
+                    "Guardar crea la carpeta dedicada y conserva la configuración.";
+                ShowStep(3);
+                SetStatus("Revisa la selección antes de guardarla.");
+            });
+    }
+
+    private ProductJobOptions ReadOptions()
+    {
+        TimeOnly? time = null;
+        if (!string.IsNullOrWhiteSpace(DailyTime.Text))
+        {
+            if (!TimeOnly.TryParseExact(DailyTime.Text.Trim(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+                throw new InvalidDataException("Introduce una hora en formato HH:mm, por ejemplo 20:30.");
+            time = parsed;
+        }
+        var options = new ProductJobOptions(JobName.Text.Trim(), (ProductBackupMode)BackupMode.SelectedIndex, time);
+        options.Validate();
+        return options;
+    }
+
+    private void SaveJobClick(object sender, RoutedEventArgs e)
+    {
+        if (busy || step != 3 || selection is not { } current) return;
+        Start(async () =>
+        {
+            try
+            {
+                string location = await Task.Run(() =>
+                {
+                    using var registry = openRegistry();
+                    var job = registry.Create(current.Options, current.Destination);
+                    if (current.Watch)
+                        registry.UpdateSettings(job.Id, job.Options.Name, job.Options.DailyAt, true, false,
+                            ProductWatchMode.Watching, current.AllowRetire);
+                    return registry.Location;
+                });
+                ShowJobs();
+                await LoadListAsync();
+                SelectJob(current.Destination.FolderId);
+                if (current.Options.DailyAt is not null)
+                    await ApplyScheduleAsync(location, current.Destination.FolderId);
+                if (current.Watch) await StartWatchAsync();
+                else if (current.Options.DailyAt is null) SetStatus("Trabajo guardado. Pulsa Respaldar ahora para crear la primera copia.");
+            }
+            catch (Exception error) when (VersionJob.Expected(error))
+            {
+                ShowJobs();
+                await LoadListAsync();
+                SelectJob(current.Destination.FolderId);
+                SetStatus(error.Message + " Si el registro quedó pendiente, puedes seleccionarlo y reanudarlo.");
+            }
+        });
+    }
+
+    private void BackStepClick(object sender, RoutedEventArgs e)
+    {
+        if (busy || step == 0) return;
+        selection = null;
+        ShowStep(step - 1);
+    }
+
+    private void CancelWizardClick(object sender, RoutedEventArgs e)
+    {
+        if (busy) return;
+        ShowJobs();
+        SetStatus("Selección descartada.");
+    }
+
+    private void RefreshJobsClick(object sender, RoutedEventArgs e)
+    {
+        if (!busy) Start(async () => { await LoadListAsync(); await RefreshRuntimeAsync(rereadHistory: true); });
+    }
+
+    private void ResumeRegistrationClick(object sender, RoutedEventArgs e)
+    {
+        if (busy || JobList.SelectedItem is not JobRow { Pending: true } row) return;
+        Start(async () =>
+        {
+            await Task.Run(() =>
+            {
+                using var registry = openRegistry();
+                registry.Resume(row.Id);
+            });
+            await LoadListAsync();
+            SelectJob(row.Id);
+            SetStatus("Registro completado.");
+        });
+    }
+
+    private void JobSelected(object sender, SelectionChangedEventArgs e)
+    {
+        JobDetailsScroll.ScrollToTop();
+        if (ResumeRegistrationButton is not null)
+            ResumeRegistrationButton.IsEnabled = !busy && JobList.SelectedItem is JobRow { Pending: true };
+        if (BackupJobButton is not null) { RefreshProductActions(); ShowJobSettings(); }
+        if (!busy && JobList.SelectedItem is JobRow selected)
+            SetStatus(runSnapshots.TryGetValue(selected.Id, out var history) && history.Runs.FirstOrDefault() is { Result: { } result } run ?
+                ResultText(run, result) : "");
+    }
+
+    private void SelectJob(Guid id)
+    {
+        JobList.SelectedItem = JobList.Items.OfType<JobRow>().FirstOrDefault(row => row.Id == id);
+    }
+
+    private async Task LoadListAsync()
+    {
+        Guid? previous = (JobList.SelectedItem as JobRow)?.Id;
+        var list = await Task.Run(() =>
+        {
+            using var registry = openRegistry();
+            return registry.List();
+        });
+        JobRow[] rows = [.. list.Jobs.Select(job => new JobRow(job.Id, job.Options.Name,
+            $"{ModeName(job.Options.Mode)} · {TriggerLabel(job.Options, job.WatchMode)}" +
+            (job.Retired ? " · Retirado" : !job.Enabled ? " · Deshabilitado" : ""), false, job)),
+            .. list.Pending.Select(id => new JobRow(id, "Registro pendiente",
+                $"Selecciona Reanudar registro para continuar · {id.ToString("N")[..8]}", true))];
+        JobList.ItemsSource = rows;
+        JobList.SelectedItem = rows.FirstOrDefault(row => row.Id == previous) ?? rows.FirstOrDefault();
+        EmptyJobsText.Visibility = rows.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ResumeRegistrationButton.Visibility = list.Pending.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        FirstBackupButton.Visibility = rows.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        SetStatus(list.Unreadable > 0 ? $"{list.Unreadable} registros necesitan revisión." : "");
+    }
+
+    private void ShowJobs()
+    {
+        selection = null;
+        ImportPanel.Visibility = Visibility.Collapsed;
+        RecoveryPanel.Visibility = Visibility.Collapsed;
+        Wizard.Visibility = Visibility.Collapsed;
+        ApplicationPanel.Visibility = Visibility.Collapsed;
+        JobListPanel.Visibility = Visibility.Visible;
+        NewJobButton.Focus();
+    }
+
+    private void ShowStep(int value)
+    {
+        step = value;
+        StepNumber.Text = $"Paso {value + 1} de 4";
+        StepTitle.Text = value switch { 0 => "Qué quieres respaldar", 1 => "Dónde guardarlo", 2 => "Cómo respaldarlo", _ => "Revisa el trabajo" };
+        OriginStep.Visibility = VisibilityFor(0);
+        DestinationStep.Visibility = VisibilityFor(1);
+        OptionsStep.Visibility = VisibilityFor(2);
+        ReviewStep.Visibility = VisibilityFor(3);
+        BackStepButton.IsEnabled = value > 0;
+        NextStepButton.Visibility = value == 3 ? Visibility.Collapsed : Visibility.Visible;
+        NextStepButton.IsDefault = value != 3;
+        NextStepButton.IsEnabled = value switch { 0 => origin is not null, 1 => parent is not null, _ => true };
+        SaveJobButton.Visibility = VisibilityFor(3);
+        SaveJobButton.IsDefault = value == 3;
+        if (!busy) FocusCurrentStep();
+
+        Visibility VisibilityFor(int target) => value == target ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void FocusCurrentStep()
+    {
+        int expectedStep = step;
+        _ = Dispatcher.InvokeAsync(() =>
+        {
+            if (!busy && step == expectedStep && Wizard.IsVisible)
+                (step switch { 0 => ChooseOriginButton, 1 => ChooseParentButton, 2 => (Control)JobName, _ => SaveJobButton }).Focus();
+        }, DispatcherPriority.Input);
+    }
+
+    private void ModeChanged(object sender, RoutedEventArgs e)
+    {
+        if (ModeDetail is null) return;
+        if (AllowWizardMirrorRetire is not null)
+            AllowWizardMirrorRetire.Visibility = WatchChanges.IsChecked == true && BackupMode.SelectedIndex == (int)ProductBackupMode.ProtectedMirror
+                ? Visibility.Visible : Visibility.Collapsed;
+        ModeDetail.Text = (ProductBackupMode)BackupMode.SelectedIndex switch
+        {
+            ProductBackupMode.Accumulative => "Añade y actualiza archivos y conserva los exclusivos del destino. Por ejemplo, si borras una foto del origen, la copia en destino permanece. Una edición externa en conflicto requiere revisión.",
+            ProductBackupMode.Versions => "Conserva fechas recuperables. Por ejemplo, puedes recuperar el documento de ayer aunque hoy lo hayas cambiado o borrado. La recuperación se hace desde la aplicación.",
+            ProductBackupMode.ProtectedMirror => "Mantiene una carpeta actual y conserva el contenido retirado. Por ejemplo, una foto borrada del origen se retira de la carpeta actual después de revisar los cambios y queda en un punto recuperable.",
+            _ => ""
+        };
+    }
+
+    private void Start(Func<Task> action) => activeTask = RunAsync(action);
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        int previousStep = step;
+        bool wasWizard = Wizard.Visibility == Visibility.Visible;
+        bool wasImport = ImportPanel.Visibility == Visibility.Visible;
+        bool wasApplication = ApplicationPanel.Visibility == Visibility.Visible;
+        bool wasRecovery = RecoveryPanel.Visibility == Visibility.Visible;
+        var previousFocus = Keyboard.FocusedElement as Control;
+        busy = true;
+        Wizard.IsEnabled = JobListPanel.IsEnabled = RecoveryPanel.IsEnabled = ImportPanel.IsEnabled = ApplicationPanel.IsEnabled = false;
+        ReturnToJobsButton.IsEnabled = false;
+        SetStatus("Comprobando la selección…");
+        try { await action(); }
+        catch (Exception error) when (ProductAutomation.Expected(error)) { SetStatus(error.Message); }
+        finally
+        {
+            busy = false;
+            Wizard.IsEnabled = JobListPanel.IsEnabled = RecoveryPanel.IsEnabled = ImportPanel.IsEnabled = ApplicationPanel.IsEnabled = true;
+            ReturnToJobsButton.IsEnabled = true;
+            ResumeRegistrationButton.IsEnabled = JobList.SelectedItem is JobRow { Pending: true };
+            RefreshProductActions();
+            if (Wizard.Visibility == Visibility.Visible && previousStep != step) FocusCurrentStep();
+            else if ((wasWizard || wasImport) && JobListPanel.Visibility == Visibility.Visible)
+                RestoreKeyboardFocus(JobList.SelectedItem is null ? NewJobButton : JobList);
+            else if (!wasImport && ImportPanel.Visibility == Visibility.Visible) RestoreKeyboardFocus(ChooseImportDestinationButton);
+            else if (!wasApplication && ApplicationPanel.Visibility == Visibility.Visible) RestoreKeyboardFocus(AcceptApplicationUpdate);
+            else if (!wasRecovery && RecoveryPanel.Visibility == Visibility.Visible) RestoreKeyboardFocus(RecoveryDates);
+            else if (previousFocus is not null) RestoreKeyboardFocus(previousFocus);
+        }
+    }
+
+    private void RestoreKeyboardFocus(Control target) => _ = Dispatcher.InvokeAsync(() =>
+    {
+        if (busy || closed || !target.IsVisible || !target.IsEnabled || Window.GetWindow(target) != this) return;
+        target.UpdateLayout();
+        FocusManager.SetFocusedElement(this, target);
+        Keyboard.Focus(target);
+    }, DispatcherPriority.Input);
+
+    private void SetStatus(string text)
+    {
+        StatusText.Text = text;
+        UIElementAutomationPeer.FromElement(StatusText)?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (busy)
+        {
+            e.Cancel = true;
+            SetStatus("Espera a que termine la operación para cerrar la ventana.");
+        }
+        else if (explainWatchOnClose)
+        {
+            explainWatchOnClose = false;
+            MessageBox.Show(this,
+                "La vigilancia puede seguir con la ventana cerrada mientras tu sesión de Windows siga iniciada y el equipo esté despierto. " +
+                "Para detenerla, abre Aplicación y elige Detener vigilancia.",
+                "Vigilancia de FolderTwin", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        base.OnClosing(e);
+    }
+
+    private static string ModeName(ProductBackupMode mode) => mode switch
+    {
+        ProductBackupMode.Accumulative => "Copia acumulativa",
+        ProductBackupMode.ProtectedMirror => "Espejo protegido",
+        _ => "Versionado"
+    };
+
+    private static string Schedule(ProductJobOptions options) =>
+        options.DailyAt is { } time ? "Hora diaria " + time.ToString("HH:mm", CultureInfo.InvariantCulture) : "A demanda";
+
+    private static string TriggerLabel(ProductJobOptions options, ProductWatchMode watch) =>
+        watch == ProductWatchMode.Off ? Schedule(options) :
+        (watch == ProductWatchMode.Watching ? "Automático al detectar cambios" : "Vigilancia pausada") +
+        (options.DailyAt is null ? "" : $" · {Schedule(options)}");
+}

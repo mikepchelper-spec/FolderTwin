@@ -1,0 +1,584 @@
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+using Microsoft.Win32.SafeHandles;
+
+[assembly: System.Runtime.InteropServices.DefaultDllImportSearchPaths(System.Runtime.InteropServices.DllImportSearchPath.System32)]
+namespace FolderTwin.Core;
+
+
+internal static class WindowsProbeNative
+{
+    private static readonly Encoding DirectoryNameEncoding = new UnicodeEncoding(false, false, true);
+    [DllImport("kernel32.dll", EntryPoint = "CreateFileW", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern SafeFileHandle CreateFile(string path, uint access, FileShare share, nint security,
+        uint disposition, uint flags, nint template);
+
+    internal static SafeFileHandle OpenPlainDirectory(string path) => OpenPlain(
+        path, 0x01 | 0x80, FileShare.ReadWrite, 3, directory: true);
+
+    internal static SafeFileHandle OpenPlainDirectory(SafeFileHandle parent, string name)
+    {
+        DirectoryFence.CheckName(name);
+        return OpenRelative(parent, name, 0x01 | 0x80, FileShare.ReadWrite, 1, directory: true);
+    }
+
+    internal static SafeFileHandle OpenDirectoryForDeletion(SafeFileHandle parent, string name)
+    {
+        DirectoryFence.CheckName(name);
+        return OpenRelative(parent, name, 0x01 | 0x80 | 0x00010000, FileShare.ReadWrite, 1, directory: true);
+    }
+
+    internal static SafeFileHandle OpenOrCreatePlainDirectory(SafeFileHandle parent, string name, bool writeAttributes = false)
+    {
+        DirectoryFence.CheckName(name);
+        return OpenRelative(parent, name, 0x01 | 0x80 | (writeAttributes ? 0x100u : 0), FileShare.ReadWrite, 3, directory: true);
+    }
+
+    internal static SafeFileHandle CreatePlainDirectory(SafeFileHandle parent, string name, bool writeAttributes = false)
+    {
+        DirectoryFence.CheckName(name);
+        return OpenRelative(parent, name, 0x01 | 0x80 | (writeAttributes ? 0x100u : 0), FileShare.ReadWrite, 2, directory: true);
+    }
+
+    internal static FileStream OpenPlainFile(SafeFileHandle parent, string path, FileAccess access, FileShare share,
+        FileMode mode = FileMode.Open,
+        bool rename = false, bool writeAttributes = false)
+    {
+        uint rights = access switch
+        {
+            FileAccess.Read => 0x80000000,
+            FileAccess.Write => 0x40000000,
+            _ => 0xc0000000
+        };
+        if (rename)
+            rights |= 0x00010000; // DELETE, required for rename.
+        if (writeAttributes)
+            rights |= 0x00000100; // FILE_WRITE_ATTRIBUTES.
+        uint disposition = mode switch
+        {
+            FileMode.Open => 1,
+            FileMode.CreateNew => 2,
+            FileMode.OpenOrCreate => 3,
+            _ => throw new ArgumentOutOfRangeException(nameof(mode))
+        };
+        string fileName = Path.GetFileName(path);
+        DirectoryFence.CheckName(fileName);
+        var handle = OpenRelative(parent, fileName, rights, share, disposition, directory: false);
+        try
+        {
+            return new FileStream(handle, access);
+        }
+        catch
+        {
+            handle.Dispose();
+            throw;
+        }
+    }
+
+    internal static bool PlainFileExists(SafeFileHandle parent, string path)
+    {
+        try
+        {
+            using var file = OpenRelative(parent, Path.GetFileName(path), 0x80,
+                FileShare.ReadWrite | FileShare.Delete, 1, directory: false);
+            return true;
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
+    }
+
+    private static SafeFileHandle OpenPlain(string path, uint access, FileShare share, uint disposition, bool directory)
+    {
+        const uint openReparsePoint = 0x00200000;
+        const uint backupSemantics = 0x02000000;
+        var handle = CreateFile(path, access, share, 0, disposition, openReparsePoint | (directory ? backupSemantics : 0), 0);
+        return ValidatePlain(handle, directory);
+    }
+
+    private static unsafe SafeFileHandle OpenRelative(SafeFileHandle parent, string name, uint access, FileShare share,
+        uint disposition, bool directory)
+    {
+        const uint synchronize = 0x00100000;
+        const uint readAttributes = 0x80;
+        const uint synchronousIo = 0x20;
+        const uint openReparsePoint = 0x00200000;
+        const uint directoryFile = 0x01;
+        const uint nonDirectoryFile = 0x40;
+        const uint caseInsensitive = 0x40;
+        bool acquired = false;
+        try
+        {
+            parent.DangerousAddRef(ref acquired);
+            RequirePlain(parent, directory: true);
+            fixed (char* buffer = name)
+            {
+                ushort length = checked((ushort)(name.Length * sizeof(char)));
+                var unicode = new UnicodeString { Length = length, MaximumLength = length, Buffer = buffer };
+                var attributes = new ObjectAttributes
+                {
+                    Length = sizeof(ObjectAttributes),
+                    RootDirectory = parent.DangerousGetHandle(),
+                    ObjectName = &unicode,
+                    Attributes = caseInsensitive
+                };
+                int status = NtCreateFile(out var handle, access | synchronize | readAttributes, in attributes, out _, 0, 0,
+                    (uint)share, disposition, synchronousIo | openReparsePoint | (directory ? directoryFile : nonDirectoryFile),
+                    0, 0);
+                if (status != 0)
+                {
+                    handle?.Dispose();
+                    int error = RtlNtStatusToDosError(status);
+                    if (error == 2)
+                        throw new FileNotFoundException("No se encontró el archivo o carpeta de la operación.");
+                    throw new IOException("No se pudo abrir la ruta relativa de la operación.", new Win32Exception(error));
+                }
+                return ValidatePlain(handle!, directory);
+            }
+        }
+        finally
+        {
+            if (acquired)
+                parent.DangerousRelease();
+        }
+    }
+
+    private static SafeFileHandle ValidatePlain(SafeFileHandle handle, bool directory)
+    {
+        try
+        {
+            RequirePlain(handle, directory);
+            return handle;
+        }
+        catch
+        {
+            handle.Dispose();
+            throw;
+        }
+    }
+
+    private static void RequirePlain(SafeFileHandle handle, bool? directory = null)
+    {
+        const int attributeTagInfo = 9;
+        if (handle.IsInvalid || !GetAttributeTag(handle, attributeTagInfo, out AttributeTag info, Marshal.SizeOf<AttributeTag>()))
+            throw new IOException("No se pudo abrir o inspeccionar la ruta de la operación.", new Win32Exception(Marshal.GetLastPInvokeError()));
+        if (directory is { } expected && info.Attributes.HasFlag(FileAttributes.Directory) != expected)
+            throw new InvalidDataException("Tipo de ruta inesperado.");
+        switch (FolderInventory.Omission(info.Attributes))
+        {
+            case InventoryIssueKind.Unavailable:
+                throw new InvalidDataException("La ruta tiene datos no disponibles localmente. Requiere revisión.");
+            case InventoryIssueKind.ReparsePoint:
+                throw new InvalidDataException("La ruta contiene un punto de reanálisis. Requiere revisión.");
+            case InventoryIssueKind.Encrypted:
+                throw new InvalidDataException("La ruta está cifrada con EFS. Requiere revisión.");
+        }
+        if (!info.Attributes.HasFlag(FileAttributes.Directory))
+        {
+            const int fileStandardInfo = 1;
+            if (!GetStandardInfo(handle, fileStandardInfo, out StandardInfo standard, Marshal.SizeOf<StandardInfo>()))
+                throw new IOException("No se pudieron comprobar los enlaces del archivo.", new Win32Exception(Marshal.GetLastPInvokeError()));
+            if (standard.NumberOfLinks != 1 || standard.DeletePending != 0)
+                throw new InvalidDataException("El archivo tiene enlaces duros o está pendiente de eliminación. Requiere revisión.");
+        }
+    }
+
+    internal static byte[] DirectoryIdentity(SafeFileHandle directory)
+    {
+        const int fileIdInfo = 18;
+        byte[] identity = new byte[24]; // 64-bit volume serial and 128-bit file ID.
+        if (!GetIdentity(directory, fileIdInfo, identity, identity.Length))
+            throw new Win32Exception(Marshal.GetLastPInvokeError(), "Reading directory identity failed.");
+        return identity;
+    }
+
+    internal static void RequireDataWriteAccess(SafeFileHandle file)
+    {
+        RequirePlain(file, directory: false);
+        const int fileAccessInformation = 8;
+        int status = NtQueryInformationFile(file, out var result, out uint access, sizeof(uint), fileAccessInformation);
+        if (status != 0)
+            throw new IOException("No se pudieron comprobar los permisos del archivo temporal.", new Win32Exception(RtlNtStatusToDosError(status)));
+        if (result.Information != sizeof(uint) || (access & 0x02) == 0)
+            throw new UnauthorizedAccessException("La escritura de metadatos requiere un handle de datos con permiso de escritura.");
+    }
+
+    internal static unsafe void RequireSupportedData(SafeFileHandle handle, string label, bool allowZoneIdentifier = false)
+    {
+        RequirePlain(handle);
+        const int fileEaInformation = 7; // NT FILE_INFORMATION_CLASS.
+        int status = NtQueryInformationFile(handle, out var result, out uint eaSize, sizeof(uint), fileEaInformation);
+        if (status != 0)
+            throw new IOException($"No se pudieron comprobar los atributos extendidos de «{label}».",
+                new Win32Exception(RtlNtStatusToDosError(status)));
+        if (result.Information != sizeof(uint))
+            throw new InvalidDataException($"La información de atributos extendidos de «{label}» es incompleta.");
+        if (eaSize != 0)
+            throw new InvalidDataException($"«{label}» tiene atributos extendidos de NTFS. Requiere revisión.");
+
+        _ = ReadSupportedStreams(handle, label, allowZoneIdentifier);
+    }
+
+    internal static bool HasZoneIdentifier(SafeFileHandle file) => ReadSupportedStreams(file, "archivo", allowZoneIdentifier: true);
+
+    private static unsafe bool ReadSupportedStreams(SafeFileHandle handle, string label, bool allowZoneIdentifier)
+    {
+        const int fileStreamInfo = 7;
+        const int headerSize = 24;
+        var defaultStream = MemoryMarshal.AsBytes("::$DATA".AsSpan());
+        bool directory = File.GetAttributes(handle).HasFlag(FileAttributes.Directory);
+        Span<byte> buffer = stackalloc byte[4096];
+        buffer.Clear();
+        fixed (byte* data = buffer)
+        {
+            if (!GetFileInformation(handle, fileStreamInfo, data, buffer.Length))
+            {
+                int error = Marshal.GetLastPInvokeError();
+                if (error == 38) // ERROR_HANDLE_EOF: no streams, as on a plain directory.
+                    return false;
+                if (error == 234) // ERROR_MORE_DATA: excessive alternate data streams.
+                    throw new InvalidDataException($"«{label}» tiene flujos de datos alternativos no admitidos. Requiere revisión.");
+                throw new IOException($"No se pudieron comprobar los flujos NTFS de «{label}».", new Win32Exception(error));
+            }
+        }
+
+        int offset = 0;
+        bool unnamed = false, zone = false;
+        while (true)
+        {
+            var entry = buffer[offset..];
+            uint next = BitConverter.ToUInt32(entry);
+            uint nameBytes = BitConverter.ToUInt32(entry[4..]);
+            long size = BitConverter.ToInt64(entry[8..]);
+            if (size < 0 || nameBytes == 0 || (nameBytes & 1) != 0 || nameBytes > entry.Length - headerSize)
+                throw new InvalidDataException("La lista de flujos NTFS no es válida.");
+            var name = entry.Slice(headerSize, (int)nameBytes);
+            if (name.SequenceEqual(defaultStream) && !unnamed) unnamed = true;
+            else if (allowZoneIdentifier && !directory && !zone &&
+                DirectoryNameEncoding.GetString(name).Equals(":Zone.Identifier:$DATA", StringComparison.OrdinalIgnoreCase))
+            {
+                if (size > ZoneIdentifierStream.MaximumBytes)
+                    throw new InvalidDataException($"Zone.Identifier de «{label}» supera el límite de 16 KiB.");
+                zone = true;
+            }
+            else throw new InvalidDataException($"«{label}» tiene flujos de datos alternativos no admitidos. Requiere revisión.");
+            if (next == 0) break;
+            if ((next & 7) != 0 || next < headerSize + nameBytes || next > entry.Length - headerSize)
+                throw new InvalidDataException("La lista de flujos NTFS está incompleta.");
+            offset += (int)next;
+        }
+        if (!directory && !unnamed) throw new InvalidDataException("Falta el flujo principal del archivo.");
+        return zone;
+    }
+
+    internal static unsafe FileMetadata ReadFileMetadata(SafeFileHandle handle)
+    {
+        const int fileBasicInfo = 0;
+        BasicInfo info = default;
+        if (!GetFileInformation(handle, fileBasicInfo, &info, sizeof(BasicInfo)))
+            throw new IOException("No se pudieron comprobar las fechas y atributos del archivo.",
+                new Win32Exception(Marshal.GetLastPInvokeError()));
+        return new(DateTime.FromFileTimeUtc(info.LastWrite), DateTime.FromFileTimeUtc(info.Creation),
+            (info.Attributes & FileAttributes.Hidden) != 0);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BasicInfo
+    {
+        internal long Creation, LastAccess, LastWrite, Change;
+        internal FileAttributes Attributes;
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "GetFileInformationByHandleEx", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern unsafe bool GetFileInformation(SafeFileHandle file, int infoClass, void* data, int size);
+
+    internal static unsafe void RequireNtfsVolume(SafeFileHandle directory, bool writable)
+    {
+        Span<char> fileSystem = stackalloc char[261];
+        fixed (char* name = fileSystem)
+        {
+            if (!GetVolumeInformationByHandle(directory, null, 0, null, null, out uint flags, name, (uint)fileSystem.Length))
+                throw new IOException("No se pudo identificar el volumen de la carpeta.", new Win32Exception(Marshal.GetLastPInvokeError()));
+            int end = fileSystem.IndexOf('\0');
+            if (end < 0 || !((ReadOnlySpan<char>)fileSystem[..end]).Equals("NTFS", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("FolderTwin requiere un volumen local NTFS.");
+            const uint readOnlyVolume = 0x00080000;
+            if (writable && (flags & readOnlyVolume) != 0)
+                throw new InvalidDataException("El volumen de destino es de solo lectura.");
+        }
+    }
+
+    internal readonly record struct DirectoryEntry(string Name, FileAttributes Attributes, long Length, long LastWriteFileTime = 0);
+
+    internal static IEnumerable<DirectoryEntry> ReadDirectory(SafeFileHandle directory)
+    {
+        // FILE_FULL_DIR_INFO has a 68-byte header followed by a UTF-16 name.
+        const int headerSize = 68;
+        byte[] buffer = new byte[64 * 1024];
+        bool restart = true;
+        while (true)
+        {
+            RequirePlain(directory, directory: true);
+            Array.Clear(buffer);
+            if (!GetIdentity(directory, restart ? 15 : 14, buffer, buffer.Length))
+            {
+                int error = Marshal.GetLastPInvokeError();
+                if (error == 18) // ERROR_NO_MORE_FILES
+                    yield break;
+                throw new IOException("Reading directory entries failed.", new Win32Exception(error));
+            }
+            restart = false;
+            int offset = 0;
+            while (true)
+            {
+                if (offset > buffer.Length - headerSize)
+                    throw new InvalidDataException("Invalid directory entry header.");
+                uint next = BitConverter.ToUInt32(buffer, offset);
+                uint nameLength = BitConverter.ToUInt32(buffer, offset + 60);
+                if (nameLength == 0 || nameLength % 2 != 0 || nameLength > buffer.Length - offset - headerSize ||
+                    (next != 0 && (next % 8 != 0 || next < headerSize + nameLength || next > buffer.Length - offset - headerSize)))
+                    throw new InvalidDataException("Invalid directory entry length.");
+                string name;
+                try
+                {
+                    name = DirectoryNameEncoding.GetString(buffer, offset + headerSize, checked((int)nameLength));
+                }
+                catch (DecoderFallbackException error)
+                {
+                    throw new InvalidDataException("Unsupported UTF-16 directory name.", error);
+                }
+                long lastWrite = BitConverter.ToInt64(buffer, offset + 24);
+                long length = BitConverter.ToInt64(buffer, offset + 40);
+                if (length < 0)
+                    throw new InvalidDataException("Invalid directory entry size.");
+                yield return new DirectoryEntry(name, (FileAttributes)BitConverter.ToUInt32(buffer, offset + 56), length, lastWrite);
+                if (next == 0)
+                    break;
+                offset += checked((int)next);
+            }
+        }
+    }
+
+    internal static unsafe string VolumePath(SafeFileHandle directory)
+    {
+        const uint volumeNameGuid = 1;
+        Span<char> path = stackalloc char[512];
+        fixed (char* buffer = path)
+        {
+            uint size = GetFinalPathNameByHandle(directory, buffer, (uint)path.Length, volumeNameGuid);
+            if (size == 0)
+                throw new Win32Exception(Marshal.GetLastPInvokeError(), "Reading the volume path failed.");
+            if (size < path.Length)
+                return new string(path[..(int)size]);
+
+            var longerPath = new char[checked((int)size)];
+            fixed (char* longerBuffer = longerPath)
+            {
+                size = GetFinalPathNameByHandle(directory, longerBuffer, (uint)longerPath.Length, volumeNameGuid);
+                if (size == 0)
+                    throw new Win32Exception(Marshal.GetLastPInvokeError(), "Reading the volume path failed.");
+                if (size >= longerPath.Length)
+                    throw new IOException("The volume path changed while reading it.");
+                return new string(longerPath, 0, (int)size);
+            }
+        }
+    }
+
+    internal static void RenameNew(SafeFileHandle file, SafeFileHandle directory, string destinationName)
+        => RenamePlainNew(file, directory, destinationName, directorySource: false);
+
+    internal static void RenameDirectoryNew(SafeFileHandle source, SafeFileHandle directory, string destinationName)
+        => RenamePlainNew(source, directory, destinationName, directorySource: true);
+
+    private static void RenamePlainNew(SafeFileHandle file, SafeFileHandle directory, string destinationName, bool directorySource)
+    {
+        const int fileRenameInformation = 10;
+        // Leave ReplaceIfExists zero and resolve the name against the pinned directory handle.
+        int lengthOffset = 2 * IntPtr.Size;
+        int nameOffset = lengthOffset + sizeof(uint);
+        ReadOnlySpan<byte> name = MemoryMarshal.AsBytes(destinationName.AsSpan());
+        byte[] request = new byte[nameOffset + name.Length + sizeof(char)];
+        BitConverter.TryWriteBytes(request.AsSpan(lengthOffset), (uint)name.Length);
+        name.CopyTo(request.AsSpan(nameOffset));
+        bool acquired = false;
+        try
+        {
+            directory.DangerousAddRef(ref acquired);
+            RequirePlain(directory, directory: true);
+            RequirePlain(file, directory: directorySource);
+            nint directoryHandle = directory.DangerousGetHandle();
+            MemoryMarshal.Write(request.AsSpan(IntPtr.Size), in directoryHandle);
+            int status = NtSetInformationFile(file, out _, request, (uint)request.Length, fileRenameInformation);
+            if (status != 0)
+                throw new IOException("Publishing the verified file failed.", new Win32Exception(RtlNtStatusToDosError(status)));
+        }
+        finally
+        {
+            if (acquired)
+                directory.DangerousRelease();
+        }
+    }
+
+    internal static void DeletePlainFile(SafeFileHandle file)
+    {
+        RequirePlain(file, directory: false);
+        // FILE_DISPOSITION_INFORMATION.DeleteFile = TRUE. DELETE access is required;
+        // the caller holds the store lock and an exclusive, verified file handle.
+        int status = NtSetInformationFile(file, out _, [1], 1, 13);
+        if (status != 0)
+            throw new IOException("No se pudo purgar el archivo de cuarentena.", new Win32Exception(RtlNtStatusToDosError(status)));
+    }
+
+    internal static void DeleteEmptyDirectory(SafeFileHandle directory)
+    {
+        RequirePlain(directory, directory: true);
+        if (ReadDirectory(directory).Any(entry => entry.Name is not ("." or "..")))
+            throw new InvalidDataException("La carpeta contiene datos inesperados. Se conserva para revisión.");
+        RequireSupportedData(directory, "carpeta retirada");
+        int status = NtSetInformationFile(directory, out _, [1], 1, 13);
+        if (status != 0)
+            throw new IOException("No se pudo retirar una carpeta vacía.", new Win32Exception(RtlNtStatusToDosError(status)));
+    }
+
+    internal static void FlushDirectory(SafeFileHandle directory)
+    {
+        using var writable = OpenRelative(directory, "", 0x02, FileShare.ReadWrite | FileShare.Delete, 1, directory: true);
+        if (!FlushFileBuffers(writable))
+            throw new IOException("No se pudo confirmar el directorio en el disco.", new Win32Exception(Marshal.GetLastPInvokeError()));
+    }
+
+    internal static bool TryLockExclusiveSentinel(SafeFileHandle file)
+    {
+        const uint flags = 0x00000001 | 0x00000002; // LOCKFILE_FAIL_IMMEDIATELY | LOCKFILE_EXCLUSIVE_LOCK
+        for (int attempt = 0; ; attempt++)
+        {
+            OverlappedOffset overlapped = new() { OffsetLow = 0xFFFFFFFEu, OffsetHigh = 0x7FFFFFFFu };
+            if (LockFileEx(file, flags, 0, 1, 0, ref overlapped)) return true;
+            int error = Marshal.GetLastPInvokeError();
+            if (error is not (33 or 167))
+                throw new IOException("No se pudo adquirir el bloqueo de coordinación.", new Win32Exception(error));
+            if (attempt >= 5) return false;
+            Thread.Sleep(10);
+        }
+    }
+
+    internal static bool IsSentinelLocked(SafeFileHandle file)
+    {
+        const uint flags = 0x00000001; // LOCKFILE_FAIL_IMMEDIATELY (shared probe at high sentinel offset)
+        OverlappedOffset overlapped = new() { OffsetLow = 0xFFFFFFFEu, OffsetHigh = 0x7FFFFFFFu };
+        if (!LockFileEx(file, flags, 0, 1, 0, ref overlapped))
+        {
+            int error = Marshal.GetLastPInvokeError();
+            if (error is 33 or 167) return true;
+            throw new IOException("No se pudo consultar el bloqueo de coordinación.", new Win32Exception(error));
+        }
+        _ = UnlockFileEx(file, 0, 1, 0, ref overlapped);
+        return false;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct OverlappedOffset
+    {
+        public nuint Internal;
+        public nuint InternalHigh;
+        public uint OffsetLow;
+        public uint OffsetHigh;
+        public nint EventHandle;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct AttributeTag
+    {
+        public FileAttributes Attributes;
+        public uint ReparseTag;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct StandardInfo
+    {
+        public long AllocationSize;
+        public long EndOfFile;
+        public uint NumberOfLinks;
+        public byte DeletePending;
+        public byte Directory;
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "GetFileInformationByHandleEx", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetStandardInfo(SafeFileHandle file, int infoClass, out StandardInfo info, int size);
+
+    [DllImport("kernel32.dll", EntryPoint = "GetFileInformationByHandleEx", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetAttributeTag(SafeFileHandle file, int infoClass, out AttributeTag info, int size);
+
+    [DllImport("kernel32.dll", EntryPoint = "GetFileInformationByHandleEx", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetIdentity(SafeFileHandle file, int infoClass, [Out] byte[] data, int size);
+
+    [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", SetLastError = true)]
+    private static extern unsafe uint GetFinalPathNameByHandle(SafeFileHandle file, char* path, uint size, uint flags);
+
+    [DllImport("kernel32.dll", EntryPoint = "GetVolumeInformationByHandleW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern unsafe bool GetVolumeInformationByHandle(SafeFileHandle file, char* volumeName, uint volumeNameSize,
+        uint* serialNumber, uint* maximumComponentLength, out uint flags, char* fileSystemName, uint fileSystemNameSize);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct IoStatusBlock
+    {
+        public nint Status;
+        public nuint Information;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private unsafe struct UnicodeString
+    {
+        public ushort Length;
+        public ushort MaximumLength;
+        public char* Buffer;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private unsafe struct ObjectAttributes
+    {
+        public int Length;
+        public nint RootDirectory;
+        public UnicodeString* ObjectName;
+        public uint Attributes;
+        public nint SecurityDescriptor;
+        public nint SecurityQualityOfService;
+    }
+
+    [DllImport("ntdll.dll", ExactSpelling = true)]
+    private static extern int NtCreateFile(out SafeFileHandle handle, uint access, in ObjectAttributes attributes,
+        out IoStatusBlock status, nint allocationSize, uint fileAttributes, uint share, uint disposition, uint options,
+        nint extendedAttributes, uint extendedAttributesLength);
+
+    [DllImport("ntdll.dll", ExactSpelling = true)]
+    private static extern int NtSetInformationFile(SafeFileHandle file, out IoStatusBlock status, byte[] data,
+        uint size, int infoClass);
+
+    [DllImport("ntdll.dll", ExactSpelling = true)]
+    private static extern int NtQueryInformationFile(SafeFileHandle file, out IoStatusBlock status, out uint data,
+        uint size, int infoClass);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool FlushFileBuffers(SafeFileHandle file);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool LockFileEx(SafeFileHandle file, uint flags, uint reserved, uint numberOfBytesToLockLow,
+        uint numberOfBytesToLockHigh, ref OverlappedOffset overlapped);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool UnlockFileEx(SafeFileHandle file, uint reserved, uint numberOfBytesToUnlockLow,
+        uint numberOfBytesToUnlockHigh, ref OverlappedOffset overlapped);
+
+    [DllImport("ntdll.dll", ExactSpelling = true)]
+    private static extern int RtlNtStatusToDosError(int status);
+}

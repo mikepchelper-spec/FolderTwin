@@ -27,10 +27,10 @@ jobs:
         shell: pwsh
         run: |
           $build = Join-Path $env:RUNNER_TEMP 'FolderTwin-Index-Build'
-          dotnet build experiments/CopyLab -c Release --output $build
+          dotnet build tests/CopyLab.Tests -c Release --output $build
           if ($LASTEXITCODE -ne 0) { throw 'The index scale probe did not build.' }
           $log = Join-Path $env:RUNNER_TEMP 'FolderTwin-Index.err'
-          $process = Start-Process -FilePath (Join-Path $build 'CopyLab.exe') -ArgumentList '--index-scale' -WindowStyle Hidden -RedirectStandardError $log -PassThru -Wait
+          $process = Start-Process -FilePath (Join-Path $build 'CopyLab.Tests.exe') -ArgumentList '--index-scale' -WindowStyle Hidden -RedirectStandardError $log -PassThru -Wait
           Get-Content -LiteralPath $log
           if ($process.ExitCode -ne 0) { throw 'The index scale probe failed.' }
   layout:
@@ -49,7 +49,7 @@ jobs:
       - name: Build the layout probe
         shell: pwsh
         run: |
-          dotnet build experiments/CopyProbe -c Release --output "$env:RUNNER_TEMP\FolderTwin-Layout-Build"
+          dotnet build tests/CopyProbe -c Release --output "$env:RUNNER_TEMP\FolderTwin-Layout-Build"
           if ($LASTEXITCODE -ne 0) { throw 'The layout probe did not build.' }
       - name: Measure a layout on a dedicated disposable NTFS image
         shell: pwsh
@@ -57,4 +57,4 @@ jobs:
           OBJECT_COUNT: ${{ inputs.count }}
           LAYOUT_LEVEL: ${{ matrix.level }}
         run: |
-          ./experiments/CopyProbe/Run-ObjectLayout.ps1 -Count $env:OBJECT_COUNT -Levels $env:LAYOUT_LEVEL
+          ./tests/CopyProbe/Run-ObjectLayout.ps1 -Count $env:OBJECT_COUNT -Levels $env:LAYOUT_LEVEL

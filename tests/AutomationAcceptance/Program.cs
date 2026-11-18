@@ -1,0 +1,88 @@
+using System.Diagnostics;
+using System.Reflection;
+using System.Security.Cryptography;
+
+if (args.Length >= 2 && args[^2] == "--cloud-output-child")
+    return KopiaOutputProbe.Emit(args);
+else if (args is [.., "snapshot", "list", "--all", "--show-identical", "--json"])
+    return KopiaOutputProbe.EmitHistory(args);
+else if (args is ["--drive-aliases"])
+    DriveAliasProbe.Run();
+else if (args is ["--held-kopia-child", _, _, _])
+    await CloudFaultProbe.HeldKopiaAsync(args[1], args[2], args[3]);
+else if (args is ["--held-cloud-recovery-child", var recoveryRoot, var recoveryId, var recoveryTool] &&
+    Guid.TryParseExact(recoveryId, "N", out var heldRecovery))
+    return await CloudRecoveryProbe.HeldChildAsync(recoveryRoot, heldRecovery, recoveryTool);
+else if (args is ["--first-use-update", _, _] or ["--first-use-update", _, _, "--withdraw-new"])
+    await FirstUseUpdateProbe.RunAsync(args[1], args[2], withdrawNew: args.Length == 4);
+else if (args.Length >= 2 && File.Exists(args[1]) && args[0] is "--packaged-binary-audit" or "--waiting-controls" or "--daily-performance" or "--storage-growth" or "--storage-safety" or "--cloud-scale" or "--cloud-faults" or "--cloud-resume-scale" or "--cloud-recovery-workers" or "--cloud-permissions" or "--cloud-history")
+{
+    string fullPath = Path.GetFullPath(args[1]);
+    string dir = Path.GetDirectoryName(fullPath)!;
+    string core = File.Exists(Path.Combine(dir, "FolderTwin.Core.dll"))
+        ? Path.Combine(dir, "FolderTwin.Core.dll")
+        : Path.Combine(dir, "CopyProbe.dll");
+    using var package = File.OpenRead(core);
+    using var referenced = File.OpenRead(typeof(LabWorkspace).Assembly.Location);
+    if (!SHA256.HashData(package).AsSpan().SequenceEqual(SHA256.HashData(referenced)))
+        throw new InvalidDataException("The executable and the referenced core must come from the same package.");
+    if (args is ["--packaged-binary-audit", _]) await RunPackagedBinaryAuditAsync(fullPath);
+    else if (args is ["--waiting-controls", _]) await WaitingControlsProbe.RunAsync(fullPath);
+    else if (args is ["--storage-safety", _]) StorageSafetyProbe.Run();
+    else if (args is ["--cloud-scale", _, "4096" or "329000"])
+        await CloudScaleProbe.RunAsync(fullPath, int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture));
+    else if (args is ["--cloud-faults", _]) await CloudFaultProbe.RunAsync(fullPath);
+    else if (args is ["--cloud-recovery-workers", _]) return await CloudRecoveryProbe.RunAsync(fullPath);
+    else if (args is ["--cloud-permissions", _]) await CloudPermissionProbe.RunAsync(dir);
+    else if (args is ["--cloud-history", _]) await KopiaOutputProbe.RunHistoryAsync();
+    else if (args is ["--cloud-resume-scale", _, var fixture]) await CloudScaleProbe.ResumeAsync(fullPath, fixture);
+    else if (args is ["--storage-growth", _, "4096" or "329000"])
+        await StorageGrowthProbe.RunAsync(fullPath, int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture));
+    else if (args is ["--daily-performance", _, _, _] or ["--daily-performance", _, _, _, "prepared"] &&
+        int.TryParse(args[2], out int files) && files is 4096 or 329000 &&
+        Enum.TryParse<ProductBackupMode>(args[3], out var mode) && Enum.IsDefined(mode))
+        await DailyPerformanceProbe.RunAsync(fullPath, files, mode, args.Length == 5 || files == 329000);
+    else return 2;
+}
+else
+{
+    Console.Error.WriteLine("Use --packaged-binary-audit <FolderTwin.exe>, --drive-aliases, --waiting-controls <FolderTwin.exe>, --daily-performance <FolderTwin.exe> <4096|329000> <mode> [prepared], --storage-growth <FolderTwin.exe> <4096|329000>, --storage-safety <FolderTwin.exe>, --cloud-scale <FolderTwin.exe> <4096|329000>, --cloud-faults <FolderTwin.exe>, or --first-use-update <old-package> <new-package>.");
+    return 2;
+}
+return 0;
+
+static async Task RunPackagedBinaryAuditAsync(string executable)
+{
+    string dir = Path.GetDirectoryName(executable)!;
+    foreach (string forbidden in new[] { "CopyLab.exe", "CopyLab.dll", "CopyProbe.exe", "CopyProbe.dll", "CopyLab.Tests.exe", "CopyLab.Tests.dll" })
+        if (File.Exists(Path.Combine(dir, forbidden)))
+            throw new InvalidDataException($"Test/legacy binary leaked into production package: {forbidden}");
+    foreach (string assemblyName in new[] { "FolderTwin.Core.dll", "FolderTwin.dll" })
+    {
+        string path = Path.Combine(dir, assemblyName);
+        if (!File.Exists(path)) throw new FileNotFoundException("Missing production assembly: " + assemblyName);
+        using var stream = File.OpenRead(path);
+        using var peReader = new System.Reflection.PortableExecutable.PEReader(stream);
+        var metadata = System.Reflection.Metadata.PEReaderExtensions.GetMetadataReader(peReader);
+        var leaked = new List<string>();
+        foreach (var handle in metadata.TypeDefinitions)
+        {
+            var typeDef = metadata.GetTypeDefinition(handle);
+            string name = metadata.GetString(typeDef.Name);
+            if (name.EndsWith("Probe", StringComparison.Ordinal) || name.EndsWith("Smoke", StringComparison.Ordinal))
+                leaked.Add(name);
+        }
+        if (leaked.Count != 0)
+            throw new InvalidDataException($"Test harness types leaked into {assemblyName}: {string.Join(", ", leaked)}");
+    }
+    foreach (string rejectedFlag in new[] { "--smoke", "--product-smoke", "--product-cloud-smoke", "--lab", "--product-preview" })
+    {
+        var start = new ProcessStartInfo(executable) { WorkingDirectory = dir, UseShellExecute = false, CreateNoWindow = true };
+        start.ArgumentList.Add(rejectedFlag);
+        using var child = Process.Start(start) ?? throw new IOException("Failed to start FolderTwin.exe");
+        await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
+        if (child.ExitCode != 2)
+            throw new InvalidDataException($"Production FolderTwin.exe did not reject test flag {rejectedFlag} (exit={child.ExitCode}).");
+    }
+    Console.WriteLine("PASS packaged binary audit: zero test assemblies, zero Probe/Smoke types in FolderTwin.dll & FolderTwin.Core.dll, and test CLI flags rejected with exit code 2.");
+}

@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+﻿#Requires -Version 7.0
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$PackageDirectory,
@@ -29,8 +29,14 @@ $actual = @(Get-ChildItem -LiteralPath $root -File -Recurse -Force | ForEach-Obj
 } | Where-Object { $_ -cne 'SHA256SUMS.txt' })
 if (-not $expected.SetEquals([string[]]$actual)) { throw 'El conjunto de archivos no coincide con el manifiesto.' }
 foreach ($required in @('README.md', 'NOTAS.md', 'GUIA.md', 'SUPPORT.md', 'INSTALACION.md', 'COMPATIBILIDAD.md', 'PILOTO.md', 'RECUPERACION-NUBE.md',
-    'LICENSE', 'LICENSE-dotnet.txt', 'LICENSE-dotnet-desktop.txt', 'THIRD-PARTY-NOTICES-dotnet.txt', 'FolderTwin.exe', 'COMPONENTES.json')) {
+    'LICENSE', 'LICENSE-dotnet.txt', 'LICENSE-dotnet-desktop.txt', 'THIRD-PARTY-NOTICES-dotnet.txt',
+    'FolderTwin.exe', 'FolderTwin.dll', 'FolderTwin.Core.dll', 'FolderTwin.runtimeconfig.json', 'COMPONENTES.json')) {
     if (-not $expected.Contains($required)) { throw "Falta un componente obligatorio: $required" }
+}
+foreach ($forbidden in @('CopyLab.exe', 'CopyLab.dll', 'CopyProbe.exe', 'CopyProbe.dll', 'CopyLab.Tests.exe', 'CopyLab.Tests.dll')) {
+    if ($expected.Contains($forbidden) -or (Test-Path -LiteralPath (Join-Path $root $forbidden))) {
+        throw "Binario de pruebas filtrado en el paquete de producción: $forbidden"
+    }
 }
 $inventory = Get-Content -LiteralPath (Join-Path $root 'COMPONENTES.json') -Raw | ConvertFrom-Json
 $versions = [ordered]@{

@@ -18,4 +18,4 @@ jobs:
         with:
           global-json-file: global.json
       - name: Measure retention with three generations of 329000 files
-        run: dotnet run --project experiments/CopyProbe --configuration Release -- --retention-scale 329000
+        run: dotnet run --project tests/CopyProbe --configuration Release -- --retention-scale 329000

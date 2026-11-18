@@ -14,7 +14,7 @@ Antes de preparar otra entrega, revisa los avisos de Microsoft, Kopia y rclone, 
 
 La candidata local usa dos ZIP reproducibles a partir de fuentes verificables. Los hashes prueban identidad de bytes contra un manifiesto conocido. Authenticode añade identidad del editor y validación de la cadena de confianza. Se conserva la candidata sin firma del editor hasta disponer de una identidad de firma autorizada. No necesita pagos ni cuentas nuevas para esta fase.
 
-Para una entrega firmada, conserva primero el artefacto reproducible, firma las copias de `FolderTwin.exe` y `CopyLab.exe` con SHA-256 y sello de tiempo, reconstruye el manifiesto del artefacto firmado y comprueba ambas firmas y su paquete. Conserva los hashes antes y después. La firma de una copia modifica sus bytes. Verifica la confianza y el comportamiento de Windows en otra máquina antes de distribuir. [SignTool](https://learn.microsoft.com/windows/win32/seccrypto/signtool) · [Sello de tiempo](https://learn.microsoft.com/en-us/windows/win32/seccrypto/time-stamping-authenticode-signatures)
+Para una entrega firmada, conserva primero el artefacto reproducible, firma la copia de `FolderTwin.exe` con SHA-256 y sello de tiempo, reconstruye el manifiesto del artefacto firmado y comprueba la firma y su paquete. Conserva los hashes antes y después. La firma de una copia modifica sus bytes. Verifica la confianza y el comportamiento de Windows en otra máquina antes de distribuir. [SignTool](https://learn.microsoft.com/windows/win32/seccrypto/signtool) · [Sello de tiempo](https://learn.microsoft.com/en-us/windows/win32/seccrypto/time-stamping-authenticode-signatures)
 
 ## Roles de acceso a probar
 
