@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory)][string]$PreviousCore,
     [Parameter(Mandatory)][string]$CurrentCore,
     [Parameter(Mandatory)][string]$PreviousArchive,
-    [string]$ExpectedArchiveSha256 = '2f795b694fa700c9993cb8cf8817017b39bed83d6212cc199eec71071bea7760'
+    [string]$ExpectedArchiveSha256 = '9c701f84c58b2420618296b31bfe75c2fc6082383fdd906ff64e149391385e4a'
 )
 $ErrorActionPreference = 'Stop'
 $campaignClock = [Diagnostics.Stopwatch]::StartNew()
@@ -34,8 +34,10 @@ foreach ($revision in @('old', 'new')) {
     & $Dotnet build $project --artifacts-path $artifacts "-p:ReferenceCoreAssembly=$core" --disable-build-servers -v minimal
     if ($LASTEXITCODE -ne 0) { throw "Compatibility harness failed to build against $revision core." }
 }
-$oldHarness = Join-Path $buildRoot 'old/bin/CompatibilityProbe/debug/CompatibilityProbe.dll'
-$newHarness = Join-Path $buildRoot 'new/bin/CompatibilityProbe/debug/CompatibilityProbe.dll'
+$oldName = if ($previousCorePath.EndsWith('CopyProbe.dll', [StringComparison]::OrdinalIgnoreCase)) { 'CopyLab.dll' } else { 'CompatibilityProbe.dll' }
+$newName = if ($currentCorePath.EndsWith('CopyProbe.dll', [StringComparison]::OrdinalIgnoreCase)) { 'CopyLab.dll' } else { 'CompatibilityProbe.dll' }
+$oldHarness = Join-Path $buildRoot "old/bin/CompatibilityProbe/debug/$oldName"
+$newHarness = Join-Path $buildRoot "new/bin/CompatibilityProbe/debug/$newName"
 $created = @(& $Dotnet $oldHarness --create)
 $createExitCode = $LASTEXITCODE
 $created | Write-Output

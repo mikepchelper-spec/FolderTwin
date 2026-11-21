@@ -2,7 +2,8 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
-    <AssemblyName>CompatibilityProbe</AssemblyName>
+    <AssemblyName Condition="'$(ReferenceCoreAssembly)' != '' and $([System.String]::Copy('$(ReferenceCoreAssembly)').EndsWith('CopyProbe.dll', System.StringComparison.OrdinalIgnoreCase))">CopyLab</AssemblyName>
+    <AssemblyName Condition="'$(AssemblyName)' == ''">CompatibilityProbe</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

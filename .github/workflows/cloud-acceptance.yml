@@ -147,6 +147,26 @@ jobs:
           dotnet $harness --cloud-history (Join-Path $package 'FolderTwin.exe') |
             Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'cloud-evidence/remote-history.txt')
           if ($LASTEXITCODE -ne 0) { throw 'The packaged history acceptance failed.' }
+      - name: Stage the verified reproducible cloud ZIP artifact
+        if: success() && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
+        run: |
+          $revision = (git rev-parse HEAD).Trim()
+          $short = $revision.Substring(0, 7)
+          $release = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP 'cloud-release') -Force
+          $zipName = "FolderTwin-win-x64-cloud-$short.zip"
+          $zipTarget = Join-Path $release.FullName $zipName
+          Copy-Item -LiteralPath (Join-Path $env:RUNNER_TEMP 'cloud-A.zip') -Destination $zipTarget -Force
+          Copy-Item -LiteralPath (Join-Path $env:RUNNER_TEMP 'cloud-expanded/SHA256SUMS.txt') -Destination (Join-Path $release.FullName 'SHA256SUMS.txt') -Force
+          $zipHash = (Get-FileHash -LiteralPath $zipTarget -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText((Join-Path $release.FullName 'SHA256SUMS-zip.txt'), "$zipHash  $zipName`n")
+      - name: Upload the verified Windows cloud package
+        if: success() && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: FolderTwin-win-x64-cloud-${{ github.sha }}
+          path: ${{ runner.temp }}/cloud-release
+          if-no-files-found: error
+          retention-days: 30
       - name: Preserve synthetic acceptance evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

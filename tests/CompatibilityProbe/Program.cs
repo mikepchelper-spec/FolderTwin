@@ -63,9 +63,10 @@ try
             Require(verified.State == ProductRunState.Confirmed && !verified.Degraded, "Old backup failed current-core verification.");
             string output = Folder(workspace.Root, "restore-" + entry.Mode);
             Require(!VersionStore.OpenProduct(job).Restore(entry.Generation, output).Degraded, "Old backup restored with a degraded catalog.");
-            var actual = Directory.EnumerateFiles(output, "*", SearchOption.AllDirectories)
-                .Where(file => file != Path.Combine(output, DestinationBinding.MarkerName) &&
-                    !Regex.IsMatch(Path.GetFileName(file), @"^\.foldertwin-[0-9A-F]{64}\.tmp\.(lock|ready)$"))
+            var allRestoredFiles = Directory.EnumerateFiles(output, "*", SearchOption.AllDirectories).ToArray();
+            Require(allRestoredFiles.All(file => !Path.GetFileName(file).StartsWith(".foldertwin-", StringComparison.Ordinal)),
+                "Clean local restore leaked internal .foldertwin-* control artifacts.");
+            var actual = allRestoredFiles
                 .ToDictionary(file => Path.GetRelativePath(output, file), File.ReadAllBytes, StringComparer.Ordinal);
             var wanted = Expected();
             Require(actual.Count == wanted.Count && wanted.All(file => actual.TryGetValue(file.Key, out var bytes) &&

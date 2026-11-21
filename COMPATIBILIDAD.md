@@ -25,7 +25,7 @@ Una demostración pendiente se puede reintentar con su plan original. Cambiar el
 
 ## Trabajos de producto e importación
 
-Las candidatas posteriores a `v1.0.0-rc.1` conservan la lectura de los formatos de respaldo, configuración e historial (`v1.0.0-rc.1` está retirada: no uses su escritor para continuar trabajando). La campaña `tests/CompatibilityProbe/Invoke-Compatibility.ps1` permite que un binario anterior cree tres respaldos sintéticos y que el núcleo actual los abra, verifique y restaure sin origen. No equivale a migración de datos personales, prueba en otra cuenta de Windows ni validación de downgrade.
+Las candidatas posteriores a `v1.0.0-rc.1` conservan la lectura de los formatos de respaldo, configuración e historial (`v1.0.0-rc.1` está retirada: no uses su escritor para continuar trabajando). La campaña `tests/CompatibilityProbe/Invoke-Compatibility.ps1` (fijada por defecto al ZIP público verificado de `v1.0.0-rc.2`, SHA-256 `9c701f84c58b2420618296b31bfe75c2fc6082383fdd906ff64e149391385e4a`) compila el arnés contra el núcleo anterior real (`CopyProbe.dll` o `FolderTwin.Core.dll`) para crear tres respaldos sintéticos y comprueba con el núcleo actual su reapertura, exportación, verificación sin origen y restauración limpia libre de archivos internos `.foldertwin-*`. No equivale a migración de datos personales, prueba en otra cuenta de Windows ni validación de downgrade.
 
 Los respaldos de producto `FTVERS03` se abren mediante su trabajo o una configuración exportada con **Importar configuración**. Revisa destino, marcador e identidad; la importación queda deshabilitada. Recuperar un punto confirmado no exige el origen. Revisa la identidad del origen antes de activar nuevas copias. [Protocolo](docs/CONFIGURACION.md).
 
